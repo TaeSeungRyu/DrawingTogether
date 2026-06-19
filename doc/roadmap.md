@@ -2,10 +2,12 @@
 
 진행 원칙: **연결을 만들기 전에 그림이 먼저 되어야 한다.** 솔로 모드 캔버스를 끝내고, 그 위에 BT 전송을 얹는 순서.
 
-## Phase 0 — 토대 (현재)
+## Phase 0 — 토대 (완료)
 - [x] Compose 스캐폴드, 테마, MainActivity
-- [ ] `gradle/libs.versions.toml`에 `navigation-compose`, `kotlinx-serialization-cbor`, `kotlinx-coroutines-android` 추가
-- [ ] 패키지 구조 생성: `ui/`, `drawing/`, `bluetooth/`, `session/` (자세한 건 [architecture.md](architecture.md))
+- [x] `gradle/libs.versions.toml`에 `navigation-compose`, `kotlinx-serialization-cbor`, `kotlinx-coroutines-android`, `kotlin-serialization` 플러그인 추가
+- [x] AndroidX 라이브러리들을 `compileSdk 34` / AGP 8.6.1과 호환되는 버전으로 다운그레이드 (`core-ktx 1.13.1`, `activity-compose 1.9.3`, `lifecycle-runtime-ktx 2.8.7`, `androidx.test.ext:junit 1.2.1`, `espresso-core 3.6.1`)
+- [x] 패키지 구조 생성: `ui/`, `drawing/`, `bluetooth/`, `session/` — 각 패키지에 `package.kt` 마커 파일 (자세한 건 [architecture.md](architecture.md))
+- [x] `gradlew assembleDebug` 통과 확인
 
 ## Phase 1 — 솔로 드로잉 MVP
 목표: BT 없이 혼자 그릴 수 있는 완성된 캔버스.
