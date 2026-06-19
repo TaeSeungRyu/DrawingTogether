@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.ui.Modifier
-import com.rts.rys.ryy.drawingtogether.ui.canvas.DrawingScreen
+import com.rts.rys.ryy.drawingtogether.ui.AppNavGraph
 import com.rts.rys.ryy.drawingtogether.ui.theme.DrawingTogetherTheme
 
 class MainActivity : ComponentActivity() {
@@ -18,7 +18,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             DrawingTogetherTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { padding ->
-                    DrawingScreen(modifier = Modifier.padding(padding))
+                    AppNavGraph(modifier = Modifier.padding(padding))
                 }
             }
         }

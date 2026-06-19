@@ -28,6 +28,7 @@ import com.rts.rys.ryy.drawingtogether.drawing.model.Point as DrawPoint
 import com.rts.rys.ryy.drawingtogether.drawing.model.Stroke
 import com.rts.rys.ryy.drawingtogether.drawing.model.StrokeId
 import com.rts.rys.ryy.drawingtogether.drawing.model.ToolKind
+import com.rts.rys.ryy.drawingtogether.drawing.model.ToolSettings
 
 // 완료된 획 + 진행 중 획을 매 프레임 다시 그린다.
 // 완료된 획용 ImageBitmap 캐시는 Phase 4(다듬기)에서 도입 — Phase 1 수준의 트래픽에선
@@ -35,6 +36,7 @@ import com.rts.rys.ryy.drawingtogether.drawing.model.ToolKind
 @Composable
 fun DrawingCanvas(
     state: CanvasState,
+    tool: ToolSettings,
     onStrokeStart: (StrokeId, DrawPoint) -> Unit,
     onStrokeAppend: (StrokeId, List<DrawPoint>) -> Unit,
     onStrokeEnd: (StrokeId) -> Unit,
@@ -42,6 +44,8 @@ fun DrawingCanvas(
 ) {
     val density = LocalDensity.current.density
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
+    // 그리는 동안 현재 포인터 위치 — 펜/지우개 두께 미리보기용. 손가락 떼면 null.
+    var cursor by remember { mutableStateOf<Offset?>(null) }
 
     Canvas(
         modifier = modifier
@@ -52,19 +56,25 @@ fun DrawingCanvas(
                     val first = awaitFirstDown(requireUnconsumed = false)
                     val strokeId = StrokeId.random()
                     onStrokeStart(strokeId, first.position.toNormalized(size))
+                    cursor = first.position
                     first.consume()
 
                     val pending = mutableListOf<DrawPoint>()
                     while (true) {
                         val event = awaitPointerEvent()
                         var anyPressed = false
+                        var latestPos: Offset? = null
                         event.changes.forEach { change: PointerInputChange ->
-                            if (change.pressed) anyPressed = true
+                            if (change.pressed) {
+                                anyPressed = true
+                                latestPos = change.position
+                            }
                             if (change.positionChanged()) {
                                 pending.add(change.position.toNormalized(size))
                                 change.consume()
                             }
                         }
+                        if (latestPos != null) cursor = latestPos
                         if (pending.isNotEmpty()) {
                             onStrokeAppend(strokeId, pending.toList())
                             pending.clear()
@@ -73,12 +83,26 @@ fun DrawingCanvas(
                     }
 
                     onStrokeEnd(strokeId)
+                    cursor = null
                 }
             }
     ) {
         state.strokes.forEach { drawStroke(it, canvasSize, density) }
         state.openStrokes.values.forEach { drawStroke(it, canvasSize, density) }
+        cursor?.let { pos ->
+            drawBrushIndicator(center = pos, tool = tool, density = density)
+        }
     }
+}
+
+private fun DrawScope.drawBrushIndicator(center: Offset, tool: ToolSettings, density: Float) {
+    val radiusPx = (tool.strokeWidthDp * density) / 2f
+    drawCircle(
+        color = Color.Black.copy(alpha = 0.45f),
+        center = center,
+        radius = radiusPx,
+        style = DrawStroke(width = 1.5f * density),
+    )
 }
 
 private fun DrawScope.drawStroke(stroke: Stroke, canvasSize: IntSize, density: Float) {

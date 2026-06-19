@@ -23,8 +23,10 @@
 ```
 com.rts.rys.ryy.drawingtogether
 ├── ui/                  Compose 화면 + 테마
-│   ├── home/            모드 선택 (솔로 / 호스트 / 조인)
-│   ├── pairing/         BT 디바이스 검색·페어링 화면
+│   ├── AppNavGraph.kt   NavHost — splash → home → (draw | pairing)
+│   ├── splash/          앱 진입 시 잠깐 보이는 스플래시
+│   ├── home/            모드 선택 (싱글 / 멀티)
+│   ├── pairing/         BT 디바이스 검색·페어링 화면 (Phase 2부터 구현)
 │   ├── canvas/          드로잉 화면 (붓·색·지우개 도구)
 │   └── theme/           (기존)
 ├── drawing/             드로잉 도메인 — UI/네트워크 무관
@@ -38,6 +40,15 @@ com.rts.rys.ryy.drawingtogether
 ├── session/             세션 상태 머신 (Idle → Pairing → Connected → Drawing)
 └── MainActivity.kt
 ```
+
+네비게이션 흐름:
+
+```
+splash ──auto──► home ──싱글모드──► draw   (DrawingScreen)
+                  └────멀티모드──► pairing (Phase 2)
+```
+
+`splash`에서 `home`으로 진입할 때는 `popUpTo(Splash) { inclusive = true }`로 백스택에서 제거 — 뒤로 가기로 스플래시에 돌아가지 않음.
 
 레이어 의존 방향은 **단방향**:
 

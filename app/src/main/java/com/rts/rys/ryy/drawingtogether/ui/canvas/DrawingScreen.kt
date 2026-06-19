@@ -23,6 +23,7 @@ fun DrawingScreen(
         ) {
             DrawingCanvas(
                 state = vm.canvas,
+                tool = vm.tool,
                 onStrokeStart = vm::strokeStart,
                 onStrokeAppend = vm::strokeAppend,
                 onStrokeEnd = vm::strokeEnd,
