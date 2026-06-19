@@ -9,16 +9,19 @@
 - [x] 패키지 구조 생성: `ui/`, `drawing/`, `bluetooth/`, `session/` — 각 패키지에 `package.kt` 마커 파일 (자세한 건 [architecture.md](architecture.md))
 - [x] `gradlew assembleDebug` 통과 확인
 
-## Phase 1 — 솔로 드로잉 MVP
+## Phase 1 — 솔로 드로잉 MVP (완료)
 목표: BT 없이 혼자 그릴 수 있는 완성된 캔버스.
-- [ ] `DrawingEvent`, `Stroke`, `CanvasState` 정의 ([drawing-engine.md](drawing-engine.md))
-- [ ] `pointerInput` 기반 입력 수집 → 이벤트 스트림
-- [ ] Compose Canvas 렌더링 (완료된 획 비트맵 캐시 + 진행 중 획)
-- [ ] 도구바: 펜/지우개, 색 팔레트, 굵기 슬라이더
-- [ ] 자기 획 되돌리기, 전체 지우기
-- [ ] 단위 테스트: 이벤트 시퀀스 → 캔버스 상태 시나리오
+- [x] `DrawingEvent`, `Stroke`, `CanvasState` 정의 ([drawing-engine.md](drawing-engine.md))
+- [x] `pointerInput` 기반 입력 수집 → 이벤트 스트림 (포인터 이벤트당 점 묶음으로 `StrokeAppend` 코얼레싱)
+- [x] Compose Canvas 렌더링 — 완료된 획 + 진행 중 획을 매 프레임 다시 그림. 비트맵 캐시는 Phase 4로 보류 (RenderNode 캐싱만으로 Phase 1 트래픽엔 충분, 실측 후 도입)
+- [x] 도구바: 펜/지우개, 색 팔레트(6색), 굵기 슬라이더(1–32dp)
+- [x] 자기 획 되돌리기 (로컬 작성자 한정), 전체 지우기
+- [x] `CanvasStateTest` 단위 테스트 10개 — start/append/end/undo/clear/원격 작성자/no-op 시나리오 커버
+- [x] `assembleDebug` + `testDebugUnitTest` 통과
 
 **완료 기준**: 한 기기에서 안정적으로 그릴 수 있다. 캔버스가 60fps 근처로 동작.
+
+> 실기기 동작 검증은 보류 — APK 빌드는 통과했지만 60fps 여부는 기기에서 확인 필요. Phase 2 진입 전에 한 번 실행해 보는 것을 권장.
 
 ## Phase 2 — 블루투스 페어링 & 연결
 목표: 두 기기가 RFCOMM 소켓으로 연결되어 "HELLO/HELLO_ACK" 핸드셰이크까지.

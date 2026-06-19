@@ -1,0 +1,118 @@
+package com.rts.rys.ryy.drawingtogether.ui.canvas
+
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke as DrawStroke
+import androidx.compose.ui.input.pointer.PointerInputChange
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntSize
+import com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState
+import com.rts.rys.ryy.drawingtogether.drawing.model.Point as DrawPoint
+import com.rts.rys.ryy.drawingtogether.drawing.model.Stroke
+import com.rts.rys.ryy.drawingtogether.drawing.model.StrokeId
+import com.rts.rys.ryy.drawingtogether.drawing.model.ToolKind
+
+// 완료된 획 + 진행 중 획을 매 프레임 다시 그린다.
+// 완료된 획용 ImageBitmap 캐시는 Phase 4(다듬기)에서 도입 — Phase 1 수준의 트래픽에선
+// Compose Canvas의 RenderNode 캐싱만으로 충분히 부드러움.
+@Composable
+fun DrawingCanvas(
+    state: CanvasState,
+    onStrokeStart: (StrokeId, DrawPoint) -> Unit,
+    onStrokeAppend: (StrokeId, List<DrawPoint>) -> Unit,
+    onStrokeEnd: (StrokeId) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val density = LocalDensity.current.density
+    var canvasSize by remember { mutableStateOf(IntSize.Zero) }
+
+    Canvas(
+        modifier = modifier
+            .fillMaxSize()
+            .onSizeChanged { canvasSize = it }
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val first = awaitFirstDown(requireUnconsumed = false)
+                    val strokeId = StrokeId.random()
+                    onStrokeStart(strokeId, first.position.toNormalized(size))
+                    first.consume()
+
+                    val pending = mutableListOf<DrawPoint>()
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        var anyPressed = false
+                        event.changes.forEach { change: PointerInputChange ->
+                            if (change.pressed) anyPressed = true
+                            if (change.positionChanged()) {
+                                pending.add(change.position.toNormalized(size))
+                                change.consume()
+                            }
+                        }
+                        if (pending.isNotEmpty()) {
+                            onStrokeAppend(strokeId, pending.toList())
+                            pending.clear()
+                        }
+                        if (!anyPressed) break
+                    }
+
+                    onStrokeEnd(strokeId)
+                }
+            }
+    ) {
+        state.strokes.forEach { drawStroke(it, canvasSize, density) }
+        state.openStrokes.values.forEach { drawStroke(it, canvasSize, density) }
+    }
+}
+
+private fun DrawScope.drawStroke(stroke: Stroke, canvasSize: IntSize, density: Float) {
+    if (stroke.points.isEmpty() || canvasSize.width <= 0 || canvasSize.height <= 0) return
+
+    val w = canvasSize.width.toFloat()
+    val h = canvasSize.height.toFloat()
+
+    val path = Path()
+    val first = stroke.points.first()
+    path.moveTo(first.x * w, first.y * h)
+    for (i in 1 until stroke.points.size) {
+        val p = stroke.points[i]
+        path.lineTo(p.x * w, p.y * h)
+    }
+
+    // 지우개 = 배경색(흰색)으로 덮어쓰기. Phase 1 단순화 — 실제 픽셀 삭제 아님.
+    val color = if (stroke.tool.kind == ToolKind.Eraser) Color.White else Color(stroke.tool.colorArgb)
+    drawPath(
+        path = path,
+        color = color,
+        style = DrawStroke(
+            width = stroke.tool.strokeWidthDp * density,
+            cap = StrokeCap.Round,
+            join = StrokeJoin.Round,
+        ),
+    )
+}
+
+private fun Offset.toNormalized(canvasSize: IntSize): DrawPoint {
+    val w = canvasSize.width.coerceAtLeast(1).toFloat()
+    val h = canvasSize.height.coerceAtLeast(1).toFloat()
+    return DrawPoint(
+        x = (x / w).coerceIn(0f, 1f),
+        y = (y / h).coerceIn(0f, 1f),
+    )
+}
