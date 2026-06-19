@@ -5,7 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState
-import com.rts.rys.ryy.drawingtogether.drawing.model.BrushShape
+import com.rts.rys.ryy.drawingtogether.drawing.model.BrushType
 import com.rts.rys.ryy.drawingtogether.drawing.model.DrawingEvent
 import com.rts.rys.ryy.drawingtogether.drawing.model.PeerId
 import com.rts.rys.ryy.drawingtogether.drawing.model.Point
@@ -35,8 +35,8 @@ class DrawingViewModel : ViewModel() {
         tool = tool.copy(strokeWidthDp = dp)
     }
 
-    fun setBrushShape(shape: BrushShape) {
-        tool = tool.copy(shape = shape)
+    fun setBrush(brush: BrushType) {
+        tool = tool.copy(brush = brush)
     }
 
     fun strokeStart(strokeId: StrokeId, point: Point) {
