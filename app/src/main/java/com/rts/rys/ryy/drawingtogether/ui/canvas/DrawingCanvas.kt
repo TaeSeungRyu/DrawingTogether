@@ -23,7 +23,9 @@ import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.geometry.Size
 import com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState
+import com.rts.rys.ryy.drawingtogether.drawing.model.BrushShape
 import com.rts.rys.ryy.drawingtogether.drawing.model.Point as DrawPoint
 import com.rts.rys.ryy.drawingtogether.drawing.model.Stroke
 import com.rts.rys.ryy.drawingtogether.drawing.model.StrokeId
@@ -96,13 +98,23 @@ fun DrawingCanvas(
 }
 
 private fun DrawScope.drawBrushIndicator(center: Offset, tool: ToolSettings, density: Float) {
-    val radiusPx = (tool.strokeWidthDp * density) / 2f
-    drawCircle(
-        color = Color.Black.copy(alpha = 0.45f),
-        center = center,
-        radius = radiusPx,
-        style = DrawStroke(width = 1.5f * density),
-    )
+    val sizePx = tool.strokeWidthDp * density
+    val color = Color.Black.copy(alpha = 0.45f)
+    val style = DrawStroke(width = 1.5f * density)
+    when (tool.shape) {
+        BrushShape.Square -> {
+            val half = sizePx / 2f
+            drawRect(
+                color = color,
+                topLeft = Offset(center.x - half, center.y - half),
+                size = Size(sizePx, sizePx),
+                style = style,
+            )
+        }
+        BrushShape.Round, BrushShape.Highlighter -> {
+            drawCircle(color = color, center = center, radius = sizePx / 2f, style = style)
+        }
+    }
 }
 
 private fun DrawScope.drawStroke(stroke: Stroke, canvasSize: IntSize, density: Float) {
@@ -119,17 +131,29 @@ private fun DrawScope.drawStroke(stroke: Stroke, canvasSize: IntSize, density: F
         path.lineTo(p.x * w, p.y * h)
     }
 
-    // 지우개 = 배경색(흰색)으로 덮어쓰기. Phase 1 단순화 — 실제 픽셀 삭제 아님.
-    val color = if (stroke.tool.kind == ToolKind.Eraser) Color.White else Color(stroke.tool.colorArgb)
+    val (cap, join) = capJoinFor(stroke.tool.shape)
     drawPath(
         path = path,
-        color = color,
+        color = colorFor(stroke.tool),
         style = DrawStroke(
             width = stroke.tool.strokeWidthDp * density,
-            cap = StrokeCap.Round,
-            join = StrokeJoin.Round,
+            cap = cap,
+            join = join,
         ),
     )
+}
+
+// 지우개 = 배경색(흰색)으로 덮어쓰기. Phase 1 단순화 — 실제 픽셀 삭제 아님.
+// 형광펜은 알파를 낮춰 겹친 부분이 진해지는 마커 효과.
+private fun colorFor(tool: ToolSettings): Color {
+    if (tool.kind == ToolKind.Eraser) return Color.White
+    val base = Color(tool.colorArgb)
+    return if (tool.shape == BrushShape.Highlighter) base.copy(alpha = 0.3f) else base
+}
+
+private fun capJoinFor(shape: BrushShape): Pair<StrokeCap, StrokeJoin> = when (shape) {
+    BrushShape.Square -> StrokeCap.Square to StrokeJoin.Miter
+    BrushShape.Round, BrushShape.Highlighter -> StrokeCap.Round to StrokeJoin.Round
 }
 
 private fun Offset.toNormalized(canvasSize: IntSize): DrawPoint {

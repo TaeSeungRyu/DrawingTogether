@@ -34,6 +34,7 @@ fun DrawingScreen(
             canUndo = vm.canvas.canUndo,
             onColor = vm::selectColor,
             onEraser = vm::selectEraser,
+            onBrushShape = vm::setBrushShape,
             onStrokeWidth = vm::setStrokeWidth,
             onUndo = vm::undoLastLocal,
             onClear = vm::clearAll,

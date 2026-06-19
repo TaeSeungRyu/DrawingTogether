@@ -13,9 +13,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -50,7 +53,8 @@ fun ColorPickerSheet(
     onConfirm: (Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val sheetState = rememberModalBottomSheetState()
+    // 부분 확장 상태를 건너뛰고 바로 전체 확장 — 짧은 시트에서 확인 버튼이 절반에 가려지는 문제 방지.
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val initialHsv = remember(initialColor) {
         FloatArray(3).also { android.graphics.Color.colorToHSV(initialColor, it) }
@@ -67,6 +71,8 @@ fun ColorPickerSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .navigationBarsPadding()
                 .padding(horizontal = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -80,7 +86,7 @@ fun ColorPickerSheet(
                 onChange = { s, v -> saturation = s; value = v },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(1.6f),
+                    .aspectRatio(1.3f),
             )
 
             Spacer(modifier = Modifier.height(16.dp))

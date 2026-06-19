@@ -13,8 +13,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -29,15 +33,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.rts.rys.ryy.drawingtogether.drawing.model.BrushShape
 import com.rts.rys.ryy.drawingtogether.drawing.model.ToolKind
 import com.rts.rys.ryy.drawingtogether.drawing.model.ToolSettings
 
+private val brushOptions: List<Pair<BrushShape, String>> = listOf(
+    BrushShape.Round to "펜",
+    BrushShape.Square to "마커",
+    BrushShape.Highlighter to "형광펜",
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun Toolbar(
     tool: ToolSettings,
     canUndo: Boolean,
     onColor: (Int) -> Unit,
     onEraser: () -> Unit,
+    onBrushShape: (BrushShape) -> Unit,
     onStrokeWidth: (Float) -> Unit,
     onUndo: () -> Unit,
     onClear: () -> Unit,
@@ -68,6 +81,22 @@ fun Toolbar(
                     label = { Text("지우개") },
                 )
             }
+
+            SingleChoiceSegmentedButtonRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+            ) {
+                brushOptions.forEachIndexed { i, (shape, label) ->
+                    SegmentedButton(
+                        selected = tool.shape == shape,
+                        onClick = { onBrushShape(shape) },
+                        shape = SegmentedButtonDefaults.itemShape(index = i, count = brushOptions.size),
+                        label = { Text(label) },
+                    )
+                }
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
