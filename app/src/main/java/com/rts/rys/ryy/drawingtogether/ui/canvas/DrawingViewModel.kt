@@ -9,6 +9,7 @@ import com.rts.rys.ryy.drawingtogether.drawing.model.BrushType
 import com.rts.rys.ryy.drawingtogether.drawing.model.DrawingEvent
 import com.rts.rys.ryy.drawingtogether.drawing.model.PeerId
 import com.rts.rys.ryy.drawingtogether.drawing.model.Point
+import com.rts.rys.ryy.drawingtogether.drawing.model.ShapeMode
 import com.rts.rys.ryy.drawingtogether.drawing.model.StrokeId
 import com.rts.rys.ryy.drawingtogether.drawing.model.ToolKind
 import com.rts.rys.ryy.drawingtogether.drawing.model.ToolSettings
@@ -27,8 +28,10 @@ class DrawingViewModel : ViewModel() {
         tool = tool.copy(kind = ToolKind.Pen, colorArgb = argb)
     }
 
-    fun selectEraser() {
-        tool = tool.copy(kind = ToolKind.Eraser)
+    // 지우개 버튼은 토글 — 지우개 상태에서 다시 누르면 펜으로 돌아온다.
+    fun toggleEraser() {
+        val nextKind = if (tool.kind == ToolKind.Eraser) ToolKind.Pen else ToolKind.Eraser
+        tool = tool.copy(kind = nextKind)
     }
 
     fun setStrokeWidth(dp: Float) {
@@ -37,6 +40,10 @@ class DrawingViewModel : ViewModel() {
 
     fun setBrush(brush: BrushType) {
         tool = tool.copy(brush = brush)
+    }
+
+    fun setShape(shape: ShapeMode) {
+        tool = tool.copy(shape = shape)
     }
 
     fun strokeStart(strokeId: StrokeId, point: Point) {

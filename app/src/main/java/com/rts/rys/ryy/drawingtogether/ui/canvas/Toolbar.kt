@@ -21,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.rts.rys.ryy.drawingtogether.drawing.model.BrushType
+import com.rts.rys.ryy.drawingtogether.drawing.model.ShapeMode
 import com.rts.rys.ryy.drawingtogether.drawing.model.ToolKind
 import com.rts.rys.ryy.drawingtogether.drawing.model.ToolSettings
 
@@ -31,6 +32,7 @@ fun Toolbar(
     onColor: (Int) -> Unit,
     onEraser: () -> Unit,
     onBrush: (BrushType) -> Unit,
+    onShape: (ShapeMode) -> Unit,
     onStrokeWidth: (Float) -> Unit,
     onUndo: () -> Unit,
     onClear: () -> Unit,
@@ -60,6 +62,10 @@ fun Toolbar(
                 BrushTriggerButton(
                     brush = tool.brush,
                     onClick = { brushSheetOpen = true },
+                )
+                ShapeDropdownButton(
+                    shape = tool.shape,
+                    onShape = onShape,
                 )
                 EraserToggle(
                     selected = tool.kind == ToolKind.Eraser,
