@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState
+import com.rts.rys.ryy.drawingtogether.drawing.model.BackgroundImage
 import com.rts.rys.ryy.drawingtogether.drawing.model.BrushType
 import com.rts.rys.ryy.drawingtogether.drawing.model.DrawingEvent
 import com.rts.rys.ryy.drawingtogether.drawing.model.PeerId
@@ -66,6 +67,10 @@ class DrawingViewModel : ViewModel() {
 
     fun clearAll() {
         emit(DrawingEvent.Clear(nextSeq(), author))
+    }
+
+    fun setBackground(image: BackgroundImage?) {
+        canvas.setBackground(image)
     }
 
     private fun emit(event: DrawingEvent) {

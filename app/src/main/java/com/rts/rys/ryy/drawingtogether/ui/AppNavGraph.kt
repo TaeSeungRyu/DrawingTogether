@@ -39,7 +39,7 @@ fun AppNavGraph(modifier: Modifier = Modifier) {
             )
         }
         composable(Routes.Draw) {
-            DrawingScreen()
+            DrawingScreen(onBack = { nav.popBackStack() })
         }
         composable(Routes.Pairing) {
             PairingScreen(onBack = { nav.popBackStack() })

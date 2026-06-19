@@ -69,6 +69,7 @@ app/src/main/java/com/rts/rys/ryy/drawingtogether
 | 문서 | 내용 |
 |---|---|
 | [`doc/architecture.md`](doc/architecture.md) | 레이어 구조, 상태 관리, 동시성, 테스트 전략 |
+| [`doc/ui-layout.md`](doc/ui-layout.md) | 화면별 ASCII 목업, TopAppBar/도구바 배치, peer indicator, 디자인 결정 |
 | [`doc/nearby-connections.md`](doc/nearby-connections.md) | Nearby Connections 선택 근거, 권한, 연결 흐름, payload 타입 |
 | [`doc/drawing-engine.md`](doc/drawing-engine.md) | 데이터 모델, Compose Canvas 렌더링, 입력 처리, 사진 배경, PNG export |
 | [`doc/protocol.md`](doc/protocol.md) | 와이어 메시지(CBOR), 핸드셰이크, 사진 전송, 늦참가 동기화 |

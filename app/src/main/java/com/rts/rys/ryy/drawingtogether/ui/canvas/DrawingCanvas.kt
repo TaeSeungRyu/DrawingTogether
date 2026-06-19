@@ -22,6 +22,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.geometry.Size
 import com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState
@@ -91,8 +92,21 @@ fun DrawingCanvas(
                 }
             }
     ) {
+        // 1. 사진 배경 (있으면) — 캔버스 종횡비는 외부에서 사진에 맞춰 잡혀있어 늘림 없이 채워짐
+        state.background?.bitmap?.let { bg ->
+            drawImage(
+                image = bg,
+                srcOffset = IntOffset.Zero,
+                srcSize = IntSize(bg.width, bg.height),
+                dstOffset = IntOffset.Zero,
+                dstSize = IntSize(canvasSize.width, canvasSize.height),
+            )
+        }
+        // 2. 완료된 stroke
         state.strokes.forEach { drawStroke(it, canvasSize, density) }
+        // 3. 진행 중 stroke
         state.openStrokes.values.forEach { drawStroke(it, canvasSize, density) }
+        // 4. 커서 인디케이터
         cursor?.let { pos ->
             drawBrushIndicator(center = pos, tool = tool, density = density)
         }

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- 카메라 촬영 결과를 임시 저장할 캐시 영역. -->
+    <cache-path name="camera_captures" path="captures/" />
+</paths>

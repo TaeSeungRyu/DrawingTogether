@@ -1,7 +1,11 @@
 package com.rts.rys.ryy.drawingtogether.drawing.engine
 
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.rts.rys.ryy.drawingtogether.drawing.model.BackgroundImage
 import com.rts.rys.ryy.drawingtogether.drawing.model.DrawingEvent
 import com.rts.rys.ryy.drawingtogether.drawing.model.PeerId
 import com.rts.rys.ryy.drawingtogether.drawing.model.Stroke
@@ -22,6 +26,14 @@ class CanvasState {
     val canUndo: Boolean get() = _undoStack.isNotEmpty()
 
     fun lastLocalStrokeId(): StrokeId? = _undoStack.lastOrNull()
+
+    // 사진 배경. 이벤트(apply)가 아닌 별도 상태 — 사진은 도메인 이벤트가 아니라 캔버스 속성.
+    private var _background: BackgroundImage? by mutableStateOf(null)
+    val background: BackgroundImage? get() = _background
+
+    fun setBackground(image: BackgroundImage?) {
+        _background = image
+    }
 
     fun apply(event: DrawingEvent) {
         when (event) {

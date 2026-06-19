@@ -21,17 +21,21 @@
 - [x] 스플래시 + 홈(싱글/멀티 선택) + 페어링 자리표시 + 네비게이션
 - [x] `CanvasStateTest` 단위 테스트 10개 + `assembleDebug` 통과
 
-## Phase 1.5 — 사진 배경 (싱글 모드, 다음 차례)
+## Phase 1.5 — 사진 배경 (완료)
 목표: 갤러리/카메라에서 가져온 사진 위에 그림을 그릴 수 있다.
-- [ ] `drawing/model/BackgroundImage` 모델 + `CanvasState.background` 필드
-- [ ] `photo/` 패키지: `PhotoPicker`(Android PhotoPicker API), `PhotoCapture`(CameraX 또는 인텐트), `PhotoLoader`(Uri → Bitmap)
-- [ ] 도구바에 "사진 선택" / "사진 촬영" 버튼 (지우개 옆 또는 별도 행)
-- [ ] 캔버스 렌더링 — 사진 레이어를 stroke 아래에 깔고 종횡비 동기화
-- [ ] 사진 제거 액션
-- [ ] 카메라 권한 흐름 (사진 촬영 시점에만 요청, 갤러리 선택은 권한 불필요)
-- [ ] 단위 테스트: PhotoLoader 리사이즈 / EXIF 회전
+- [x] `drawing/model/BackgroundImage` 모델 (bitmap + dimensions + Source enum)
+- [x] `CanvasState.background` 필드 + `setBackground` setter
+- [x] `photo/PhotoLoader.kt`: Uri → BackgroundImage (down-sample + EXIF rotation, `androidx.exifinterface`)
+- [x] `photo/CameraCaptureFile.kt`: FileProvider 기반 임시 URI 생성
+- [x] AndroidManifest FileProvider + `res/xml/file_paths.xml`
+- [x] `DrawingScreen`에 `TopAppBar` 도입 — 뒤로 / 사진 / 촬영 / 제거 액션
+- [x] PhotoPicker (`ActivityResultContracts.PickVisualMedia`) — 권한 불필요
+- [x] 카메라 촬영 (`ActivityResultContracts.TakePicture`) — 매니페스트에 CAMERA 미선언으로 런타임 권한 불필요
+- [x] 캔버스 렌더링 — 사진 → stroke 순서, letterbox Box로 사진 비율 보존
+- [x] `PhotoLoaderTest` 8개 (sample size 계산 — 권한/EXIF 검증은 실기기에서)
+- [x] `assembleDebug` + `testDebugUnitTest` 통과
 
-**완료 기준**: 싱글 모드에서 사진을 띄우고 그 위에 그릴 수 있다. 회전된 사진도 올바른 방향으로 표시.
+**완료 기준**: 싱글 모드에서 사진을 띄우고 그 위에 그릴 수 있다. 회전된 사진도 올바른 방향으로 표시. (실기기 검증은 사용자가 직접 진행.)
 
 ## Phase 2 — Nearby Connections 페어링 & 연결
 목표: 두 기기가 Nearby로 연결되어 "HELLO/HELLO_ACK" 핸드셰이크까지.
