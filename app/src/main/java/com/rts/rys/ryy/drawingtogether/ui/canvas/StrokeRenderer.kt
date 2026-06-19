@@ -1,0 +1,133 @@
+package com.rts.rys.ryy.drawingtogether.ui.canvas
+
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke as DrawStroke
+import androidx.compose.ui.unit.IntSize
+import com.rts.rys.ryy.drawingtogether.drawing.model.BrushCapStyle
+import com.rts.rys.ryy.drawingtogether.drawing.model.BrushType
+import com.rts.rys.ryy.drawingtogether.drawing.model.ShapeMode
+import com.rts.rys.ryy.drawingtogether.drawing.model.Stroke
+import com.rts.rys.ryy.drawingtogether.drawing.model.ToolKind
+import com.rts.rys.ryy.drawingtogether.drawing.model.ToolSettings
+
+// stroke 한 개를 그린다. 화면 렌더링과 PNG 합성 양쪽에서 같은 함수를 사용 — 보이는 것 = 저장되는 것.
+// shape가 None이면 폴리라인, 그 외엔 첫·마지막 점 바운딩 박스 도형.
+internal fun DrawScope.drawStroke(stroke: Stroke, canvasSize: IntSize, density: Float) {
+    if (stroke.points.isEmpty() || canvasSize.width <= 0 || canvasSize.height <= 0) return
+    when (stroke.tool.shape) {
+        ShapeMode.None -> drawFreehand(stroke, canvasSize, density)
+        else -> drawShapeForm(stroke, canvasSize, density)
+    }
+}
+
+private fun DrawScope.drawFreehand(stroke: Stroke, canvasSize: IntSize, density: Float) {
+    val w = canvasSize.width.toFloat()
+    val h = canvasSize.height.toFloat()
+
+    val path = Path()
+    val first = stroke.points.first()
+    path.moveTo(first.x * w, first.y * h)
+    for (i in 1 until stroke.points.size) {
+        val p = stroke.points[i]
+        path.lineTo(p.x * w, p.y * h)
+    }
+
+    val (cap, join) = capJoinFor(stroke.tool.brush)
+    drawPath(
+        path = path,
+        color = colorFor(stroke.tool),
+        style = DrawStroke(
+            width = strokeWidthPxFor(stroke.tool, density),
+            cap = cap,
+            join = join,
+        ),
+    )
+}
+
+// 첫 점과 마지막 점을 바운딩 박스로 삼아 정해진 도형 하나를 외곽선으로 그린다.
+private fun DrawScope.drawShapeForm(stroke: Stroke, canvasSize: IntSize, density: Float) {
+    val first = stroke.points.first()
+    val last = stroke.points.last()
+    val w = canvasSize.width.toFloat()
+    val h = canvasSize.height.toFloat()
+
+    val x1 = first.x * w
+    val y1 = first.y * h
+    val x2 = last.x * w
+    val y2 = last.y * h
+    val left = minOf(x1, x2)
+    val top = minOf(y1, y2)
+    val width = (maxOf(x1, x2) - left).coerceAtLeast(0f)
+    val height = (maxOf(y1, y2) - top).coerceAtLeast(0f)
+    if (width <= 0f && height <= 0f) return
+
+    val color = colorFor(stroke.tool)
+    val (cap, join) = capJoinFor(stroke.tool.brush)
+    val style = DrawStroke(
+        width = strokeWidthPxFor(stroke.tool, density),
+        cap = cap,
+        join = join,
+    )
+
+    when (stroke.tool.shape) {
+        ShapeMode.Circle -> drawOval(
+            color = color,
+            topLeft = Offset(left, top),
+            size = Size(width, height),
+            style = style,
+        )
+        ShapeMode.Rect -> drawRect(
+            color = color,
+            topLeft = Offset(left, top),
+            size = Size(width, height),
+            style = style,
+        )
+        ShapeMode.Triangle -> drawPath(
+            path = buildRegularPolygonPath(left, top, width, height, sides = 3),
+            color = color,
+            style = style,
+        )
+        ShapeMode.Pentagon -> drawPath(
+            path = buildRegularPolygonPath(left, top, width, height, sides = 5),
+            color = color,
+            style = style,
+        )
+        ShapeMode.Hexagon -> drawPath(
+            path = buildRegularPolygonPath(left, top, width, height, sides = 6),
+            color = color,
+            style = style,
+        )
+        ShapeMode.Star -> drawPath(
+            path = buildStarPath(left, top, width, height),
+            color = color,
+            style = style,
+        )
+        ShapeMode.Heart -> drawPath(
+            path = buildHeartPath(left, top, width, height),
+            color = color,
+            style = style,
+        )
+        ShapeMode.None -> Unit
+    }
+}
+
+// 지우개 = 배경색(흰색)으로 덮어쓰기. Phase 1 단순화 — 실제 픽셀 삭제 아님.
+// 지우개 자체는 BrushType의 alpha 무시 (항상 불투명).
+internal fun colorFor(tool: ToolSettings): Color {
+    if (tool.kind == ToolKind.Eraser) return Color.White
+    return Color(tool.colorArgb).copy(alpha = tool.brush.alpha)
+}
+
+internal fun strokeWidthPxFor(tool: ToolSettings, density: Float): Float =
+    tool.strokeWidthDp * tool.brush.widthScale * density
+
+internal fun capJoinFor(brush: BrushType): Pair<StrokeCap, StrokeJoin> = when (brush.capStyle) {
+    BrushCapStyle.Square -> StrokeCap.Square to StrokeJoin.Miter
+    BrushCapStyle.Round -> StrokeCap.Round to StrokeJoin.Round
+}

@@ -1,0 +1,61 @@
+package com.rts.rys.ryy.drawingtogether.works
+
+import android.graphics.Bitmap
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Canvas
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
+import com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState
+import com.rts.rys.ryy.drawingtogether.ui.canvas.drawStroke
+
+// CanvasState를 단일 비트맵으로 합성. 화면에 보이는 것과 같은 stroke 렌더링 함수를 재사용해
+// "보이는 것 = 저장되는 것"을 보장.
+// 진행 중 stroke와 커서 인디케이터는 포함하지 않음 — 저장 시점엔 손가락이 떨어진 상태로 가정.
+object PngComposer {
+
+    private const val DEFAULT_BLANK_SIZE = 1080
+
+    fun compose(state: CanvasState, density: Float): Bitmap {
+        val bg = state.background
+        val (w, h) = if (bg != null) bg.widthPx to bg.heightPx
+                     else DEFAULT_BLANK_SIZE to DEFAULT_BLANK_SIZE
+
+        val image = ImageBitmap(w, h)
+        val canvas = Canvas(image)
+        val drawScope = CanvasDrawScope()
+        val sizeFloat = Size(w.toFloat(), h.toFloat())
+        val sizeInt = IntSize(w, h)
+
+        drawScope.draw(
+            density = Density(density),
+            layoutDirection = LayoutDirection.Ltr,
+            canvas = canvas,
+            size = sizeFloat,
+        ) {
+            // 배경: 사진이 있으면 사진, 없으면 흰색.
+            if (bg != null) {
+                drawImage(
+                    image = bg.bitmap,
+                    srcOffset = IntOffset.Zero,
+                    srcSize = IntSize(bg.bitmap.width, bg.bitmap.height),
+                    dstOffset = IntOffset.Zero,
+                    dstSize = sizeInt,
+                )
+            } else {
+                drawRect(color = Color.White)
+            }
+            // 완료된 stroke만.
+            state.strokes.forEach { stroke ->
+                drawStroke(stroke, sizeInt, density)
+            }
+        }
+
+        return image.asAndroidBitmap()
+    }
+}
