@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
@@ -22,7 +21,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -40,6 +38,7 @@ import kotlinx.coroutines.withContext
 private const val RECENT_LIMIT = 10
 
 // 작품이 있을 때만 렌더 — 빈 상태 자리표시는 첫 사용 UX에 잡음.
+// HomeScreen에서 Spacer(weight=1f)로 화면 하단에 배치됨 — 모바일 화면 약 20% 차지.
 @Composable
 fun RecentWorksRow(
     works: List<Work>,
@@ -50,16 +49,16 @@ fun RecentWorksRow(
     val recent = remember(works) { works.take(RECENT_LIMIT) }
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
-            text = "최근 작품",
-            style = MaterialTheme.typography.labelMedium,
+            text = "최근 작업",
+            style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 1.dp),
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
         )
         LazyRow(
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(recent, key = { it.id }) { work ->
                 WorkThumbnail(work = work, onClick = { onWorkClick(work.id) })
@@ -76,7 +75,7 @@ private fun WorkThumbnail(work: Work, onClick: () -> Unit) {
         value = withContext(Dispatchers.IO) {
             val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeFile(file.absolutePath, opts)
-            val sample = PhotoLoader.computeSampleSize(opts.outWidth, opts.outHeight, maxDim = 192)
+            val sample = PhotoLoader.computeSampleSize(opts.outWidth, opts.outHeight, maxDim = 240)
             val final = BitmapFactory.Options().apply { inSampleSize = sample }
             BitmapFactory.decodeFile(file.absolutePath, final)?.asImageBitmap()
         }
@@ -84,8 +83,8 @@ private fun WorkThumbnail(work: Work, onClick: () -> Unit) {
 
     Card(
         onClick = onClick,
-        modifier = Modifier.size(width = 48.dp, height = 48.dp),
-        shape = RoundedCornerShape(8.dp),
+        modifier = Modifier.size(width = 72.dp, height = 72.dp),
+        shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
         ),

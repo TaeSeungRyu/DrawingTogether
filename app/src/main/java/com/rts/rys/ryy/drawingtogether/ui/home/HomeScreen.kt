@@ -1,6 +1,5 @@
 package com.rts.rys.ryy.drawingtogether.ui.home
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -12,9 +11,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -33,12 +32,10 @@ fun HomeScreen(
     val works by store.works.collectAsState()
 
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(vertical = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(0.dp),
+        modifier = modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        // 상단: 타이틀 + 모드 버튼. 자연스러운 높이로 stack.
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -68,7 +65,7 @@ fun HomeScreen(
                     Text("혼자 그리기", style = MaterialTheme.typography.bodySmall)
                 }
             }
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(32.dp))
             OutlinedButton(
                 onClick = onMultiMode,
                 modifier = Modifier.fillMaxWidth().height(88.dp),
@@ -81,12 +78,17 @@ fun HomeScreen(
             }
         }
 
+        // 중간 빈 공간 — 모드 버튼과 최근 작업 사이를 자동으로 벌림.
+        // 결과: 최근 작업 섹션이 화면 하단에 붙음. 높이는 자체 콘텐츠(~130dp) 기준 ≈ 화면 20%.
+        Spacer(modifier = Modifier.weight(0.5f))
+
         if (works.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(12.dp))
             RecentWorksRow(
                 works = works,
                 onWorkClick = onWorkClick,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
             )
         }
     }
