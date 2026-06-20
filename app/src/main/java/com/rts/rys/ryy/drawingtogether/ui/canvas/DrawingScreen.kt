@@ -15,10 +15,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -52,6 +55,7 @@ fun DrawingScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val density = androidx.compose.ui.platform.LocalDensity.current.density
+    var showSaveConfirm by remember { mutableStateOf(false) }
 
     // 갤러리 선택 — 권한 불필요 (Android PhotoPicker)
     val pickPhoto = rememberLauncherForActivityResult(
@@ -133,14 +137,7 @@ fun DrawingScreen(
                 Spacer(modifier = Modifier.width(6.dp))
                 CuteToolButton(
                     text = "저장",
-                    onClick = {
-                        scope.launch {
-                            val hasBg = vm.canvas.background != null
-                            val bitmap = PngComposer.compose(vm.canvas, density)
-                            WorkStore.get(context).save(bitmap, hasBg)
-                            Toast.makeText(context, SAVED_TOAST_TEXT, Toast.LENGTH_SHORT).show()
-                        }
-                    },
+                    onClick = { showSaveConfirm = true },
                     container = MaterialTheme.colorScheme.secondaryContainer,
                     content = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
@@ -186,6 +183,28 @@ fun DrawingScreen(
             onUndo = vm::undoLastLocal,
             onClear = vm::clearAll,
             modifier = Modifier.fillMaxWidth(),
+        )
+    }
+
+    if (showSaveConfirm) {
+        AlertDialog(
+            onDismissRequest = { showSaveConfirm = false },
+            title = { Text("작품 저장") },
+            text = { Text("현재 캔버스를 작품으로 저장할까요?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showSaveConfirm = false
+                    scope.launch {
+                        val hasBg = vm.canvas.background != null
+                        val bitmap = PngComposer.compose(vm.canvas, density)
+                        WorkStore.get(context).save(bitmap, hasBg)
+                        Toast.makeText(context, SAVED_TOAST_TEXT, Toast.LENGTH_SHORT).show()
+                    }
+                }) { Text("저장") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSaveConfirm = false }) { Text("취소") }
+            },
         )
     }
 }

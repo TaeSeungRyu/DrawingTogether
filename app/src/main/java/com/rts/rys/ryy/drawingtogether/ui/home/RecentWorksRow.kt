@@ -36,42 +36,29 @@ import com.rts.rys.ryy.drawingtogether.works.WorkStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+// 작품이 있을 때만 렌더 — 빈 상태 자리표시는 첫 사용 UX에 잡음.
 @Composable
 fun RecentWorksRow(
     works: List<Work>,
     onWorkClick: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    if (works.isEmpty()) return
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text = "최근 작품",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 2.dp),
         )
-        if (works.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(96.dp)
-                    .padding(horizontal = 24.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = "아직 저장된 작품이 없어요",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        } else {
-            LazyRow(
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(horizontal = 24.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                items(works, key = { it.id }) { work ->
-                    WorkThumbnail(work = work, onClick = { onWorkClick(work.id) })
-                }
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            items(works, key = { it.id }) { work ->
+                WorkThumbnail(work = work, onClick = { onWorkClick(work.id) })
             }
         }
     }
@@ -85,7 +72,7 @@ private fun WorkThumbnail(work: Work, onClick: () -> Unit) {
         value = withContext(Dispatchers.IO) {
             val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeFile(file.absolutePath, opts)
-            val sample = PhotoLoader.computeSampleSize(opts.outWidth, opts.outHeight, maxDim = 240)
+            val sample = PhotoLoader.computeSampleSize(opts.outWidth, opts.outHeight, maxDim = 192)
             val final = BitmapFactory.Options().apply { inSampleSize = sample }
             BitmapFactory.decodeFile(file.absolutePath, final)?.asImageBitmap()
         }
@@ -93,8 +80,8 @@ private fun WorkThumbnail(work: Work, onClick: () -> Unit) {
 
     Card(
         onClick = onClick,
-        modifier = Modifier.size(width = 92.dp, height = 92.dp),
-        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.size(width = 64.dp, height = 64.dp),
+        shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
         ),

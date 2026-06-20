@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -82,14 +81,13 @@ fun HomeScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
-        HorizontalDivider(modifier = Modifier.padding(horizontal = 24.dp))
-        Spacer(modifier = Modifier.height(8.dp))
-
-        RecentWorksRow(
-            works = works,
-            onWorkClick = onWorkClick,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        if (works.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(20.dp))
+            RecentWorksRow(
+                works = works,
+                onWorkClick = onWorkClick,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
     }
 }
