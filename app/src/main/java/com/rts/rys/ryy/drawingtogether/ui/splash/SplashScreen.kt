@@ -13,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.rts.rys.ryy.drawingtogether.ui.theme.EnglishFontFamily
+import com.rts.rys.ryy.drawingtogether.ui.theme.PastelBlobBackground
 import kotlinx.coroutines.delay
 
 private const val SPLASH_DELAY_MS = 1200L
@@ -27,21 +28,24 @@ fun SplashScreen(
         onFinished()
     }
 
-    Box(modifier = modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                text = "DrawingTogether",
-                style = MaterialTheme.typography.headlineLarge.copy(fontFamily = EnglishFontFamily),
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Text(
-                text = "함께 그리는 시간",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+    Box(modifier = modifier.fillMaxSize()) {
+        PastelBlobBackground()
+        Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = "DrawingTogether",
+                    style = MaterialTheme.typography.headlineLarge.copy(fontFamily = EnglishFontFamily),
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text = "함께 그리는 시간",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }

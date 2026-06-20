@@ -1,5 +1,6 @@
 package com.rts.rys.ryy.drawingtogether.ui.home
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.rts.rys.ryy.drawingtogether.ui.theme.PastelBlobBackground
 import com.rts.rys.ryy.drawingtogether.works.WorkStore
 
 @Composable
@@ -34,13 +36,15 @@ fun HomeScreen(
     val works by store.works.collectAsState()
     var modalOpen by remember { mutableStateOf(false) }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Spacer(modifier = Modifier.height(64.dp))
+    Box(modifier = modifier.fillMaxSize()) {
+        PastelBlobBackground()
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Spacer(modifier = Modifier.height(64.dp))
         Text(
             text = "DrawingTogether",
             style = MaterialTheme.typography.headlineMedium,
@@ -116,14 +120,15 @@ fun HomeScreen(
             }
         }
 
-        Spacer(modifier = Modifier.weight(1f))
-    }
+            Spacer(modifier = Modifier.weight(1f))
+        }
 
-    if (modalOpen) {
-        RecentWorksModal(
-            works = works,
-            onWorkClick = onWorkClick,
-            onDismiss = { modalOpen = false },
-        )
+        if (modalOpen) {
+            RecentWorksModal(
+                works = works,
+                onWorkClick = onWorkClick,
+                onDismiss = { modalOpen = false },
+            )
+        }
     }
 }
