@@ -104,6 +104,11 @@ fun DrawingScreen(
                 }
             },
             actions = {
+                MergeBackgroundToggle(
+                    checked = vm.canvas.mergeBackgroundOnSave,
+                    onCheckedChange = vm::setMergeBackgroundOnSave,
+                )
+                Spacer(modifier = Modifier.width(6.dp))
                 CuteToolButton(
                     text = "사진",
                     onClick = {
@@ -195,9 +200,10 @@ fun DrawingScreen(
                 TextButton(onClick = {
                     showSaveConfirm = false
                     scope.launch {
-                        val hasBg = vm.canvas.background != null
-                        val bitmap = PngComposer.compose(vm.canvas, density)
-                        WorkStore.get(context).save(bitmap, hasBg)
+                        val includeBg = vm.canvas.mergeBackgroundOnSave
+                        val mergedBg = vm.canvas.background != null && includeBg
+                        val bitmap = PngComposer.compose(vm.canvas, density, includeBg)
+                        WorkStore.get(context).save(bitmap, mergedBg)
                         Toast.makeText(context, SAVED_TOAST_TEXT, Toast.LENGTH_SHORT).show()
                     }
                 }) { Text("저장") }

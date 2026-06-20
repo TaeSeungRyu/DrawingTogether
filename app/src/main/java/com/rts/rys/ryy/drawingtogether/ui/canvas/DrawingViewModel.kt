@@ -73,6 +73,10 @@ class DrawingViewModel : ViewModel() {
         canvas.setBackground(image)
     }
 
+    fun setMergeBackgroundOnSave(value: Boolean) {
+        canvas.setMergeBackgroundOnSave(value)
+    }
+
     private fun emit(event: DrawingEvent) {
         canvas.apply(event)
     }

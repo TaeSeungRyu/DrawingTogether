@@ -87,6 +87,46 @@ fun EraserToggle(
     }
 }
 
+// 저장 시 사진 배경을 PNG에 합칠지 켜고 끄는 토글. 사진 추가 전에도 켤 수 있도록 항상 노출.
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MergeBackgroundToggle(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val container = if (checked)
+        MaterialTheme.colorScheme.primaryContainer
+    else
+        MaterialTheme.colorScheme.surfaceVariant
+    val contentColor = if (checked)
+        MaterialTheme.colorScheme.onPrimaryContainer
+    else
+        MaterialTheme.colorScheme.onSurfaceVariant
+    val border = if (checked)
+        BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+    else
+        null
+    Surface(
+        onClick = { onCheckedChange(!checked) },
+        shape = RoundedCornerShape(percent = 50),
+        color = container,
+        contentColor = contentColor,
+        border = border,
+        modifier = modifier.height(40.dp),
+    ) {
+        Box(
+            modifier = Modifier.padding(horizontal = 14.dp).fillMaxHeight(),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = if (checked) "배경 합치기 ON" else "배경 합치기 OFF",
+                style = MaterialTheme.typography.labelLarge,
+            )
+        }
+    }
+}
+
 // 도구바에서 현재 붓 보여주는 트리거. 탭하면 BrushSelectorSheet가 열림.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

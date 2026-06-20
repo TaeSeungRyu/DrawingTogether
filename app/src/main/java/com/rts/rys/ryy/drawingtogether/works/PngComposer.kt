@@ -21,8 +21,9 @@ object PngComposer {
 
     private const val DEFAULT_BLANK_SIZE = 1080
 
-    fun compose(state: CanvasState, density: Float): Bitmap {
+    fun compose(state: CanvasState, density: Float, includeBackground: Boolean = true): Bitmap {
         val bg = state.background
+        // 사진 미포함 모드여도 캔버스 크기는 bg 비율을 유지해야 stroke(정규화 좌표) 비율이 맞음.
         val (w, h) = if (bg != null) bg.widthPx to bg.heightPx
                      else DEFAULT_BLANK_SIZE to DEFAULT_BLANK_SIZE
 
@@ -38,8 +39,8 @@ object PngComposer {
             canvas = canvas,
             size = sizeFloat,
         ) {
-            // 배경: 사진이 있으면 사진, 없으면 흰색.
-            if (bg != null) {
+            // 배경: 사진이 있고 합치기 모드면 사진, 아니면 흰색.
+            if (bg != null && includeBackground) {
                 drawImage(
                     image = bg.bitmap,
                     srcOffset = IntOffset.Zero,

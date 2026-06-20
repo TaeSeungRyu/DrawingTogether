@@ -35,6 +35,15 @@ class CanvasState {
         _background = image
     }
 
+    // 저장 시 사진 배경을 PNG에 합쳐 굽을지 여부. 토글을 사진 추가보다 먼저 켜둘 수 있도록
+    // 배경 유무와 독립적으로 보관. 기본 true — 기존 동작과 호환.
+    private var _mergeBackgroundOnSave: Boolean by mutableStateOf(true)
+    val mergeBackgroundOnSave: Boolean get() = _mergeBackgroundOnSave
+
+    fun setMergeBackgroundOnSave(value: Boolean) {
+        _mergeBackgroundOnSave = value
+    }
+
     fun apply(event: DrawingEvent) {
         when (event) {
             is DrawingEvent.StrokeStart -> {
