@@ -12,6 +12,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.rts.rys.ryy.drawingtogether.ui.theme.EnglishFontFamily
 import kotlinx.coroutines.delay
 
 private const val SPLASH_DELAY_MS = 1200L
@@ -33,7 +34,7 @@ fun SplashScreen(
         ) {
             Text(
                 text = "DrawingTogether",
-                style = MaterialTheme.typography.headlineLarge,
+                style = MaterialTheme.typography.headlineLarge.copy(fontFamily = EnglishFontFamily),
                 color = MaterialTheme.colorScheme.primary,
             )
             Text(

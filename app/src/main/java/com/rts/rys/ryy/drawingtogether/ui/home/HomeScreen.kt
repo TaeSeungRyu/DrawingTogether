@@ -7,9 +7,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -41,7 +40,7 @@ fun HomeScreen(
             .padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Spacer(modifier = Modifier.height(40.dp))
+        Spacer(modifier = Modifier.height(64.dp))
         Text(
             text = "DrawingTogether",
             style = MaterialTheme.typography.headlineMedium,
@@ -56,11 +55,13 @@ fun HomeScreen(
         // 위 spacer가 버튼 그룹을 수직 중앙쪽으로 밀어냄. 아래 spacer와 비율이 같으면 정확한 중앙.
         Spacer(modifier = Modifier.weight(1f))
 
+        // 싱글모드 — 코랄(primary). 가장 강한 CTA.
         Button(
             onClick = onSingleMode,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(88.dp),
+            shape = MaterialTheme.shapes.extraLarge,
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("싱글모드", style = MaterialTheme.typography.titleLarge)
@@ -69,13 +70,19 @@ fun HomeScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        OutlinedButton(
+        // 멀티모드 — 민트(secondary). 같은 위계지만 색으로 구분.
+        Button(
             onClick = onMultiMode,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(88.dp),
+            shape = MaterialTheme.shapes.extraLarge,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.secondary,
+                contentColor = MaterialTheme.colorScheme.onSecondary,
+            ),
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("멀티모드", style = MaterialTheme.typography.titleLarge)
@@ -84,13 +91,19 @@ fun HomeScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        FilledTonalButton(
+        // 최근 작업 — 라벤더(tertiary). 보조 액션이지만 같은 시각 무게.
+        Button(
             onClick = { modalOpen = true },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(88.dp),
+            shape = MaterialTheme.shapes.extraLarge,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.tertiary,
+                contentColor = MaterialTheme.colorScheme.onTertiary,
+            ),
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("최근 작업", style = MaterialTheme.typography.titleLarge)
