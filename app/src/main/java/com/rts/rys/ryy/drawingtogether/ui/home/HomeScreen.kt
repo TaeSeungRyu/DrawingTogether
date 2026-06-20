@@ -8,57 +8,88 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.rts.rys.ryy.drawingtogether.works.WorkStore
 
 @Composable
 fun HomeScreen(
     onSingleMode: () -> Unit,
     onMultiMode: () -> Unit,
+    onWorkClick: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
+    val store = remember { WorkStore.get(context) }
+    val works by store.works.collectAsState()
+
     Column(
-        modifier = modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 32.dp),
-        verticalArrangement = Arrangement.Center,
+        modifier = modifier
+            .fillMaxSize()
+            .padding(vertical = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(0.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(
-            text = "DrawingTogether",
-            style = MaterialTheme.typography.headlineMedium,
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "모드를 선택해 주세요",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(modifier = Modifier.height(48.dp))
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Spacer(modifier = Modifier.height(40.dp))
+            Text(
+                text = "DrawingTogether",
+                style = MaterialTheme.typography.headlineMedium,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "모드를 선택해 주세요",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(40.dp))
 
-        Button(
-            onClick = onSingleMode,
-            modifier = Modifier.fillMaxWidth().height(88.dp),
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("싱글모드", style = MaterialTheme.typography.titleLarge)
-                Spacer(modifier = Modifier.height(2.dp))
-                Text("혼자 그리기", style = MaterialTheme.typography.bodySmall)
+            Button(
+                onClick = onSingleMode,
+                modifier = Modifier.fillMaxWidth().height(88.dp),
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("싱글모드", style = MaterialTheme.typography.titleLarge)
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text("혼자 그리기", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            OutlinedButton(
+                onClick = onMultiMode,
+                modifier = Modifier.fillMaxWidth().height(88.dp),
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("멀티모드", style = MaterialTheme.typography.titleLarge)
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text("가까운 기기와 함께 그리기", style = MaterialTheme.typography.bodySmall)
+                }
             }
         }
-        Spacer(modifier = Modifier.height(16.dp))
-        OutlinedButton(
-            onClick = onMultiMode,
-            modifier = Modifier.fillMaxWidth().height(88.dp),
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("멀티모드", style = MaterialTheme.typography.titleLarge)
-                Spacer(modifier = Modifier.height(2.dp))
-                Text("블루투스로 함께 그리기", style = MaterialTheme.typography.bodySmall)
-            }
-        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 24.dp))
+        Spacer(modifier = Modifier.height(8.dp))
+
+        RecentWorksRow(
+            works = works,
+            onWorkClick = onWorkClick,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }

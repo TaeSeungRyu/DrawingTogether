@@ -30,7 +30,8 @@ com.rts.rys.ryy.drawingtogether
 │   ├── splash/          앱 진입 시 잠깐 보이는 스플래시
 │   ├── home/            모드 선택 (싱글 / 멀티)
 │   ├── pairing/         Nearby 디바이스 검색·연결 화면 (Phase 2부터 구현)
-│   ├── canvas/          드로잉 화면 (붓·색·지우개·사진 도구)
+│   ├── canvas/          드로잉 화면 (붓·색·지우개·사진 도구 + StrokeRenderer)
+│   ├── preview/         저장된 작품 풀사이즈 보기 (Phase 1.6)
 │   └── theme/           (기존)
 ├── drawing/             드로잉 도메인 — UI/네트워크 무관
 │   ├── model/           Stroke, Point, ToolSettings, DrawingEvent, BackgroundImage
@@ -40,6 +41,10 @@ com.rts.rys.ryy.drawingtogether
 │   ├── PhotoPicker      갤러리에서 선택 (PhotoPicker API)
 │   ├── PhotoCapture     카메라로 촬영 (CameraX 또는 ACTION_IMAGE_CAPTURE)
 │   └── PhotoLoader      Uri → Bitmap + 메타데이터
+├── works/               저장된 작품 영속성 (Phase 1.6)
+│   ├── Work             메타데이터 (id, 저장 시각, 크기, 사진 유무)
+│   ├── WorkStore        filesDir/works/ — PNG + .meta 파일, StateFlow 인덱스
+│   └── PngComposer      CanvasState → ImageBitmap → PNG (StrokeRenderer 재사용)
 ├── transport/           Nearby Connections 연결 + 직렬화
 │   ├── nearby/          NearbyTransport — 광고/검색/연결/페이로드 송수신
 │   └── codec/           Frame ↔ CBOR 바이트
@@ -51,20 +56,23 @@ com.rts.rys.ryy.drawingtogether
 
 ```
 splash ──auto──► home ──싱글모드──► draw   (DrawingScreen)
-                  └────멀티모드──► pairing (Phase 2)──► draw (멀티 모드 변형)
+                  ├────멀티모드──► pairing (Phase 2)──► draw (멀티 모드 변형)
+                  └────썸네일 탭──► preview/{workId} (Phase 1.6 PreviewScreen)
 ```
 
-`splash`에서 `home`으로 진입할 때는 `popUpTo(Splash) { inclusive = true }`로 백스택에서 제거.
+`splash`에서 `home`으로 진입할 때는 `popUpTo(Splash) { inclusive = true }`로 백스택에서 제거. 미리보기는 백스택에 쌓여 뒤로 가기로 홈 복귀.
 
 레이어 의존 방향은 **단방향**:
 
 ```
 ui ──► session ──► drawing
    │           └──► transport ──► drawing(.model)
-   └──► photo ──► drawing(.model)
+   ├──► photo ──► drawing(.model)
+   └──► works ──► drawing(.engine) (PngComposer가 CanvasState 읽음)
+                  └──► ui.canvas.StrokeRenderer (화면과 동일 렌더 함수 재사용)
 ```
 
-`drawing`은 누구에게도 의존하지 않습니다(가장 안쪽). `transport`와 `photo`는 `drawing.model`의 타입만 알고 UI/세션은 모름.
+`drawing`은 누구에게도 의존하지 않습니다(가장 안쪽). `transport`/`photo`/`works`는 `drawing.model` 타입만 알고 UI/세션은 모름. 단 `works.PngComposer`는 화면용 stroke 렌더 함수를 재사용해 "보이는 것 = 저장되는 것"을 보장.
 
 ## 3. 상태 관리
 

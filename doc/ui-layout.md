@@ -8,7 +8,7 @@
 - **싱글과 멀티는 같은 화면** — 차이는 TopAppBar 우측 peer indicator 하나뿐. 코드 재사용 + 사용자 학습 비용 최소.
 - **사진은 캔버스의 상태** — 액션은 한 곳(TopAppBar)에 모이고, 도구바는 매번 그리기 동작만.
 
-## 2. 홈 화면 (기존, 라벨만 갱신)
+## 2. 홈 화면 (Phase 1.6 갱신)
 
 ```
 ┌──────────────────────────────────┐
@@ -26,10 +26,14 @@
 │  │   가까운 기기와 함께 그리기   │  │
 │  └────────────────────────────┘  │
 │                                  │
+│  ─────────────                   │
+│  최근 작품                        │
+│  [▣][▣][▣][▣][▣]  ─────►          │ 가로 스크롤 (LazyRow)
+│                                  │
 └──────────────────────────────────┘
 ```
 
-기존 "블루투스로 함께 그리기" → "가까운 기기와 함께 그리기" (Nearby 전환 반영).
+"가까운 기기와 함께 그리기" — 멀티모드 라벨 (Nearby 반영). 작품 없을 땐 "아직 저장된 작품이 없어요" 안내. 썸네일은 92×92dp, `ContentScale.Crop`. 탭 시 `preview/{workId}` 라우트로 이동.
 
 ## 3. 드로잉 화면 — 싱글 모드 (Phase 1.5+)
 
@@ -53,13 +57,13 @@
 
 ### TopAppBar 액션
 
-| 액션 | 동작 | Phase | 가시성 |
-|---|---|---|---|
-| ← | 홈으로 (백 스택 pop) | 1 | 항상 |
-| 📷사진 | Android PhotoPicker — 갤러리 선택, 권한 불필요 | 1.5 | 항상 |
-| 📸촬영 | CameraX 또는 `ACTION_IMAGE_CAPTURE` 인텐트, `CAMERA` 권한 | 1.5 | 항상 |
-| ⤴PNG | 사진 + finished strokes를 `MediaStore.Images`로 저장 | 4 | 항상 (Phase 4 전엔 placeholder) |
-| ✕제거 | `canvas.setBackground(null)` | 1.5 | 사진 있을 때만 |
+| 액션 | 동작 | Phase | 가시성 | 색 |
+|---|---|---|---|---|
+| ← | 홈으로 (백 스택 pop) | 1 | 항상 | 기본 |
+| 사진 | Android PhotoPicker — 갤러리 선택, 권한 불필요 | 1.5 | 항상 | primaryContainer |
+| 촬영 | `ACTION_IMAGE_CAPTURE` 인텐트(FileProvider URI), CAMERA 권한 미선언 | 1.5 | 항상 | tertiaryContainer |
+| 제거 | `canvas.setBackground(null)` | 1.5 | 사진 있을 때만 | errorContainer |
+| 저장 | `PngComposer.compose` → `WorkStore.save` → Toast | 1.6 | 항상 | secondaryContainer |
 
 ### 캔버스 영역
 
@@ -94,7 +98,28 @@
 | Slow | 🟠 | PING 응답 지연 |
 | Disconnected | 🔴 | 끊김 — 재연결 다이얼로그 |
 
-## 5. 페어링 화면 (Phase 2)
+## 5. 미리보기 화면 (Phase 1.6)
+
+```
+┌──────────────────────────────────────┐
+│ ←                                    │ TopAppBar (back만)
+├──────────────────────────────────────┤
+│                                      │
+│      surfaceVariant letterbox        │
+│   ┌────────────────────────────┐     │
+│   │                            │     │
+│   │     [저장된 PNG]            │     │ ContentScale.Fit
+│   │                            │     │
+│   └────────────────────────────┘     │
+│      surfaceVariant letterbox        │
+│                                      │
+└──────────────────────────────────────┘
+```
+
+- 홈 썸네일 탭 → `preview/{workId}` 라우트 → PNG 풀사이즈 표시
+- 첫 버전은 보기 전용. 삭제/공유/재편집은 Phase 4+ 로드맵.
+
+## 6. 페어링 화면 (Phase 2)
 
 ```
 ┌──────────────────────────────────────┐
@@ -133,7 +158,7 @@
 화면 진입 직후 한 번에 묶어 요청 — 자세한 권한 매트릭스는 [nearby-connections.md](nearby-connections.md) §3.
 거부 시 "권한이 없어 멀티모드를 사용할 수 없습니다" 안내 + 홈 복귀.
 
-## 6. 화면 비율과 공간
+## 7. 화면 비율과 공간
 
 폰 700dp 세로 기준:
 
@@ -150,7 +175,7 @@
 
 실측 후 필요해지면 추가.
 
-## 7. 디자인 결정 — 왜 TopAppBar인가
+## 8. 디자인 결정 — 왜 TopAppBar인가
 
 | 후보 | 장점 | 단점 |
 |---|---|---|
