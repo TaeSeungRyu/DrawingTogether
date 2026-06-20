@@ -36,6 +36,9 @@ import com.rts.rys.ryy.drawingtogether.works.WorkStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+// 홈 화면에 노출할 최근 작품 개수. 그 이상은 향후 갤러리 화면(Phase 4)에서 "전체 보기"로.
+private const val RECENT_LIMIT = 10
+
 // 작품이 있을 때만 렌더 — 빈 상태 자리표시는 첫 사용 UX에 잡음.
 @Composable
 fun RecentWorksRow(
@@ -44,20 +47,21 @@ fun RecentWorksRow(
     modifier: Modifier = Modifier,
 ) {
     if (works.isEmpty()) return
+    val recent = remember(works) { works.take(RECENT_LIMIT) }
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text = "최근 작품",
-            style = MaterialTheme.typography.labelLarge,
+            style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 2.dp),
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 1.dp),
         )
         LazyRow(
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            items(works, key = { it.id }) { work ->
+            items(recent, key = { it.id }) { work ->
                 WorkThumbnail(work = work, onClick = { onWorkClick(work.id) })
             }
         }
@@ -80,8 +84,8 @@ private fun WorkThumbnail(work: Work, onClick: () -> Unit) {
 
     Card(
         onClick = onClick,
-        modifier = Modifier.size(width = 64.dp, height = 64.dp),
-        shape = RoundedCornerShape(10.dp),
+        modifier = Modifier.size(width = 48.dp, height = 48.dp),
+        shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
         ),

@@ -82,7 +82,7 @@ fun HomeScreen(
         }
 
         if (works.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             RecentWorksRow(
                 works = works,
                 onWorkClick = onWorkClick,
