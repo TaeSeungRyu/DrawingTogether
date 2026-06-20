@@ -2,21 +2,12 @@ package com.rts.rys.ryy.drawingtogether.ui.home
 
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
@@ -26,7 +17,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.rts.rys.ryy.drawingtogether.photo.PhotoLoader
 import com.rts.rys.ryy.drawingtogether.works.Work
@@ -34,48 +25,23 @@ import com.rts.rys.ryy.drawingtogether.works.WorkStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-// 홈 화면에 노출할 최근 작품 개수. 그 이상은 향후 갤러리 화면(Phase 4)에서 "전체 보기"로.
-private const val RECENT_LIMIT = 10
-
-// 작품이 있을 때만 렌더 — 빈 상태 자리표시는 첫 사용 UX에 잡음.
-// HomeScreen에서 Spacer(weight=1f)로 화면 하단에 배치됨 — 모바일 화면 약 20% 차지.
+// 저장된 작품 1건의 썸네일 카드. 크기는 호출자가 modifier로 결정.
+// 디코딩은 IO 디스패처에서 sample-size로 다운샘플링.
 @Composable
-fun RecentWorksRow(
-    works: List<Work>,
-    onWorkClick: (String) -> Unit,
+fun WorkThumbnail(
+    work: Work,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    cornerRadius: Dp = 12.dp,
+    decodeMaxDim: Int = 320,
 ) {
-    if (works.isEmpty()) return
-    val recent = remember(works) { works.take(RECENT_LIMIT) }
-    Column(modifier = modifier.fillMaxWidth()) {
-        Text(
-            text = "최근 작업",
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
-        )
-        LazyRow(
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            items(recent, key = { it.id }) { work ->
-                WorkThumbnail(work = work, onClick = { onWorkClick(work.id) })
-            }
-        }
-    }
-}
-
-@Composable
-private fun WorkThumbnail(work: Work, onClick: () -> Unit) {
     val context = LocalContext.current
     val file = remember(work.id) { WorkStore.get(context).pngFile(work.id) }
     val bitmap: ImageBitmap? by produceState<ImageBitmap?>(initialValue = null, work.id) {
         value = withContext(Dispatchers.IO) {
             val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeFile(file.absolutePath, opts)
-            val sample = PhotoLoader.computeSampleSize(opts.outWidth, opts.outHeight, maxDim = 240)
+            val sample = PhotoLoader.computeSampleSize(opts.outWidth, opts.outHeight, maxDim = decodeMaxDim)
             val final = BitmapFactory.Options().apply { inSampleSize = sample }
             BitmapFactory.decodeFile(file.absolutePath, final)?.asImageBitmap()
         }
@@ -83,8 +49,8 @@ private fun WorkThumbnail(work: Work, onClick: () -> Unit) {
 
     Card(
         onClick = onClick,
-        modifier = Modifier.size(width = 72.dp, height = 72.dp),
-        shape = RoundedCornerShape(12.dp),
+        modifier = modifier,
+        shape = RoundedCornerShape(cornerRadius),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
         ),
