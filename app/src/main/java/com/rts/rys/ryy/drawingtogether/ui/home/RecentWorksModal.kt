@@ -80,10 +80,7 @@ fun RecentWorksModal(
                     items(works, key = { it.id }) { work ->
                         WorkThumbnail(
                             work = work,
-                            onClick = {
-                                onWorkClick(work.id)
-                                onDismiss()
-                            },
+                            onClick = { onWorkClick(work.id) },
                             modifier = Modifier.aspectRatio(1f),
                             cornerRadius = 12.dp,
                             decodeMaxDim = 360,

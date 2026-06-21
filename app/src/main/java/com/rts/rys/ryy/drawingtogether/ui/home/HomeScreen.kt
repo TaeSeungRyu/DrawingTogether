@@ -16,6 +16,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,7 +35,7 @@ fun HomeScreen(
     val context = LocalContext.current
     val store = remember { WorkStore.get(context) }
     val works by store.works.collectAsState()
-    var modalOpen by remember { mutableStateOf(false) }
+    var modalOpen by rememberSaveable { mutableStateOf(false) }
 
     Box(modifier = modifier.fillMaxSize()) {
         PastelBlobBackground()
@@ -46,7 +47,7 @@ fun HomeScreen(
         ) {
             Spacer(modifier = Modifier.height(64.dp))
         Text(
-            text = "DrawingTogether",
+            text = "Drawing Together",
             style = MaterialTheme.typography.headlineMedium,
         )
         Spacer(modifier = Modifier.height(8.dp))
