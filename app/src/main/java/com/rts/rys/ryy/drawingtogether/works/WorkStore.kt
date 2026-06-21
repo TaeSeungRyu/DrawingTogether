@@ -18,14 +18,20 @@ class WorkStore private constructor(private val worksDir: File) {
     private val _works = MutableStateFlow(loadAll())
     val works: StateFlow<List<Work>> = _works.asStateFlow()
 
-    suspend fun save(bitmap: Bitmap, hasPhotoBackground: Boolean): Work = withContext(Dispatchers.IO) {
+    suspend fun save(
+        bitmap: Bitmap,
+        hasPhotoBackground: Boolean,
+        name: String,
+    ): Work = withContext(Dispatchers.IO) {
         val id = UUID.randomUUID().toString()
+        val finalName = resolveUniqueName(name, _works.value)
         val work = Work(
             id = id,
             savedAtEpochMs = System.currentTimeMillis(),
             widthPx = bitmap.width,
             heightPx = bitmap.height,
             hasPhotoBackground = hasPhotoBackground,
+            name = finalName,
         )
         pngFile(id).outputStream().use { out ->
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
@@ -54,6 +60,18 @@ class WorkStore private constructor(private val worksDir: File) {
                 val dir = File(context.applicationContext.filesDir, "works").apply { mkdirs() }
                 WorkStore(dir).also { instance = it }
             }
+        }
+
+        // 같은 이름이 있으면 "곰돌이", "곰돌이 (2)", "곰돌이 (3)" ... 순으로 비어있는 첫 자리를 사용.
+        // 이름이 빈 문자열이면 그대로 빈 문자열 반환(라벨 없는 작품 허용).
+        internal fun resolveUniqueName(base: String, existing: List<Work>): String {
+            val trimmed = base.trim()
+            if (trimmed.isEmpty()) return ""
+            val taken = existing.map { it.name }.toHashSet()
+            if (trimmed !in taken) return trimmed
+            var n = 2
+            while ("$trimmed ($n)" in taken) n++
+            return "$trimmed ($n)"
         }
     }
 }

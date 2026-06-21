@@ -20,9 +20,16 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -55,7 +62,8 @@ fun DrawingScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val density = androidx.compose.ui.platform.LocalDensity.current.density
-    var showSaveConfirm by remember { mutableStateOf(false) }
+    var showSaveDialog by remember { mutableStateOf(false) }
+    var nameInput by remember { mutableStateOf("") }
 
     // 갤러리 선택 — 권한 불필요 (Android PhotoPicker)
     val pickPhoto = rememberLauncherForActivityResult(
@@ -142,7 +150,10 @@ fun DrawingScreen(
                 Spacer(modifier = Modifier.width(6.dp))
                 CuteToolButton(
                     text = "저장",
-                    onClick = { showSaveConfirm = true },
+                    onClick = {
+                        nameInput = ""
+                        showSaveDialog = true
+                    },
                     container = MaterialTheme.colorScheme.secondaryContainer,
                     content = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
@@ -191,25 +202,44 @@ fun DrawingScreen(
         )
     }
 
-    if (showSaveConfirm) {
+    if (showSaveDialog) {
+        val focus = remember { FocusRequester() }
+        LaunchedEffect(Unit) { focus.requestFocus() }
+        val submit = submit@{
+            val raw = nameInput.trim()
+            if (raw.isEmpty()) return@submit
+            showSaveDialog = false
+            scope.launch {
+                val includeBg = vm.canvas.mergeBackgroundOnSave
+                val mergedBg = vm.canvas.background != null && includeBg
+                val bitmap = PngComposer.compose(vm.canvas, density, includeBg)
+                WorkStore.get(context).save(bitmap, mergedBg, raw)
+                Toast.makeText(context, SAVED_TOAST_TEXT, Toast.LENGTH_SHORT).show()
+            }
+        }
         AlertDialog(
-            onDismissRequest = { showSaveConfirm = false },
+            onDismissRequest = { showSaveDialog = false },
             title = { Text("작품 저장") },
-            text = { Text("현재 캔버스를 작품으로 저장할까요?") },
+            text = {
+                OutlinedTextField(
+                    value = nameInput,
+                    onValueChange = { nameInput = it.take(40) },
+                    singleLine = true,
+                    label = { Text("이름") },
+                    placeholder = { Text("예) 곰돌이") },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { submit() }),
+                    modifier = Modifier.focusRequester(focus),
+                )
+            },
             confirmButton = {
-                TextButton(onClick = {
-                    showSaveConfirm = false
-                    scope.launch {
-                        val includeBg = vm.canvas.mergeBackgroundOnSave
-                        val mergedBg = vm.canvas.background != null && includeBg
-                        val bitmap = PngComposer.compose(vm.canvas, density, includeBg)
-                        WorkStore.get(context).save(bitmap, mergedBg)
-                        Toast.makeText(context, SAVED_TOAST_TEXT, Toast.LENGTH_SHORT).show()
-                    }
-                }) { Text("저장") }
+                TextButton(
+                    onClick = { submit() },
+                    enabled = nameInput.trim().isNotEmpty(),
+                ) { Text("저장") }
             },
             dismissButton = {
-                TextButton(onClick = { showSaveConfirm = false }) { Text("취소") }
+                TextButton(onClick = { showSaveDialog = false }) { Text("취소") }
             },
         )
     }

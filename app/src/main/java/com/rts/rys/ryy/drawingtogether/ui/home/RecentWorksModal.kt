@@ -23,6 +23,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.rts.rys.ryy.drawingtogether.works.Work
 
@@ -78,13 +80,31 @@ fun RecentWorksModal(
                         .heightIn(max = 440.dp),
                 ) {
                     items(works, key = { it.id }) { work ->
-                        WorkThumbnail(
-                            work = work,
-                            onClick = { onWorkClick(work.id) },
-                            modifier = Modifier.aspectRatio(1f),
-                            cornerRadius = 12.dp,
-                            decodeMaxDim = 360,
-                        )
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            WorkThumbnail(
+                                work = work,
+                                onClick = { onWorkClick(work.id) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .aspectRatio(1f),
+                                cornerRadius = 12.dp,
+                                decodeMaxDim = 360,
+                            )
+                            if (work.name.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = work.name,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                        }
                     }
                 }
             }
