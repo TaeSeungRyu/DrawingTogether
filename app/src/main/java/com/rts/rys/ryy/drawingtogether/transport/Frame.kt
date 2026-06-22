@@ -1,10 +1,11 @@
 package com.rts.rys.ryy.drawingtogether.transport
 
+import com.rts.rys.ryy.drawingtogether.drawing.model.DrawingEvent
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 // 와이어 메시지. doc/protocol.md §3 참고.
-// Phase 2에서는 핸드셰이크/킵얼라이브/종료까지만. EVENT/SNAPSHOT/PHOTO는 Phase 3.
+// Phase 3-A 에서 Event 추가. SNAPSHOT/PHOTO 는 Phase 3-B / 3-C.
 @Serializable
 sealed class Frame {
 
@@ -19,6 +20,10 @@ sealed class Frame {
     @Serializable
     @SerialName("hello_ack")
     data class HelloAck(val peerId: String) : Frame()
+
+    @Serializable
+    @SerialName("event")
+    data class Event(val e: DrawingEvent) : Frame()
 
     @Serializable
     @SerialName("ping")

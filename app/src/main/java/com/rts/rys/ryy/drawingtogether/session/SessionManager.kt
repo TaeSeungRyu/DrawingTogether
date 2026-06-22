@@ -2,6 +2,7 @@ package com.rts.rys.ryy.drawingtogether.session
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.rts.rys.ryy.drawingtogether.drawing.model.DrawingEvent
 import com.rts.rys.ryy.drawingtogether.transport.Frame
 import com.rts.rys.ryy.drawingtogether.transport.PROTO_VERSION
 import com.rts.rys.ryy.drawingtogether.transport.Transport
@@ -10,8 +11,11 @@ import com.rts.rys.ryy.drawingtogether.transport.nearby.NearbyTransport
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -41,6 +45,11 @@ class SessionManager private constructor(
 
     private val _nick = MutableStateFlow(prefs.getString(KEY_NICK, null) ?: "")
     val nick: StateFlow<String> = _nick.asStateFlow()
+
+    // 원격 작성자가 보낸 DrawingEvent. Frame.Event 만 추려서 노출.
+    // DrawingScreen 이 collect 해서 DrawingViewModel.applyRemoteEvent 에 전달한다.
+    private val _incomingDrawing = MutableSharedFlow<DrawingEvent>(extraBufferCapacity = 256)
+    val incomingDrawing: SharedFlow<DrawingEvent> = _incomingDrawing.asSharedFlow()
 
     val peerId: String = prefs.getString(KEY_PEER_ID, null) ?: run {
         val newId = UUID.randomUUID().toString()
@@ -123,6 +132,12 @@ class SessionManager private constructor(
 
     private fun handleIncoming(frame: Frame) {
         when (frame) {
+            is Frame.Event -> {
+                // 원격 DrawingEvent → DrawingScreen 으로 흘려보냄.
+                // 핸드셰이크 완료(Connected) 후에만 의미 있는 이벤트이지만,
+                // 안전상 그 외 상태에서도 들어오면 일단 broadcast 만 하고 적용은 소비자가 결정.
+                _incomingDrawing.tryEmit(frame.e)
+            }
             is Frame.Hello -> {
                 if (frame.proto != PROTO_VERSION) {
                     scope.launch {

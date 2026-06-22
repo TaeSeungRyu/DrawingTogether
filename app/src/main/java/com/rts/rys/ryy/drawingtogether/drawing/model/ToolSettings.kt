@@ -1,7 +1,11 @@
 package com.rts.rys.ryy.drawingtogether.drawing.model
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 enum class ToolKind { Pen, Eraser }
 
+@Serializable
 data class ToolSettings(
     val kind: ToolKind,
     val colorArgb: Int,

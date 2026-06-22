@@ -15,8 +15,12 @@ import com.rts.rys.ryy.drawingtogether.drawing.model.Stroke
 import com.rts.rys.ryy.drawingtogether.drawing.model.StrokeId
 import com.rts.rys.ryy.drawingtogether.drawing.model.ToolKind
 import com.rts.rys.ryy.drawingtogether.drawing.model.ToolSettings
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 
-// Phase 1: 단일 작성자. Phase 3에서 BT 인바운드 이벤트도 같은 apply() 루프로 흘려보낼 예정.
+// Phase 3-A: 로컬 입력 + 원격 인바운드 이벤트 둘 다 같은 canvas.apply() 루프를 통과.
+// outbound 는 SharedFlow 로 노출해 DrawingScreen 이 Connected 상태에서만 transport.send 로 흘려보낸다.
 class DrawingViewModel : ViewModel() {
     val canvas = CanvasState()
 
@@ -25,6 +29,17 @@ class DrawingViewModel : ViewModel() {
 
     var tool by mutableStateOf(ToolSettings.defaultPen())
         private set
+
+    // 로컬에서 발생한 모든 DrawingEvent. DrawingScreen 이 collect 해서
+    // 멀티모드 연결 중이면 Frame.Event 로 송신. 멀티모드 아니면 그냥 흘려보냄.
+    private val _outboundEvents = MutableSharedFlow<DrawingEvent>(extraBufferCapacity = 256)
+    val outboundEvents: SharedFlow<DrawingEvent> = _outboundEvents.asSharedFlow()
+
+    // 원격에서 받은 이벤트를 캔버스에 반영. outbound 로 재발행하지 않음(루프 방지).
+    // 인바운드는 다른 작성자 ID 가 박힌 채로 도착하므로 canvas.apply() 의 author 분리 로직이 자동 적용됨.
+    fun applyRemoteEvent(event: DrawingEvent) {
+        canvas.apply(event)
+    }
 
     fun selectColor(argb: Int) {
         tool = tool.copy(kind = ToolKind.Pen, colorArgb = argb)
@@ -149,6 +164,7 @@ class DrawingViewModel : ViewModel() {
 
     private fun emit(event: DrawingEvent) {
         canvas.apply(event)
+        _outboundEvents.tryEmit(event)
     }
 
     private fun nextSeq(): Long {

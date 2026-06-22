@@ -1,5 +1,13 @@
 package com.rts.rys.ryy.drawingtogether.transport.codec
 
+import com.rts.rys.ryy.drawingtogether.drawing.model.BrushType
+import com.rts.rys.ryy.drawingtogether.drawing.model.DrawingEvent
+import com.rts.rys.ryy.drawingtogether.drawing.model.PeerId
+import com.rts.rys.ryy.drawingtogether.drawing.model.Point
+import com.rts.rys.ryy.drawingtogether.drawing.model.ShapeMode
+import com.rts.rys.ryy.drawingtogether.drawing.model.StrokeId
+import com.rts.rys.ryy.drawingtogether.drawing.model.ToolKind
+import com.rts.rys.ryy.drawingtogether.drawing.model.ToolSettings
 import com.rts.rys.ryy.drawingtogether.transport.Frame
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -39,5 +47,61 @@ class FrameCodecTest {
     fun garbageBytesReturnsNullViaTryDecode() {
         val garbage = byteArrayOf(0x00, 0x01, 0x02, 0xFF.toByte())
         assertNull(FrameCodec.tryDecode(garbage))
+    }
+
+    @Test
+    fun eventStrokeStartRoundtrip() {
+        val tool = ToolSettings(
+            kind = ToolKind.Pen,
+            colorArgb = 0xFFE53935.toInt(),
+            strokeWidthDp = 6f,
+            brush = BrushType.Marker,
+            shape = ShapeMode.Circle,
+        )
+        val src = Frame.Event(
+            DrawingEvent.StrokeStart(
+                seq = 1L,
+                authorId = PeerId("peer-a"),
+                strokeId = StrokeId("s1"),
+                tool = tool,
+                point = Point(0.1f, 0.2f),
+            )
+        )
+        assertEquals(src, FrameCodec.decode(FrameCodec.encode(src)))
+    }
+
+    @Test
+    fun eventStrokeAppendRoundtrip() {
+        val src = Frame.Event(
+            DrawingEvent.StrokeAppend(
+                seq = 2L,
+                authorId = PeerId.Local,
+                strokeId = StrokeId("s1"),
+                points = listOf(Point(0.2f, 0.3f), Point(0.4f, 0.5f)),
+            )
+        )
+        assertEquals(src, FrameCodec.decode(FrameCodec.encode(src)))
+    }
+
+    @Test
+    fun eventStrokeEndRoundtrip() {
+        val src = Frame.Event(
+            DrawingEvent.StrokeEnd(seq = 3L, authorId = PeerId.Local, strokeId = StrokeId("s1"))
+        )
+        assertEquals(src, FrameCodec.decode(FrameCodec.encode(src)))
+    }
+
+    @Test
+    fun eventClearRoundtrip() {
+        val src = Frame.Event(DrawingEvent.Clear(seq = 4L, authorId = PeerId("peer-b")))
+        assertEquals(src, FrameCodec.decode(FrameCodec.encode(src)))
+    }
+
+    @Test
+    fun eventUndoRoundtrip() {
+        val src = Frame.Event(
+            DrawingEvent.Undo(seq = 5L, authorId = PeerId.Local, strokeId = StrokeId("s1"))
+        )
+        assertEquals(src, FrameCodec.decode(FrameCodec.encode(src)))
     }
 }

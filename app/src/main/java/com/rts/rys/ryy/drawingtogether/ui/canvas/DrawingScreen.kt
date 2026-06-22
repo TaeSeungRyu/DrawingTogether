@@ -96,6 +96,26 @@ fun DrawingScreen(
         }
     }
 
+    // Phase 3-A 양방향 stroke 동기화.
+    // outbound: VM 의 로컬 DrawingEvent → Connected 일 때만 Frame.Event 로 송신.
+    // inbound:  SessionManager 가 받은 원격 이벤트를 VM.applyRemoteEvent 로 흘려보냄.
+    LaunchedEffect(vm, session) {
+        vm.outboundEvents.collect { event ->
+            if (session.state.value is SessionState.Connected) {
+                runCatching {
+                    session.transport.send(
+                        com.rts.rys.ryy.drawingtogether.transport.Frame.Event(event)
+                    )
+                }
+            }
+        }
+    }
+    LaunchedEffect(vm, session) {
+        session.incomingDrawing.collect { event ->
+            vm.applyRemoteEvent(event)
+        }
+    }
+
     // 갤러리 선택 — 권한 불필요 (Android PhotoPicker)
     val pickPhoto = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
