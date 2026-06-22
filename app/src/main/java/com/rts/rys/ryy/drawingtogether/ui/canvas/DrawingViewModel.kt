@@ -88,13 +88,14 @@ class DrawingViewModel : ViewModel() {
         emit(DrawingEvent.StrokeEnd(nextSeq(), author, strokeId))
     }
 
-    // 지우개 한 점이 자기 stroke과 충돌하면 그 stroke에 대해 Undo 이벤트 발행.
-    // hit radius는 tool.strokeWidthDp에 비례하는 정규화 좌표(0..1). 캔버스 크기 없이도 동작.
+    // 지우개 한 점이 stroke 과 충돌하면 그 stroke 에 대해 Undo 이벤트 발행.
+    // "함께 그리기" 단일 모드 — 자기/상대 누구 stroke 든 지울 수 있다.
+    // hit radius 는 tool.strokeWidthDp 에 비례하는 정규화 좌표(0..1). 캔버스 크기 없이도 동작.
     private fun eraseAt(p: Point) {
         val threshold = (tool.strokeWidthDp * 0.005f).coerceAtLeast(0.015f)
         val thresholdSq = threshold * threshold
         val hits = canvas.strokes
-            .filter { it.authorId == author && strokeHitsPoint(it, p, thresholdSq) }
+            .filter { strokeHitsPoint(it, p, thresholdSq) }
             .map { it.id }
         hits.forEach { id -> emit(DrawingEvent.Undo(nextSeq(), author, id)) }
     }
@@ -146,7 +147,7 @@ class DrawingViewModel : ViewModel() {
     }
 
     fun undoLastLocal() {
-        val id = canvas.lastLocalStrokeId() ?: return
+        val id = canvas.lastFinishedStrokeId() ?: return
         emit(DrawingEvent.Undo(nextSeq(), author, id))
     }
 

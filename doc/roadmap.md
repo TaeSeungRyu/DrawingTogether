@@ -71,7 +71,7 @@
 - [x] 로컬 입력 → `EVENT` 프레임 전송 (`Payload.Type.BYTES`) — `DrawingViewModel.outboundEvents` → `Frame.Event`
 - [x] 인바운드 `EVENT` → 같은 `apply()` 루프 — `SessionManager.incomingDrawing` → `vm.applyRemoteEvent`
 - [x] 20–30ms 코얼레싱 (`StrokeAppend` 점 묶기) — `transport/OutboundCoalescer.kt`, 25ms 주기
-- [x] 원격 작성자 획은 시각적으로 구분 — 알파 0.65 곱셈 (`StrokeRenderer.colorFor(isRemote)`). 화면만, PNG 저장은 동등 가시
+- [~] 원격 작성자 획 시각 구분 — "함께 그리기" 단일 모드 확정으로 보류. 자기/상대 stroke 동등 가시. Phase 4 "따라 그리기" 옵션 도입 시 알파 감쇠 재추가 검토
 - [ ] PING/PONG (BYE는 Phase 2에서 구현됨)
 - [ ] 늦참가/재연결 시 `SNAPSHOT_REQ` → `SNAPSHOT`
 - [ ] **사진 전송**: `PHOTO_META` + `Payload.Type.FILE` → 수신 측 `BackgroundImage` 설정
@@ -79,28 +79,31 @@
 
 **완료 기준**: 두 사람이 동시에 그려도 양쪽 캔버스가 일치. 한쪽이 사진을 보내면 양쪽 모두 같은 배경 위에 그림. 끊김/재연결 시 상태 복원.
 
-## Phase 4 — 함께 그리기 모드 (협업 모드)
-목표: 두 피어가 **하나의 캔버스를 진짜로 공유**하며 서로의 그림도 자유롭게 수정·삭제 가능. Phase 2-3 까지의 "따라 그리기" (작성자별 데이터 분리) 모드는 그대로 두고, 옵션으로 선택할 수 있는 두 번째 협업 모드를 추가.
+## Phase 4 — 따라 그리기 모드 옵션 (협업 모드와 병행)
+목표: Phase 3 이후 **기본 동작인 "함께 그리기"** 외에 **"따라 그리기"** 모드를 옵션으로 추가. 잘 그리는 사람의 시범을 보고 따라 그리는 학습 시나리오용. 두 모드는 페어링 시 양쪽 합의로 선택.
 
 **모드 비교**
 
-| 항목 | 따라 그리기 (Phase 2-3 기본) | 함께 그리기 (Phase 4) |
+| 항목 | 함께 그리기 (현재 기본) | 따라 그리기 (Phase 4 옵션) |
 |---|---|---|
-| 컨셉 | 잘 그리는 사람의 시범 → 옆에서 따라 그리기 학습 | 공동 작업, 두 사람이 같이 완성 |
-| Clear / Undo / 지우개 | 자기 stroke만 | 누구든 누구 stroke든 |
-| 저장 PNG | 양쪽 stroke 합성 (이미 그렇게 됨) | 동일 |
+| 컨셉 | 공동 작업, 둘이 같이 완성 | 시범 → 옆에서 따라 그리기 학습 |
+| Clear / Undo / 지우개 | 누구든 누구 stroke 든 | 자기 stroke 만 |
+| 상대 stroke 시각 구분 | 동등 가시 | 알파 0.65 (참고용 표시) |
+| 저장 PNG | 양쪽 stroke 동등 합성 | 동일 |
 | 와이어 프로토콜 | EVENT 그대로 | EVENT 그대로 — 변경 없음 |
 
 **구현 항목**
-- [ ] `CollaborationMode` enum (Follow / Together) + `CanvasState` 또는 세션 시작 시점에 보관
-- [ ] `CanvasState.apply()` 의 Clear/Undo 분기에서 Together 모드면 author 필터 우회
+- [ ] `CollaborationMode` enum (Together / Follow) + `CanvasState` 또는 세션 시작 시점에 보관
+- [ ] 송수신 경계에서 `PeerId.Local` ↔ 실제 peerId 번역 (현재는 양쪽 모두 Local 로 박혀있음 — protocol.md §8 참고)
+- [ ] `CanvasState.apply()` 의 Clear/Undo 분기에서 Follow 모드면 author 필터 활성화
+- [ ] `DrawingViewModel.eraseAt` 도 Follow 모드면 author 필터 활성화
+- [ ] `StrokeRenderer` 에 `isRemote` 알파 감쇠 재추가 (Follow 모드 전용)
 - [ ] 페어링 화면에 모드 선택 토글 — 양쪽이 합의해야 시작 (HELLO에 모드 필드 추가, 불일치 시 거부)
 - [ ] DrawingScreen 표시: 현재 어느 모드인지 작게 노출 (peer indicator 옆)
-- [ ] (선택) Together 모드에서도 작성자 시각 구분 — 닉네임 라벨 또는 살짝 다른 색 모드
 
-**완료 기준**: 페어링 시 모드 선택 가능. Together 모드에서 한쪽이 "전체 지우기" 하면 양쪽 캔버스 모두 비워짐. 한쪽 지우개로 상대 stroke 직접 삭제 가능.
+**완료 기준**: 페어링 시 모드 선택 가능. Follow 모드에서 한쪽 지우개·Clear 가 상대 stroke 안 건드림. 상대 stroke 은 살짝 흐리게 표시되어 시범인지 구분됨.
 
-> 도입 시점 가이드: Phase 3 (이벤트 동기화) 가 실제 기기에서 안정적으로 도는 걸 확인한 다음. 데이터 모델 자체는 Phase 1.6 시점부터 author 분리가 박혀있어서 조건 한 줄만 바꾸면 됨.
+> 도입 시점 가이드: Phase 3 (이벤트 동기화) 가 실제 기기에서 안정적으로 도는 걸 확인한 다음. 알파 감쇠와 author 필터 분기 코드는 Phase 3-A 중에 한 번 작성됐다가 단일 모드 확정으로 제거됨 — 도입 시 git 히스토리 참고.
 
 ## Phase 5 — 완성품 추출 & 다듬기
 - [ ] PNG 내보내기 — 사진 배경 + 완료된 stroke 합성, `MediaStore.Images`로 저장

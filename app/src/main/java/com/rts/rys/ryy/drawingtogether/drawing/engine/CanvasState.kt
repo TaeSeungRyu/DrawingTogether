@@ -7,7 +7,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.rts.rys.ryy.drawingtogether.drawing.model.BackgroundImage
 import com.rts.rys.ryy.drawingtogether.drawing.model.DrawingEvent
-import com.rts.rys.ryy.drawingtogether.drawing.model.PeerId
 import com.rts.rys.ryy.drawingtogether.drawing.model.Stroke
 import com.rts.rys.ryy.drawingtogether.drawing.model.StrokeId
 
@@ -20,12 +19,13 @@ class CanvasState {
     private val _openStrokes = mutableStateMapOf<StrokeId, Stroke>()
     val openStrokes: Map<StrokeId, Stroke> get() = _openStrokes
 
-    // 로컬 작성자(PeerId.Local) 획만 보관. 원격 획은 되돌리기 후보가 아님.
+    // 완료된 stroke 의 시간순 스택. "되돌리기" 버튼이 마지막 항목을 pop.
+    // "함께 그리기" 모드라 자기/상대 구분 없이 모두 들어감 (collaborative undo).
     private val _undoStack = mutableStateListOf<StrokeId>()
 
     val canUndo: Boolean get() = _undoStack.isNotEmpty()
 
-    fun lastLocalStrokeId(): StrokeId? = _undoStack.lastOrNull()
+    fun lastFinishedStrokeId(): StrokeId? = _undoStack.lastOrNull()
 
     // 사진 배경. 이벤트(apply)가 아닌 별도 상태 — 사진은 도메인 이벤트가 아니라 캔버스 속성.
     private var _background: BackgroundImage? by mutableStateOf(null)
@@ -61,9 +61,7 @@ class CanvasState {
             is DrawingEvent.StrokeEnd -> {
                 val finished = _openStrokes.remove(event.strokeId) ?: return
                 _strokes.add(finished)
-                if (finished.authorId == PeerId.Local) {
-                    _undoStack.add(finished.id)
-                }
+                _undoStack.add(finished.id)
             }
             is DrawingEvent.Clear -> {
                 // "함께 그리기" 단일 모드 — Clear 는 양쪽 모두에 적용.
