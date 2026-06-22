@@ -167,10 +167,22 @@ fun PairingScreen(
                 Text(if (isAdvertising) "광고 중 — 탭하면 검색으로" else "호스트로 광고시작")
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // 핵심 안내 — 비대칭(한 대만 호스트) 규칙을 항상 노출.
+            Text(
+                text = if (isAdvertising)
+                    "💡 이제 상대 기기 화면에서 내 이름 카드가 보일 거예요.\n   상대가 탭하면 양쪽에 인증 토큰이 뜹니다."
+                else
+                    "💡 두 기기 중 한 대만 위 버튼을 누르세요.\n   다른 한 대는 그대로 두면 아래에 카드가 나타납니다.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = if (isAdvertising) "다른 기기에서 내 이름이 보일 거예요" else "발견된 디바이스",
+                text = if (isAdvertising) "내가 호스트 — 상대가 탭하기를 기다리는 중" else "주변에서 발견된 기기",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
             )
@@ -298,9 +310,10 @@ private fun AdvertisingHint() {
         CircularProgressIndicator()
         Spacer(modifier = Modifier.height(12.dp))
         Text(
-            text = "광고 중 — 상대 기기에서 내 이름을 탭하기를 기다리는 중",
+            text = "내가 호스트가 됐어요.\n상대 기기 화면에 내 이름이 곧 보일 거예요.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
     }
 }
@@ -317,9 +330,10 @@ private fun EmptyDiscoveryHint(state: TransportState) {
                 CircularProgressIndicator()
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = "주변 기기를 검색 중...",
+                    text = "검색 중...\n상대 기기에서 \"호스트로 광고시작\"을 누를 때까지 기다리는 중",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 )
             }
             is TransportState.Connecting -> {
