@@ -84,6 +84,18 @@ fun DrawingScreen(
         }
     }
 
+    // 예상치 못한 끊김 알림. 사용자의 명시적 disconnect 는 SessionManager 에서 Failed 를 우회하므로
+    // 여기 토스트는 진짜 끊김에서만 발화. 캔버스 데이터는 그대로 남아있으니 저장 안내까지 같이.
+    LaunchedEffect(sessionState) {
+        if (sessionState is SessionState.Failed) {
+            Toast.makeText(
+                context,
+                "상대와의 연결이 끊겼어요. 그림은 그대로 두면 저장할 수 있어요.",
+                Toast.LENGTH_LONG,
+            ).show()
+        }
+    }
+
     // 갤러리 선택 — 권한 불필요 (Android PhotoPicker)
     val pickPhoto = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),

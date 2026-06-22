@@ -81,9 +81,12 @@ class SessionManager private constructor(
             if (_state.value is SessionState.Connected) {
                 runCatching { transport.send(Frame.Bye("user-quit")) }
             }
+            // transport.stop() 가 onDisconnected 콜백을 비동기로 발화시키고, 그 결과
+            // handleTransportState 가 Connected→Failed("disconnected") 로 잠깐 뒤집을 수 있다.
+            // 사용자 의도 disconnect 는 Failed 알림을 띄우면 안 되므로 먼저 Idle 로 박는다.
+            _state.value = SessionState.Idle
             transport.stop()
             resetHandshake()
-            _state.value = SessionState.Idle
         }
     }
 
