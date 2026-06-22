@@ -44,6 +44,18 @@ class CanvasState {
         _mergeBackgroundOnSave = value
     }
 
+    // 외부에서 들어온 snapshot 으로 stroke 을 전부 교체. "동기화" 버튼 응답을 받을 때 사용.
+    // 일반 DrawingEvent 흐름과 달리 out-of-band — outboundEvents 로 흘려보내지 않으므로
+    // 받는 쪽 단방향 적용용. _strokes/_openStrokes/_undoStack 을 비우고 받은 strokes 로 재구성.
+    fun applySnapshot(strokes: List<Stroke>) {
+        _strokes.clear()
+        _openStrokes.clear()
+        _undoStack.clear()
+        _strokes.addAll(strokes)
+        // collaborative undo — 받은 stroke 들 시간순으로 undoStack 에 push.
+        strokes.forEach { _undoStack.add(it.id) }
+    }
+
     fun apply(event: DrawingEvent) {
         when (event) {
             is DrawingEvent.StrokeStart -> {

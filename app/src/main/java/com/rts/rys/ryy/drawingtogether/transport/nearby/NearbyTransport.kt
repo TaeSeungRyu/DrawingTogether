@@ -201,7 +201,12 @@ class NearbyTransport(context: Context) : Transport {
         override fun onEndpointFound(endpointId: String, info: DiscoveredEndpointInfo) {
             if (info.serviceId != SERVICE_ID) return
             val peer = DiscoveredPeer(endpointId = endpointId, nick = info.endpointName)
-            _discovered.value = (_discovered.value.filter { it.endpointId != endpointId } + peer)
+            // 같은 endpointId 와 같은 nick 둘 다 제거하고 새 entry 만 남긴다.
+            // 한 기기가 광고를 재시작하면 Nearby 가 새 endpointId 를 부여해서 같은 기기가
+            // 두 카드로 보이는 현상이 있는데(onEndpointLost 가 늦게 옴), nick 기반 dedupe 로 해결.
+            // 트레이드오프: 두 단말이 같은 닉네임을 쓰면 하나만 보임 — 1:1 쓰임새에서 수용 가능.
+            _discovered.value = _discovered.value
+                .filter { it.endpointId != endpointId && it.nick != info.endpointName } + peer
         }
 
         override fun onEndpointLost(endpointId: String) {

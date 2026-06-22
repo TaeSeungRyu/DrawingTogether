@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.net.Uri
 import com.rts.rys.ryy.drawingtogether.drawing.model.DrawingEvent
+import com.rts.rys.ryy.drawingtogether.drawing.model.Stroke
 import com.rts.rys.ryy.drawingtogether.transport.FileTransferEvent
 import com.rts.rys.ryy.drawingtogether.transport.Frame
 import com.rts.rys.ryy.drawingtogether.transport.PROTO_VERSION
@@ -70,6 +71,14 @@ class SessionManager private constructor(
 
     // 사진 송수신 진행률. transport.fileTransfers 패스스루 — 현재 프로토콜에서 FILE = 사진.
     val photoTransfers: SharedFlow<FileTransferEvent> get() = transport.fileTransfers
+
+    // "동기화" — 상대가 내 캔버스 상태를 요청. DrawingScreen 이 canvas 의 strokes/photo 로 응답.
+    private val _snapshotRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 4)
+    val snapshotRequests: SharedFlow<Unit> = _snapshotRequests.asSharedFlow()
+
+    // 내가 SnapshotReq 를 보냈고, 상대가 Snapshot 으로 응답한 stroke 목록.
+    private val _incomingSnapshot = MutableSharedFlow<List<Stroke>>(extraBufferCapacity = 4)
+    val incomingSnapshot: SharedFlow<List<Stroke>> = _incomingSnapshot.asSharedFlow()
 
     // PhotoMeta 와 FILE 페이로드는 도착 순서가 달라질 수 있으니 양방향 버퍼.
     private val pendingPhotoMeta = mutableMapOf<Long, Frame.PhotoMeta>()
@@ -187,6 +196,15 @@ class SessionManager private constructor(
             }
             is Frame.MergeBackground -> {
                 _incomingMergeToggle.tryEmit(frame.enabled)
+            }
+            is Frame.SnapshotReq -> {
+                // 상대가 내 캔버스 상태를 요청. DrawingScreen 이 canvas 의 strokes/photo 로 응답.
+                _snapshotRequests.tryEmit(Unit)
+            }
+            is Frame.Snapshot -> {
+                // 내가 보낸 SnapshotReq 의 응답 — 받은 strokes 로 내 캔버스 덮어쓸 신호.
+                // 사진은 별도 PhotoMeta + FILE (또는 PhotoRemove) 으로 따라옴 — 기존 경로 활용.
+                _incomingSnapshot.tryEmit(frame.strokes)
             }
             is Frame.Hello -> {
                 if (frame.proto != PROTO_VERSION) {

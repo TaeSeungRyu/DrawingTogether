@@ -54,6 +54,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rts.rys.ryy.drawingtogether.drawing.model.BackgroundImage
 import com.rts.rys.ryy.drawingtogether.photo.CameraCaptureFile
 import com.rts.rys.ryy.drawingtogether.photo.PhotoLoader
+import androidx.compose.ui.graphics.asAndroidBitmap
 import com.rts.rys.ryy.drawingtogether.session.BackgroundChange
 import com.rts.rys.ryy.drawingtogether.session.SessionManager
 import com.rts.rys.ryy.drawingtogether.session.SessionState
@@ -96,6 +97,61 @@ private suspend fun shareBackgroundToPeer(
     }
 }
 
+// "동기화" 응답용 — 현재 캔버스의 ImageBitmap 을 cache/snapshots/ 에 JPEG 로 저장하고
+// FileProvider URI 반환. URI 는 곧 Nearby FILE 페이로드로 송신.
+private suspend fun bitmapToCacheUri(
+    context: android.content.Context,
+    bitmap: androidx.compose.ui.graphics.ImageBitmap,
+): android.net.Uri = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+    val dir = java.io.File(context.cacheDir, "snapshots").apply { mkdirs() }
+    val file = java.io.File(dir, "snap_${System.currentTimeMillis()}.jpg")
+    file.outputStream().use { out ->
+        bitmap.asAndroidBitmap()
+            .compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, out)
+    }
+    androidx.core.content.FileProvider.getUriForFile(
+        context,
+        "${context.packageName}.fileprovider",
+        file,
+    )
+}
+
+// SnapshotReq 를 받은 쪽에서 호출. 현재 strokes + photo 를 상대에게 전송.
+// 1) Frame.Snapshot(strokes, hasPhoto) 송신
+// 2) hasPhoto == true: bitmap → cache JPEG → sendFile + Frame.PhotoMeta
+//    hasPhoto == false: Frame.PhotoRemove (상대 캔버스의 사진도 제거되도록)
+private suspend fun respondToSnapshotRequest(
+    context: android.content.Context,
+    session: SessionManager,
+    strokes: List<com.rts.rys.ryy.drawingtogether.drawing.model.Stroke>,
+    background: BackgroundImage?,
+) {
+    if (session.state.value !is SessionState.Connected) return
+    runCatching {
+        session.transport.send(
+            Frame.Snapshot(strokes = strokes, hasPhoto = background != null)
+        )
+        if (background != null) {
+            val uri = bitmapToCacheUri(context, background.bitmap)
+            val payloadId = session.transport.sendFile(uri)
+            session.transport.send(
+                Frame.PhotoMeta(
+                    payloadId = payloadId,
+                    byteSize = context.contentResolver
+                        .openAssetFileDescriptor(uri, "r")
+                        ?.use { it.length }
+                        ?: 0L,
+                    widthPx = background.widthPx,
+                    heightPx = background.heightPx,
+                    mime = "image/jpeg",
+                )
+            )
+        } else {
+            session.transport.send(Frame.PhotoRemove)
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DrawingScreen(
@@ -109,6 +165,7 @@ fun DrawingScreen(
     val density = androidx.compose.ui.platform.LocalDensity.current.density
     val snackbarHostState = remember { SnackbarHostState() }
     var showSaveDialog by remember { mutableStateOf(false) }
+    var showSyncConfirm by remember { mutableStateOf(false) }
     var nameInput by remember { mutableStateOf("") }
 
     // 멀티모드 — Connected이면 우측에 peer indicator. 화면을 떠날 때 disconnect.
@@ -182,6 +239,24 @@ fun DrawingScreen(
     LaunchedEffect(vm, session) {
         session.incomingMergeToggle.collect { enabled ->
             vm.setMergeBackgroundOnSave(enabled)
+        }
+    }
+
+    // "동기화" — 상대가 내 캔버스 상태를 요청 (SnapshotReq). 현재 strokes + photo 로 응답.
+    LaunchedEffect(vm, session) {
+        session.snapshotRequests.collect {
+            respondToSnapshotRequest(
+                context = context,
+                session = session,
+                strokes = vm.canvas.strokes.toList(),
+                background = vm.canvas.background,
+            )
+        }
+    }
+    // 내가 동기화 요청 → 응답으로 받은 strokes 로 캔버스 덮어쓰기. (사진은 별도 PhotoMeta/FILE 경로.)
+    LaunchedEffect(vm, session) {
+        session.incomingSnapshot.collect { strokes ->
+            vm.applyRemoteSnapshot(strokes)
         }
     }
 
@@ -386,6 +461,10 @@ fun DrawingScreen(
             onStrokeWidth = vm::setStrokeWidth,
             onUndo = vm::undoLastLocal,
             onClear = vm::clearAll,
+            // 동기화 버튼은 Connected 일 때만 노출. 탭 시 컨펌 다이얼로그 → 승인 후 SnapshotReq 송신.
+            onSync = if (sessionState is SessionState.Connected) {
+                { showSyncConfirm = true }
+            } else null,
             modifier = Modifier.fillMaxWidth(),
         )
     }
@@ -399,6 +478,25 @@ fun DrawingScreen(
     val activeLabel = transferLabel
     if (activeLabel != null) {
         TransferLoadingOverlay(label = activeLabel, fraction = transferFraction)
+    }
+
+    if (showSyncConfirm) {
+        AlertDialog(
+            onDismissRequest = { showSyncConfirm = false },
+            title = { Text("동기화") },
+            text = { Text("상대방 데이터를 전부 가져와 적용 합니다.\n내가 그린 그림은 전부 제거됩니다.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showSyncConfirm = false
+                    scope.launch {
+                        runCatching { session.transport.send(Frame.SnapshotReq) }
+                    }
+                }) { Text("적용") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSyncConfirm = false }) { Text("취소") }
+            },
+        )
     }
 
     if (showSaveDialog) {

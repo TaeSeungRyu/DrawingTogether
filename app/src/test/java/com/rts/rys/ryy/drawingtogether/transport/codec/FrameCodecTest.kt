@@ -5,6 +5,7 @@ import com.rts.rys.ryy.drawingtogether.drawing.model.DrawingEvent
 import com.rts.rys.ryy.drawingtogether.drawing.model.PeerId
 import com.rts.rys.ryy.drawingtogether.drawing.model.Point
 import com.rts.rys.ryy.drawingtogether.drawing.model.ShapeMode
+import com.rts.rys.ryy.drawingtogether.drawing.model.Stroke
 import com.rts.rys.ryy.drawingtogether.drawing.model.StrokeId
 import com.rts.rys.ryy.drawingtogether.drawing.model.ToolKind
 import com.rts.rys.ryy.drawingtogether.drawing.model.ToolSettings
@@ -126,6 +127,44 @@ class FrameCodecTest {
     @Test
     fun mergeBackgroundRoundtrip() {
         listOf(Frame.MergeBackground(true), Frame.MergeBackground(false)).forEach { src ->
+            assertEquals(src, FrameCodec.decode(FrameCodec.encode(src)))
+        }
+    }
+
+    @Test
+    fun snapshotReqRoundtrip() {
+        val src: Frame = Frame.SnapshotReq
+        assertEquals(src, FrameCodec.decode(FrameCodec.encode(src)))
+    }
+
+    @Test
+    fun snapshotRoundtrip() {
+        val tool = ToolSettings(
+            kind = ToolKind.Pen,
+            colorArgb = 0xFF000000.toInt(),
+            strokeWidthDp = 4f,
+            brush = BrushType.Pen,
+            shape = ShapeMode.None,
+        )
+        val strokes = listOf(
+            Stroke(
+                id = StrokeId("s1"),
+                authorId = PeerId.Local,
+                tool = tool,
+                points = listOf(Point(0.1f, 0.2f), Point(0.3f, 0.4f)),
+            ),
+            Stroke(
+                id = StrokeId("s2"),
+                authorId = PeerId("peer-b"),
+                tool = tool,
+                points = listOf(Point(0.5f, 0.6f)),
+            ),
+        )
+        listOf(
+            Frame.Snapshot(strokes = strokes, hasPhoto = true),
+            Frame.Snapshot(strokes = strokes, hasPhoto = false),
+            Frame.Snapshot(strokes = emptyList(), hasPhoto = false),
+        ).forEach { src ->
             assertEquals(src, FrameCodec.decode(FrameCodec.encode(src)))
         }
     }

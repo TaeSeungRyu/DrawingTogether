@@ -2,4 +2,6 @@
 <paths>
     <!-- 카메라 촬영 결과를 임시 저장할 캐시 영역. -->
     <cache-path name="camera_captures" path="captures/" />
+    <!-- "동기화" 시 bitmap → JPEG 변환 임시 파일을 두는 캐시 영역. -->
+    <cache-path name="snapshots" path="snapshots/" />
 </paths>

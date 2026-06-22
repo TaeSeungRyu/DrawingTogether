@@ -1,6 +1,7 @@
 package com.rts.rys.ryy.drawingtogether.transport
 
 import com.rts.rys.ryy.drawingtogether.drawing.model.DrawingEvent
+import com.rts.rys.ryy.drawingtogether.drawing.model.Stroke
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -24,6 +25,21 @@ sealed class Frame {
     @Serializable
     @SerialName("event")
     data class Event(val e: DrawingEvent) : Frame()
+
+    // "동기화" 버튼 — 내 캔버스를 상대 캔버스로 덮어쓰기 위해 상대에게 현재 상태 요청.
+    @Serializable
+    @SerialName("snapshot_req")
+    data object SnapshotReq : Frame()
+
+    // SnapshotReq 응답. strokes 는 응답자의 현재 완료된 stroke 전부.
+    // hasPhoto 가 true 면 직후 Frame.PhotoMeta + FILE 페이로드가 따라오고, false 면
+    // Frame.PhotoRemove 가 따라온다 — 수신측은 어느 쪽이든 처리.
+    @Serializable
+    @SerialName("snapshot")
+    data class Snapshot(
+        val strokes: List<Stroke>,
+        val hasPhoto: Boolean,
+    ) : Frame()
 
     // 사진 파일이 곧 도착함을 알리는 메타. payloadId 로 FILE 페이로드와 매칭.
     @Serializable

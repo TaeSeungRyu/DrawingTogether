@@ -41,6 +41,11 @@ class DrawingViewModel : ViewModel() {
         canvas.apply(event)
     }
 
+    // "동기화" — 상대 캔버스 snapshot 으로 내 stroke 을 전부 교체. 사진 배경은 별도 경로.
+    fun applyRemoteSnapshot(strokes: List<Stroke>) {
+        canvas.applySnapshot(strokes)
+    }
+
     fun selectColor(argb: Int) {
         tool = tool.copy(kind = ToolKind.Pen, colorArgb = argb)
     }

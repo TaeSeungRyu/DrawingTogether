@@ -37,6 +37,8 @@ fun Toolbar(
     onUndo: () -> Unit,
     onClear: () -> Unit,
     modifier: Modifier = Modifier,
+    // null 이면 버튼 숨김 — 싱글 모드 또는 미연결 상태.
+    onSync: (() -> Unit)? = null,
 ) {
     var colorPickerOpen by remember { mutableStateOf(false) }
     var brushSheetOpen by remember { mutableStateOf(false) }
@@ -97,6 +99,15 @@ fun Toolbar(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
             ) {
+                if (onSync != null) {
+                    CuteToolButton(
+                        text = "동기화",
+                        onClick = onSync,
+                        container = MaterialTheme.colorScheme.tertiary,
+                        content = MaterialTheme.colorScheme.onTertiary,
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
                 CuteToolButton(
                     text = "되돌리기",
                     onClick = onUndo,
