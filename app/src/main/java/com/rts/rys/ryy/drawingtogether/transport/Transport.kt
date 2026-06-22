@@ -32,6 +32,23 @@ enum class Role { Host, Joiner }
 // 인바운드 FILE 페이로드 1건. payloadId 로 Frame.PhotoMeta 와 매칭.
 data class IncomingFile(val payloadId: Long, val uri: Uri)
 
+enum class FileTransferDirection { Outgoing, Incoming }
+enum class FileTransferStatus { InProgress, Success, Failure }
+
+// FILE 페이로드 송수신 진행 상황. Nearby 의 PayloadTransferUpdate 를 우리 도메인 타입으로 정규화.
+// fraction = bytesTransferred / totalBytes (totalBytes 0 이면 0f 로 보호).
+data class FileTransferEvent(
+    val payloadId: Long,
+    val direction: FileTransferDirection,
+    val bytesTransferred: Long,
+    val totalBytes: Long,
+    val status: FileTransferStatus,
+) {
+    val fraction: Float
+        get() = if (totalBytes <= 0L) 0f
+                else (bytesTransferred.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f)
+}
+
 // transport 추상화. Nearby 외 다른 구현(예: 페이크/Wi-Fi Direct)을 끼울 여지를 둔다.
 // doc/nearby-connections.md §8.
 interface Transport {
@@ -40,6 +57,7 @@ interface Transport {
     val pending: StateFlow<PendingConnection?>
     val incoming: SharedFlow<Frame>
     val incomingFiles: SharedFlow<IncomingFile>
+    val fileTransfers: SharedFlow<FileTransferEvent>
 
     fun setLocalNick(nick: String)
 

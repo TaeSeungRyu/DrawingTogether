@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.net.Uri
 import com.rts.rys.ryy.drawingtogether.drawing.model.DrawingEvent
+import com.rts.rys.ryy.drawingtogether.transport.FileTransferEvent
 import com.rts.rys.ryy.drawingtogether.transport.Frame
 import com.rts.rys.ryy.drawingtogether.transport.PROTO_VERSION
 import com.rts.rys.ryy.drawingtogether.transport.Transport
@@ -66,6 +67,9 @@ class SessionManager private constructor(
     // 원격에서 도착한 "저장 시 배경 합치기" 토글 값.
     private val _incomingMergeToggle = MutableSharedFlow<Boolean>(extraBufferCapacity = 4)
     val incomingMergeToggle: SharedFlow<Boolean> = _incomingMergeToggle.asSharedFlow()
+
+    // 사진 송수신 진행률. transport.fileTransfers 패스스루 — 현재 프로토콜에서 FILE = 사진.
+    val photoTransfers: SharedFlow<FileTransferEvent> get() = transport.fileTransfers
 
     // PhotoMeta 와 FILE 페이로드는 도착 순서가 달라질 수 있으니 양방향 버퍼.
     private val pendingPhotoMeta = mutableMapOf<Long, Frame.PhotoMeta>()

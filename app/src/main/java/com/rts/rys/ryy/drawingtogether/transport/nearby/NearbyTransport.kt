@@ -17,6 +17,9 @@ import com.google.android.gms.nearby.connection.PayloadCallback
 import com.google.android.gms.nearby.connection.PayloadTransferUpdate
 import com.google.android.gms.nearby.connection.Strategy
 import com.rts.rys.ryy.drawingtogether.transport.DiscoveredPeer
+import com.rts.rys.ryy.drawingtogether.transport.FileTransferDirection
+import com.rts.rys.ryy.drawingtogether.transport.FileTransferEvent
+import com.rts.rys.ryy.drawingtogether.transport.FileTransferStatus
 import com.rts.rys.ryy.drawingtogether.transport.Frame
 import com.rts.rys.ryy.drawingtogether.transport.IncomingFile
 import com.rts.rys.ryy.drawingtogether.transport.PendingConnection
@@ -54,6 +57,13 @@ class NearbyTransport(context: Context) : Transport {
 
     private val _incomingFiles = MutableSharedFlow<IncomingFile>(extraBufferCapacity = 8)
     override val incomingFiles: SharedFlow<IncomingFile> = _incomingFiles.asSharedFlow()
+
+    private val _fileTransfers = MutableSharedFlow<FileTransferEvent>(extraBufferCapacity = 64)
+    override val fileTransfers: SharedFlow<FileTransferEvent> = _fileTransfers.asSharedFlow()
+
+    // 우리가 보낸 / 받은 FILE payload id 추적 — 진행률 업데이트 방향 분류용.
+    private val outgoingFilePayloads = mutableSetOf<Long>()
+    private val incomingFilePayloads = mutableSetOf<Long>()
 
     private var localNick: String = "User"
     private var connectedEndpoint: String? = null
@@ -127,6 +137,7 @@ class NearbyTransport(context: Context) : Transport {
             appContext.contentResolver.openFileDescriptor(uri, "r")
         } ?: error("cannot open uri: $uri")
         val payload = Payload.fromFile(pfd)
+        outgoingFilePayloads.add(payload.id)
         client.sendPayload(target, payload)
         return payload.id
     }
@@ -208,6 +219,7 @@ class NearbyTransport(context: Context) : Transport {
                 }
                 Payload.Type.FILE -> {
                     val uri = payload.asFile()?.asUri() ?: return
+                    incomingFilePayloads.add(payload.id)
                     _incomingFiles.tryEmit(IncomingFile(payloadId = payload.id, uri = uri))
                 }
                 else -> Unit
@@ -215,7 +227,30 @@ class NearbyTransport(context: Context) : Transport {
         }
 
         override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {
-            // 진행률 UI 는 Phase 3-B 추가 작업. 현재는 무시.
+            val direction = when (update.payloadId) {
+                in outgoingFilePayloads -> FileTransferDirection.Outgoing
+                in incomingFilePayloads -> FileTransferDirection.Incoming
+                else -> return  // BYTES 페이로드 업데이트나 아직 분류 안 된 건 무시
+            }
+            val status = when (update.status) {
+                PayloadTransferUpdate.Status.IN_PROGRESS -> FileTransferStatus.InProgress
+                PayloadTransferUpdate.Status.SUCCESS -> FileTransferStatus.Success
+                else -> FileTransferStatus.Failure  // FAILURE, CANCELED 등 모두 실패로 통합
+            }
+            _fileTransfers.tryEmit(
+                FileTransferEvent(
+                    payloadId = update.payloadId,
+                    direction = direction,
+                    bytesTransferred = update.bytesTransferred,
+                    totalBytes = update.totalBytes,
+                    status = status,
+                )
+            )
+            // 종료 상태면 추적 set 에서 제거.
+            if (status != FileTransferStatus.InProgress) {
+                outgoingFilePayloads.remove(update.payloadId)
+                incomingFilePayloads.remove(update.payloadId)
+            }
         }
     }
 

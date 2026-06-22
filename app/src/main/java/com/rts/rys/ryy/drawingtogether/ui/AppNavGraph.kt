@@ -47,14 +47,22 @@ fun AppNavGraph(modifier: Modifier = Modifier) {
             )
         }
         composable(Routes.Draw) {
-            DrawingScreen(onBack = { nav.popBackStack() })
+            DrawingScreen(
+                onBack = { nav.popBackStack() },
+                onReconnect = { nav.navigate(Routes.Pairing) },
+            )
         }
         composable(Routes.Pairing) {
             PairingScreen(
                 onBack = { nav.popBackStack() },
                 onConnected = {
-                    nav.navigate(Routes.Draw) {
-                        popUpTo(Routes.Pairing) { inclusive = true }
+                    // 백스택에 이미 Draw 가 있으면 (재연결 시나리오) 그쪽으로 pop —
+                    // ViewModel + CanvasState 가 살아있어서 끊기기 전 자기 stroke 가 그대로 유지된다.
+                    val popped = nav.popBackStack(Routes.Draw, inclusive = false)
+                    if (!popped) {
+                        nav.navigate(Routes.Draw) {
+                            popUpTo(Routes.Pairing) { inclusive = true }
+                        }
                     }
                 },
             )
