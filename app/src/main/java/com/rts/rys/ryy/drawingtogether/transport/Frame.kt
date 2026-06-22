@@ -1,7 +1,6 @@
 package com.rts.rys.ryy.drawingtogether.transport
 
 import com.rts.rys.ryy.drawingtogether.drawing.model.DrawingEvent
-import com.rts.rys.ryy.drawingtogether.drawing.model.Stroke
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -31,13 +30,13 @@ sealed class Frame {
     @SerialName("snapshot_req")
     data object SnapshotReq : Frame()
 
-    // SnapshotReq 응답. strokes 는 응답자의 현재 완료된 stroke 전부.
-    // hasPhoto 가 true 면 직후 Frame.PhotoMeta + FILE 페이로드가 따라오고, false 면
-    // Frame.PhotoRemove 가 따라온다 — 수신측은 어느 쪽이든 처리.
+    // SnapshotReq 응답. strokes 는 별도 FILE 페이로드로 송신 (BYTES 32KB 한도 회피).
+    // strokesPayloadId 로 FILE 매칭 — 사진의 PhotoMeta 와 동일 패턴.
+    // hasPhoto 가 true 면 별도로 Frame.PhotoMeta + FILE 가 따라오고, false 면 Frame.PhotoRemove.
     @Serializable
     @SerialName("snapshot")
     data class Snapshot(
-        val strokes: List<Stroke>,
+        val strokesPayloadId: Long,
         val hasPhoto: Boolean,
     ) : Frame()
 

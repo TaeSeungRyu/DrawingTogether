@@ -140,7 +140,12 @@ A → B: EVENT(...)   // 그 후 평상시 흐름
 - **호스트 relay**: 호스트가 조인자 A 로부터 `Frame.Event` 받으면 → 조인자 B, C 에게 그대로 재전송 (source endpointId 제외). 양쪽이 동일 이벤트를 본인 화면이 아닌 *그 조인자의 미니 뷰*에 반영.
 - 자기 캔버스에는 자기가 그린 stroke 만 들어감. 다른 사람들 stroke 은 미니 캔버스 (peer 별 `CanvasState`) 에만 들어감.
 - `Clear`/`Undo`/지우개는 자기 캔버스만 영향. 미니 뷰는 read-only.
-- "동기화" 는 타겟 peerId 와 함께 보내는 `SnapshotReq` — 호스트 relay 거쳐 그 피어가 응답. 응답이 도착하면 *내 메인 캔버스* 만 덮어씀.
+- **사진 정책**:
+  - 자기 캔버스에 사진 사용 OK — 1:1 멀티모드와 동일 UX (사진/촬영/제거/배경합치기 액션).
+  - `PhotoMeta` / `PhotoRemove` / `MergeBackground` 는 **일반 흐름에서 broadcast 안 됨** — 호스트도 relay 안 함. 자기 사진은 자기만 본다.
+  - 미니 뷰는 stroke 만 렌더 (배경 사진 무시) — 미니 크기에 사진까지 부담스럽고 4-way 전송도 비용 큼.
+  - **단, "동기화" 응답에는 사진 동반 가능** — 1:1 의 sync-with-photo 흐름 재사용. 응답자가 사진을 갖고 있으면 `Snapshot(hasPhoto=true)` + `PhotoMeta` + FILE 페이로드 송신.
+- "동기화" 는 타겟 peerId 와 함께 보내는 `SnapshotReq` — 호스트 relay 거쳐 그 피어가 응답. 응답이 도착하면 *내 메인 캔버스* 만 덮어씀 (사진 포함).
 - 끊김: 한 조인자 disconnect 는 그 미니 뷰 사라짐 + 세션 유지. 호스트 disconnect 는 전체 세션 종료.
 
 ## 9. 키프알라이브와 종료

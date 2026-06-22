@@ -79,12 +79,40 @@
 
 **완료 기준**: 두 사람이 동시에 그려도 양쪽 캔버스가 일치. 한쪽이 사진을 보내면 양쪽 모두 같은 배경 위에 그림. 끊김/재연결 시 상태 복원.
 
+## Phase 3.5 — Snapshot 전송 안정화 (Phase 4 사전 작업)
+
+**문제**: Nearby Connections 의 `Payload.Type.BYTES` 한도는 **32KB**. 현재 `Frame.Snapshot(strokes)` 는 단일 BYTES payload 로 송신.
+
+- 한 stroke ≈ id + authorId + tool + points 100개 ≈ 1.6KB
+- 빽빽한 캔버스(50~300 stroke) = **80KB ~ 500KB → 한도 초과**
+- BYTES 한도 초과 시 Nearby 는 **조용히 실패** (명시적 에러 없음) — 사용자는 "동기화 눌렀는데 아무 일 없네?" 만 봄
+
+**왜 지금 처리하는가**
+- 1:1 멀티모드 현재 sync 의 잠재 버그 (작은 캔버스에서만 우연히 안 터졌을 뿐)
+- Phase 4 다중모드는 호스트 relay 까지 추가 → 같은 문제가 N 배 확대됨
+- Phase 4 시작 전에 안정화 후 진입하는 게 안전
+
+**작업**
+- [x] **3.5-A**: Snapshot 송수신을 BYTES → FILE payload 로 전환 — `Frame.Snapshot(strokesPayloadId, hasPhoto)`, `FrameCodec.encodeStrokes/decodeStrokes`, `SessionManager.handleSnapshotFile`. 사진 sync 와 같은 pending FILE/META 매칭 메커니즘 재사용.
+- [ ] **3.5-B**: Sync 로딩 UI 의 타임아웃 60초 → **120초** 로 확대
+  - 다중모드(Phase 4)에서 호스트 relay 거쳐 사진까지 동반되면 60초로 빠듯할 수 있음
+  - 1:1 에선 어차피 fast path 라 변화 체감 거의 없음
+
+**완료 기준**: 200+ stroke 빽빽한 캔버스에서 sync 정상 동작. 사진까지 동반된 sync 도 안정. Phase 4 진입 준비 완료.
+
+**예상 작업량**: 1~2 시간 (FILE 메커니즘 재사용).
+
 ## Phase 4 — 다중모드 (1:N, 최대 4인)
+> Phase 3.5 (Snapshot 안정화) 선행 권장.
 목표: 기존 **"멀티모드" (1:1)** 와 별개로 **"다중모드" (1:N, 최대 4인)** 추가. 한 명이 자기 캔버스에 그리면서 다른 3명이 무엇을 그리는지 미니 뷰로 보고, 필요하면 누구 한 명의 캔버스를 그대로 자기 캔버스로 가져옴.
 
 **모델 결정**
 - Strategy: **`P2P_STAR`** — 호스트 1 + 조인자 최대 3 (Nearby 의 1:N 스타 토폴로지). 조인자끼리는 직접 연결되지 않으므로 **호스트가 EVENT 를 다른 조인자에게 재전송 (app-level relay)**.
-- 사진 배경: **다중모드에서는 완전 비활성**. 도구바의 사진/촬영/제거/배경합치기 버튼 모두 숨김. 4-way 사진 매트릭스 관리 복잡도와 미니 뷰 표시 부담 회피.
+- 사진 배경 정책 (1:1 과 다름):
+  - **자기 캔버스에는 사진 OK** — 사진/촬영/제거/배경합치기 버튼 그대로 노출. 1:1 멀티모드와 동일한 UX.
+  - **다른 사람에게 자동 broadcast 안 함** — `PhotoMeta`/`PhotoRemove`/`MergeBackground` 자동 송신 차단. 자기 사진은 자기만 본다.
+  - **미니 뷰에는 사진 미표시** — `stroke` 만 렌더 (배경 null 로 그림). 미니 뷰 크기 + 4-way 사진 전송 복잡도 회피.
+  - **"동기화" 시에만 사진 동반** — 선택한 피어가 사진을 갖고 있으면 동기화 응답에 `Frame.Snapshot(hasPhoto=true)` + `PhotoMeta` + FILE 페이로드가 따라옴. 현재 1:1 sync-with-photo 흐름 재사용.
 - 멀티모드(1:1) 코드는 그대로 유지. 다중모드는 별도 진입점·별도 흐름.
 
 **UI 레이아웃**
@@ -105,23 +133,25 @@
 
 **"동기화" 동작** (멀티모드와 다름)
 - 멀티모드(1:1): 즉시 그 한 명에게 `SnapshotReq` 송신
-- 다중모드: 다이얼로그 → 연결된 피어 리스트 → 한 명 선택 → 그 사람에게 타겟 `SnapshotReq` (호스트 relay 거침)
+- 다중모드: 다이얼로그 → 연결된 피어 리스트 → 한 명 선택 → 컨펌 (사진 안내 포함) → 그 사람에게 타겟 `SnapshotReq` (호스트 relay 거침)
+- 다중모드 컨펌 문구 추가: "상대방 사진이 있는 경우 사진 정보도 가져옵니다"
 
 **구현 항목 — 8단계로 분할**
 - [ ] **4-A**: `Transport` 다중 endpoint 지원. `connectedEndpoint: String?` → `connectedEndpoints: Map<String, PeerInfo>`. `send(frame)` = 브로드캐스트, `sendTo(endpointId, frame)` = 유니캐스트. Strategy 파라미터화. `incoming` 이 source endpointId 동반.
 - [ ] **4-B**: `SessionManager` 다중 피어 상태 머신. 피어별 HELLO/ACK 추적, **송신 시 `DrawingEvent.authorId` 를 실제 peerId 로 채워서** 박음 (현재 `PeerId.Local` 그대로 → 다중에선 라우팅 깨짐).
 - [ ] **4-C**: `DrawingViewModel.peerCanvases: Map<PeerId, CanvasState>`. 인바운드 이벤트를 발신자 peerId 기준으로 해당 캔버스에 라우팅.
 - [ ] **4-D**: Home 화면에 "다중모드" 버튼 추가. 다중모드 페어링 화면 — 호스트/조인 명시적 선택, 호스트는 최대 3명 까지 accept.
-- [ ] **4-E**: `DrawingScreen` 1+3 레이아웃. 미니 캔버스는 input 비활성. 다중모드면 사진 관련 액션 숨김.
-- [ ] **4-F**: 호스트 relay — 인바운드 `Frame.Event` 를 source 제외 다른 조인자에게 재송신. `Frame.PeerJoined`/`PeerLeft` 로 조인자 목록 변동 알림.
-- [ ] **4-G**: "동기화" 선택 다이얼로그. 피어 리스트 → 선택 → 타겟 SnapshotReq (호스트 relay).
+- [ ] **4-E**: `DrawingScreen` 1+3 레이아웃. 미니 캔버스는 input 비활성 + 미니 뷰 렌더 시 사진 배경 무시(strokes 만). 자기 캔버스의 사진 관련 액션은 유지.
+- [ ] **4-F**: 호스트 relay — 인바운드 `Frame.Event` 를 source 제외 다른 조인자에게 재송신. **`PhotoMeta`/`PhotoRemove`/`MergeBackground` 는 relay 안 함** (자기 사진은 자기만). `Frame.PeerJoined`/`PeerLeft` 로 조인자 목록 변동 알림.
+- [ ] **4-G**: "동기화" 선택 다이얼로그. 피어 리스트 → 선택 → 컨펌 (사진 안내 문구 포함) → 타겟 SnapshotReq (호스트 relay). 응답에 사진 동반되면 자동 적용.
 - [ ] **4-H**: 끊김 처리 (조인자 1명 빠져도 세션 유지, 호스트 빠지면 모두 종료), 4명 초과 시 reject, 도구바 액션 가시성 정리.
 
 **완료 기준**:
 - 4명까지 같은 세션에 참여 가능
-- 내가 그리면 다른 3명의 미니 뷰에 안 보이고 *그들 각자의 메인 캔버스*에 보임 (마찬가지 거꾸로도)
-- 미니 뷰는 항상 read-only
-- 동기화 선택 다이얼로그에서 누구 캔버스든 가져올 수 있음
+- 내가 그리면 다른 3명의 메인 캔버스가 아닌 *각자 화면의 내 미니 뷰*에 stroke 만 표시됨 (마찬가지 거꾸로도)
+- 미니 뷰는 항상 read-only, 사진 배경 표시 안 함
+- 자기 캔버스에는 사진 추가 가능, 다른 사람에게 자동 broadcast 안 됨
+- 동기화 선택 다이얼로그에서 누구 캔버스든 가져올 수 있고, 선택된 사람의 사진이 있다면 함께 가져옴
 - 한 명 끊김은 세션 종료 아님 (호스트 끊김은 종료)
 
 ## Phase 5 — 완성품 추출 & 다듬기

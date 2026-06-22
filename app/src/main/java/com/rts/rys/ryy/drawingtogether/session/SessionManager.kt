@@ -10,6 +10,7 @@ import com.rts.rys.ryy.drawingtogether.transport.Frame
 import com.rts.rys.ryy.drawingtogether.transport.PROTO_VERSION
 import com.rts.rys.ryy.drawingtogether.transport.Transport
 import com.rts.rys.ryy.drawingtogether.transport.TransportState
+import com.rts.rys.ryy.drawingtogether.transport.codec.FrameCodec
 import com.rts.rys.ryy.drawingtogether.transport.nearby.NearbyTransport
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,6 +24,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 // 세션 상태 머신 + 핸드셰이크. doc/architecture.md §2-3, doc/protocol.md §5.
@@ -45,6 +47,7 @@ sealed class BackgroundChange {
 class SessionManager private constructor(
     val transport: Transport,
     private val prefs: SharedPreferences,
+    private val appContext: Context,
 ) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -80,9 +83,14 @@ class SessionManager private constructor(
     private val _incomingSnapshot = MutableSharedFlow<List<Stroke>>(extraBufferCapacity = 4)
     val incomingSnapshot: SharedFlow<List<Stroke>> = _incomingSnapshot.asSharedFlow()
 
-    // PhotoMeta 와 FILE 페이로드는 도착 순서가 달라질 수 있으니 양방향 버퍼.
+    // FILE 페이로드와 짝이 되는 메타는 PhotoMeta(사진) 또는 Snapshot(strokes) 두 종류.
+    // 도착 순서가 달라질 수 있어서 양방향 버퍼.
+    //   pendingPhotoMeta:    PhotoMeta 가 먼저 도착해 FILE 을 기다리는 상태
+    //   pendingSnapshotMeta: Frame.Snapshot 이 먼저 도착해 FILE 을 기다리는 상태
+    //   pendingFiles:        FILE 이 먼저 도착해 메타를 기다리는 상태 (어느 종류일지는 메타 도착 시 결정)
     private val pendingPhotoMeta = mutableMapOf<Long, Frame.PhotoMeta>()
-    private val pendingPhotoFiles = mutableMapOf<Long, Uri>()
+    private val pendingSnapshotMeta = mutableMapOf<Long, Frame.Snapshot>()
+    private val pendingFiles = mutableMapOf<Long, Uri>()
 
     val peerId: String = prefs.getString(KEY_PEER_ID, null) ?: run {
         val newId = UUID.randomUUID().toString()
@@ -102,14 +110,22 @@ class SessionManager private constructor(
         transport.incoming
             .onEach { handleIncoming(it) }
             .launchIn(scope)
-        // FILE 페이로드 도착 → 대응 PhotoMeta 매칭 시도
+        // FILE 페이로드 도착 → PhotoMeta 또는 Snapshot 메타 매칭 시도
         transport.incomingFiles
             .onEach { file ->
-                val meta = pendingPhotoMeta.remove(file.payloadId)
-                if (meta != null) {
-                    _incomingBackground.tryEmit(BackgroundChange.Photo(file.uri))
-                } else {
-                    pendingPhotoFiles[file.payloadId] = file.uri
+                val photoMeta = pendingPhotoMeta.remove(file.payloadId)
+                val snapshotMeta = pendingSnapshotMeta.remove(file.payloadId)
+                when {
+                    photoMeta != null -> {
+                        _incomingBackground.tryEmit(BackgroundChange.Photo(file.uri))
+                    }
+                    snapshotMeta != null -> {
+                        handleSnapshotFile(file.uri)
+                    }
+                    else -> {
+                        // 메타가 아직 도착 안 함 — 일단 buffer, 곧 들어오면 매칭.
+                        pendingFiles[file.payloadId] = file.uri
+                    }
                 }
             }
             .launchIn(scope)
@@ -184,7 +200,7 @@ class SessionManager private constructor(
             }
             is Frame.PhotoMeta -> {
                 // 짝이 되는 FILE 페이로드가 이미 도착해 있는지 확인.
-                val fileUri = pendingPhotoFiles.remove(frame.payloadId)
+                val fileUri = pendingFiles.remove(frame.payloadId)
                 if (fileUri != null) {
                     _incomingBackground.tryEmit(BackgroundChange.Photo(fileUri))
                 } else {
@@ -202,9 +218,15 @@ class SessionManager private constructor(
                 _snapshotRequests.tryEmit(Unit)
             }
             is Frame.Snapshot -> {
-                // 내가 보낸 SnapshotReq 의 응답 — 받은 strokes 로 내 캔버스 덮어쓸 신호.
+                // 내가 보낸 SnapshotReq 의 응답 — strokes 는 FILE 페이로드로 따로 도착.
+                // 짝이 되는 FILE 이 이미 와있으면 즉시 처리, 아니면 buffer.
+                val fileUri = pendingFiles.remove(frame.strokesPayloadId)
+                if (fileUri != null) {
+                    handleSnapshotFile(fileUri)
+                } else {
+                    pendingSnapshotMeta[frame.strokesPayloadId] = frame
+                }
                 // 사진은 별도 PhotoMeta + FILE (또는 PhotoRemove) 으로 따라옴 — 기존 경로 활용.
-                _incomingSnapshot.tryEmit(frame.strokes)
             }
             is Frame.Hello -> {
                 if (frame.proto != PROTO_VERSION) {
@@ -238,6 +260,19 @@ class SessionManager private constructor(
         }
     }
 
+    // Snapshot FILE 페이로드 (CBOR-encoded List<Stroke>) 를 읽어 incomingSnapshot 으로 발행.
+    private fun handleSnapshotFile(uri: Uri) {
+        scope.launch {
+            runCatching {
+                val bytes = withContext(Dispatchers.IO) {
+                    appContext.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                } ?: return@launch
+                val strokes = FrameCodec.decodeStrokes(bytes)
+                _incomingSnapshot.tryEmit(strokes)
+            }
+        }
+    }
+
     private fun maybeFinishHandshake() {
         val remote = remoteHelloReceived ?: return
         if (localAckSent && remoteAckReceived) {
@@ -263,7 +298,7 @@ class SessionManager private constructor(
                 val app = context.applicationContext
                 val prefs = app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                 val transport = NearbyTransport(app)
-                SessionManager(transport, prefs).also { instance = it }
+                SessionManager(transport, prefs, app).also { instance = it }
             }
         }
     }

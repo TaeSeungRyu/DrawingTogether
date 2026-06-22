@@ -116,8 +116,29 @@ private suspend fun bitmapToCacheUri(
     )
 }
 
+// "동기화" 응답용 — strokes 를 CBOR 로 직렬화해 cache/snapshots/ 에 저장하고 URI 반환.
+// BYTES 페이로드 32KB 한도를 회피하기 위해 FILE 페이로드로 송신 (Phase 3.5-A).
+private suspend fun strokesToCacheUri(
+    context: android.content.Context,
+    strokes: List<com.rts.rys.ryy.drawingtogether.drawing.model.Stroke>,
+): android.net.Uri = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+    val dir = java.io.File(context.cacheDir, "snapshots").apply { mkdirs() }
+    val file = java.io.File(dir, "strokes_${System.currentTimeMillis()}.cbor")
+    file.outputStream().use { out ->
+        out.write(
+            com.rts.rys.ryy.drawingtogether.transport.codec.FrameCodec.encodeStrokes(strokes)
+        )
+    }
+    androidx.core.content.FileProvider.getUriForFile(
+        context,
+        "${context.packageName}.fileprovider",
+        file,
+    )
+}
+
 // SnapshotReq 를 받은 쪽에서 호출. 현재 strokes + photo 를 상대에게 전송.
-// 1) Frame.Snapshot(strokes, hasPhoto) 송신
+// 1) strokes → cache CBOR 파일 → sendFile → Frame.Snapshot(strokesPayloadId, hasPhoto) 송신
+//    (BYTES 32KB 한도 회피 — Phase 3.5-A. 큰 캔버스에서도 안전)
 // 2) hasPhoto == true: bitmap → cache JPEG → sendFile + Frame.PhotoMeta
 //    hasPhoto == false: Frame.PhotoRemove (상대 캔버스의 사진도 제거되도록)
 private suspend fun respondToSnapshotRequest(
@@ -128,8 +149,11 @@ private suspend fun respondToSnapshotRequest(
 ) {
     if (session.state.value !is SessionState.Connected) return
     runCatching {
+        // 1) strokes → FILE + Snapshot 메타
+        val strokesUri = strokesToCacheUri(context, strokes)
+        val strokesPayloadId = session.transport.sendFile(strokesUri)
         session.transport.send(
-            Frame.Snapshot(strokes = strokes, hasPhoto = background != null)
+            Frame.Snapshot(strokesPayloadId = strokesPayloadId, hasPhoto = background != null)
         )
         if (background != null) {
             val uri = bitmapToCacheUri(context, background.bitmap)

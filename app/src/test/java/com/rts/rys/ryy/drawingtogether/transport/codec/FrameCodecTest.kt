@@ -139,11 +139,24 @@ class FrameCodecTest {
 
     @Test
     fun snapshotRoundtrip() {
+        // Phase 3.5-A: Snapshot 은 이제 payloadId 만 carry — strokes 는 FILE 페이로드로 별도 송신.
+        listOf(
+            Frame.Snapshot(strokesPayloadId = 12345L, hasPhoto = true),
+            Frame.Snapshot(strokesPayloadId = 67890L, hasPhoto = false),
+            Frame.Snapshot(strokesPayloadId = 0L, hasPhoto = false),
+        ).forEach { src ->
+            assertEquals(src, FrameCodec.decode(FrameCodec.encode(src)))
+        }
+    }
+
+    @Test
+    fun strokeListRoundtripViaFileCodec() {
+        // FILE 페이로드 콘텐츠 — encodeStrokes/decodeStrokes 라운드트립.
         val tool = ToolSettings(
             kind = ToolKind.Pen,
-            colorArgb = 0xFF000000.toInt(),
-            strokeWidthDp = 4f,
-            brush = BrushType.Pen,
+            colorArgb = 0xFFE53935.toInt(),
+            strokeWidthDp = 6f,
+            brush = BrushType.Marker,
             shape = ShapeMode.None,
         )
         val strokes = listOf(
@@ -151,21 +164,24 @@ class FrameCodecTest {
                 id = StrokeId("s1"),
                 authorId = PeerId.Local,
                 tool = tool,
-                points = listOf(Point(0.1f, 0.2f), Point(0.3f, 0.4f)),
+                points = listOf(Point(0.1f, 0.2f), Point(0.3f, 0.4f), Point(0.5f, 0.6f)),
             ),
             Stroke(
                 id = StrokeId("s2"),
                 authorId = PeerId("peer-b"),
                 tool = tool,
-                points = listOf(Point(0.5f, 0.6f)),
+                points = listOf(Point(0.7f, 0.8f)),
             ),
         )
-        listOf(
-            Frame.Snapshot(strokes = strokes, hasPhoto = true),
-            Frame.Snapshot(strokes = strokes, hasPhoto = false),
-            Frame.Snapshot(strokes = emptyList(), hasPhoto = false),
-        ).forEach { src ->
-            assertEquals(src, FrameCodec.decode(FrameCodec.encode(src)))
-        }
+        val bytes = FrameCodec.encodeStrokes(strokes)
+        val back = FrameCodec.decodeStrokes(bytes)
+        assertEquals(strokes, back)
+    }
+
+    @Test
+    fun emptyStrokeListRoundtripViaFileCodec() {
+        val bytes = FrameCodec.encodeStrokes(emptyList())
+        val back = FrameCodec.decodeStrokes(bytes)
+        assertEquals(emptyList<Stroke>(), back)
     }
 }
