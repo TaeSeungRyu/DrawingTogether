@@ -130,8 +130,18 @@ A → B: EVENT(...)   // 그 후 평상시 흐름
 
 - 단일 연결, Nearby 의 BYTES 는 순서 보장 → 같은 작성자의 이벤트 순서 자동 보장.
 - 각 stroke 는 고유 `StrokeId` 로 식별 — 겹쳐 그려도 둘 다 살아남음.
-- **"함께 그리기" 단일 모드 (현재 동작)**: `Clear` 와 `Undo` 는 양쪽 모두에 적용, `authorId` 로 거르지 않음. 한쪽이 "전체 지우기" 하면 양쪽 캔버스 모두 빈다. 지우개도 자기/상대 stroke 가리지 않고 삭제 가능. 작성자별 권한 분리("따라 그리기" 모드) 는 Phase 4 옵션으로 보류.
-- 인바운드 EVENT 의 `authorId` 는 송신 측 VM 의 `PeerId.Local` 그대로 도착 — 수신 측에서도 Local 로 박힘. 향후 Phase 4 토글 도입 시 송수신 경계에서 실제 peerId 로 번역하는 작업이 필요.
+- **멀티(1:1) "함께 그리기" 모드 (현재 동작)**: `Clear` 와 `Undo` 는 양쪽 모두에 적용, `authorId` 로 거르지 않음. 한쪽이 "전체 지우기" 하면 양쪽 캔버스 모두 빈다. 지우개도 자기/상대 stroke 가리지 않고 삭제 가능.
+- 인바운드 EVENT 의 `authorId` 는 송신 측 VM 의 `PeerId.Local` 그대로 도착 — 수신 측에서도 Local 로 박힘. 1:1 에선 라우팅 안 해도 됨.
+
+### 다중(1:N) 모드 — Phase 4 예정
+
+- Strategy `P2P_STAR`: 호스트 + 조인자 최대 3. 조인자끼리 직접 연결 없음.
+- **송신 시 `DrawingEvent.authorId` 를 실제 peerId (SessionManager.peerId, 설치당 UUID) 로 박아 보냄.** 1:1 에서 `PeerId.Local` 그대로 보내던 것과 다름 — 수신 측이 어느 미니 캔버스에 적용할지 알기 위함.
+- **호스트 relay**: 호스트가 조인자 A 로부터 `Frame.Event` 받으면 → 조인자 B, C 에게 그대로 재전송 (source endpointId 제외). 양쪽이 동일 이벤트를 본인 화면이 아닌 *그 조인자의 미니 뷰*에 반영.
+- 자기 캔버스에는 자기가 그린 stroke 만 들어감. 다른 사람들 stroke 은 미니 캔버스 (peer 별 `CanvasState`) 에만 들어감.
+- `Clear`/`Undo`/지우개는 자기 캔버스만 영향. 미니 뷰는 read-only.
+- "동기화" 는 타겟 peerId 와 함께 보내는 `SnapshotReq` — 호스트 relay 거쳐 그 피어가 응답. 응답이 도착하면 *내 메인 캔버스* 만 덮어씀.
+- 끊김: 한 조인자 disconnect 는 그 미니 뷰 사라짐 + 세션 유지. 호스트 disconnect 는 전체 세션 종료.
 
 ## 9. 키프알라이브와 종료
 

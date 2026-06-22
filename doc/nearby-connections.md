@@ -17,7 +17,19 @@
 
 ## 2. Strategy
 
-`Strategy.P2P_POINT_TO_POINT` — 1:1 양방향. 향후 3+명 동시 드로잉이 필요해지면 `P2P_CLUSTER`로 교체 고려.
+모드별로 다른 strategy 사용:
+
+| 앱 모드 | Strategy | 위상 |
+|---|---|---|
+| 멀티 (1:1) — 현재 | `P2P_POINT_TO_POINT` | 1:1 양방향 |
+| 다중 (1:N, Phase 4 예정) | `P2P_STAR` | 호스트 1 + 조인자 최대 3 |
+
+`P2P_STAR` 의 비대칭:
+- 광고자(호스트)는 여러 발견자(조인자) 와 연결 가능
+- 발견자는 한 광고자에게만 연결 가능 — **조인자끼리는 직접 연결 안 됨**
+- 따라서 조인자 → 다른 조인자 메시지는 **호스트 app-level relay** 필요 (`Frame.Event` 수신 시 source 제외 다른 조인자에게 재전송)
+
+향후 4+명 또는 호스트 단일 장애점이 부담되면 `P2P_CLUSTER` 메시로 전환 검토 (`doc/roadmap.md` Phase 6 보류 항목).
 
 ## 3. 권한 (Android 버전별)
 
