@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import com.rts.rys.ryy.drawingtogether.session.SessionManager
 import com.rts.rys.ryy.drawingtogether.session.SessionState
 import com.rts.rys.ryy.drawingtogether.transport.TransportState
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -100,12 +101,17 @@ fun PairingScreen(
         }
     }
 
-    // 실패 시 토스트만 — 사용자는 다시 시도 가능
-    LaunchedEffect(sessionState) {
-        val s = sessionState
-        if (s is SessionState.Failed) {
-            Toast.makeText(context, "연결 실패: ${s.reason}", Toast.LENGTH_SHORT).show()
-        }
+    // 실패 시 토스트만 — 사용자는 다시 시도 가능.
+    // drop(1) 로 StateFlow 의 초기값(이전 Draw 화면에서 끊긴 채 남은 Failed 등) 은 무시하고
+    // PairingScreen 진입 후의 새 전이만 토스트. "재연결" 직후 자동 토스트 방지.
+    LaunchedEffect(Unit) {
+        session.state
+            .drop(1)
+            .collect { s ->
+                if (s is SessionState.Failed) {
+                    Toast.makeText(context, "연결 실패: ${s.reason}", Toast.LENGTH_SHORT).show()
+                }
+            }
     }
 
     Column(modifier = modifier.fillMaxSize()) {
