@@ -50,7 +50,14 @@ fun AppNavGraph(modifier: Modifier = Modifier) {
             DrawingScreen(onBack = { nav.popBackStack() })
         }
         composable(Routes.Pairing) {
-            PairingScreen(onBack = { nav.popBackStack() })
+            PairingScreen(
+                onBack = { nav.popBackStack() },
+                onConnected = {
+                    nav.navigate(Routes.Draw) {
+                        popUpTo(Routes.Pairing) { inclusive = true }
+                    }
+                },
+            )
         }
         composable(
             route = "${Routes.Preview}/{${Routes.PreviewArg}}",

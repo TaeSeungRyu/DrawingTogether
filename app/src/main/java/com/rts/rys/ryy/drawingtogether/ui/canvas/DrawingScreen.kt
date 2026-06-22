@@ -34,6 +34,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,6 +50,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rts.rys.ryy.drawingtogether.drawing.model.BackgroundImage
 import com.rts.rys.ryy.drawingtogether.photo.CameraCaptureFile
 import com.rts.rys.ryy.drawingtogether.photo.PhotoLoader
+import com.rts.rys.ryy.drawingtogether.session.SessionManager
+import com.rts.rys.ryy.drawingtogether.session.SessionState
 import com.rts.rys.ryy.drawingtogether.works.PngComposer
 import com.rts.rys.ryy.drawingtogether.works.WorkStore
 import kotlinx.coroutines.launch
@@ -67,6 +71,18 @@ fun DrawingScreen(
     val density = androidx.compose.ui.platform.LocalDensity.current.density
     var showSaveDialog by remember { mutableStateOf(false) }
     var nameInput by remember { mutableStateOf("") }
+
+    // 멀티모드 — Connected이면 우측에 peer indicator. 화면을 떠날 때 disconnect.
+    val session = remember { SessionManager.get(context) }
+    val sessionState by session.state.collectAsState()
+    DisposableEffect(Unit) {
+        onDispose {
+            if (session.state.value is SessionState.Connected ||
+                session.state.value is SessionState.Handshaking) {
+                session.disconnect()
+            }
+        }
+    }
 
     // 갤러리 선택 — 권한 불필요 (Android PhotoPicker)
     val pickPhoto = rememberLauncherForActivityResult(
@@ -170,6 +186,11 @@ fun DrawingScreen(
                         content = MaterialTheme.colorScheme.onSecondaryContainer,
                     )
                     Spacer(modifier = Modifier.width(8.dp))
+                }
+                // Phase 2 — 멀티모드 연결 상태 표시. weight(1f) Row 다음이라 우측에 고정.
+                val s = sessionState
+                if (s is SessionState.Connected) {
+                    PeerIndicator(nick = s.remoteNick)
                 }
             },
         )
