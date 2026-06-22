@@ -89,6 +89,21 @@
 - **사진 선택/촬영이 자동으로 상대에게 전송** — 별도 "보내기" 버튼 없음
 - 사진 전송 중 진행률은 Snackbar 또는 indicator 옆 작은 ProgressIndicator
 
+### 액션 영역 레이아웃 (TopAppBar `actions`)
+
+좁은 폰(예: 갤럭시 S21, 360dp)에서 액션이 한 줄에 다 안 들어가는 문제는 **가로 스크롤 + peer indicator 고정** 으로 해결한다. 연결 상태는 항상 보여야 하므로 같은 스크롤 그룹에 두면 안 됨.
+
+```kotlin
+actions = {
+    Row(modifier = Modifier.weight(1f).horizontalScroll(...)) {
+        // 배경합치기 토글, 사진, 촬영, 제거, 저장
+    }
+    PeerIndicator(...)   // Phase 2 — 항상 우측 고정
+}
+```
+
+싱글 모드는 `PeerIndicator` 호출이 없어 weight(1f) Row가 액션 영역 전체를 차지. 멀티 모드는 indicator가 우측 슬롯을 차지하고 액션 행이 좁아진 만큼 스크롤로 흡수.
+
 ### Peer Indicator 상태
 
 | 상태 | 아이콘 | 의미 |
