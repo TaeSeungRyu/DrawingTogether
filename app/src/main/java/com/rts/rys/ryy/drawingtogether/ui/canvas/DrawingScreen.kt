@@ -284,7 +284,7 @@ fun DrawingScreen(
         }
     }
 
-    // 사진 송수신 로딩 오버레이. 최대 1분, 타임아웃·실패 시 토스트.
+    // 사진 송수신 로딩 오버레이. 최대 2분, 타임아웃·실패 시 토스트.
     var transferLabel by remember { mutableStateOf<String?>(null) }
     var transferFraction by remember { mutableStateOf(0f) }
     LaunchedEffect(session) {
@@ -307,15 +307,16 @@ fun DrawingScreen(
             }
         }
     }
-    // 1분 타임아웃 — transferLabel 이 켜진 채로 60초 이상 유지되면 강제 해제 + 토스트.
+    // 2분 타임아웃 — transferLabel 이 켜진 채로 120초 이상 유지되면 강제 해제 + 토스트.
     // key 를 transferLabel 로 두면 새 transfer 시작·종료마다 타이머 리셋.
+    // Phase 4 다중모드에선 호스트 relay 거치는 사진 전송도 있어 1분이 빠듯할 수 있음 → 2분으로.
     LaunchedEffect(transferLabel) {
         if (transferLabel != null) {
-            delay(60_000L)
+            delay(120_000L)
             if (transferLabel != null) {
                 transferLabel = null
                 transferFraction = 0f
-                Toast.makeText(context, "사진 동기화가 1분을 넘겨 중단했어요.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "사진 동기화가 2분을 넘겨 중단했어요.", Toast.LENGTH_SHORT).show()
             }
         }
     }

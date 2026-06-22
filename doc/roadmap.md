@@ -75,7 +75,7 @@
 - [ ] PING/PONG (BYE는 Phase 2에서 구현됨)
 - [ ] 늦참가/재연결 시 `SNAPSHOT_REQ` → `SNAPSHOT`
 - [x] **사진 전송**: `PHOTO_META` + `Payload.Type.FILE` → 수신 측 `BackgroundImage` 설정. `PhotoRemove` 도 같이. "배경 합치기" 토글(`MergeBackground`) 도 양방향 동기화
-- [x] 사진 송수신 진행률 UI — `Transport.fileTransfers` + `TransferLoadingOverlay`. 최대 60초 타임아웃, 실패/타임아웃 시 토스트
+- [x] 사진 송수신 진행률 UI — `Transport.fileTransfers` + `TransferLoadingOverlay`. 최대 120초 타임아웃(Phase 3.5-B), 실패/타임아웃 시 토스트
 
 **완료 기준**: 두 사람이 동시에 그려도 양쪽 캔버스가 일치. 한쪽이 사진을 보내면 양쪽 모두 같은 배경 위에 그림. 끊김/재연결 시 상태 복원.
 
@@ -94,9 +94,7 @@
 
 **작업**
 - [x] **3.5-A**: Snapshot 송수신을 BYTES → FILE payload 로 전환 — `Frame.Snapshot(strokesPayloadId, hasPhoto)`, `FrameCodec.encodeStrokes/decodeStrokes`, `SessionManager.handleSnapshotFile`. 사진 sync 와 같은 pending FILE/META 매칭 메커니즘 재사용.
-- [ ] **3.5-B**: Sync 로딩 UI 의 타임아웃 60초 → **120초** 로 확대
-  - 다중모드(Phase 4)에서 호스트 relay 거쳐 사진까지 동반되면 60초로 빠듯할 수 있음
-  - 1:1 에선 어차피 fast path 라 변화 체감 거의 없음
+- [x] **3.5-B**: Sync 로딩 UI 의 타임아웃 60초 → **120초** 로 확대 — `DrawingScreen.kt` 의 `LaunchedEffect(transferLabel)` 의 `delay(120_000L)`. 토스트 문구도 "2분 넘겨 중단" 으로 갱신.
 
 **완료 기준**: 200+ stroke 빽빽한 캔버스에서 sync 정상 동작. 사진까지 동반된 sync 도 안정. Phase 4 진입 준비 완료.
 
@@ -141,7 +139,12 @@
 - [ ] **4-B**: `SessionManager` 다중 피어 상태 머신. 피어별 HELLO/ACK 추적, **송신 시 `DrawingEvent.authorId` 를 실제 peerId 로 채워서** 박음 (현재 `PeerId.Local` 그대로 → 다중에선 라우팅 깨짐).
 - [ ] **4-C**: `DrawingViewModel.peerCanvases: Map<PeerId, CanvasState>`. 인바운드 이벤트를 발신자 peerId 기준으로 해당 캔버스에 라우팅.
 - [ ] **4-D**: Home 화면에 "다중모드" 버튼 추가. 다중모드 페어링 화면 — 호스트/조인 명시적 선택, 호스트는 최대 3명 까지 accept.
-- [ ] **4-E**: `DrawingScreen` 1+3 레이아웃. 미니 캔버스는 input 비활성 + 미니 뷰 렌더 시 사진 배경 무시(strokes 만). 자기 캔버스의 사진 관련 액션은 유지.
+- [ ] **4-E**: `DrawingScreen` 반응형 레이아웃 (방향 × 참가자 수). 미니 캔버스는 input 비활성 + 미니 뷰 렌더 시 사진 배경 무시(strokes 만). 자기 캔버스의 사진 관련 액션은 유지.
+  - **세로**: 캔버스 위, 미니 뷰 N개를 캔버스 아래 가로 분할 (`Row` + `Modifier.weight(1f)`)
+  - **가로**: 캔버스 좌측, 미니 뷰 N개를 우측 세로 스택 (`Column` + `Modifier.weight(1f)`)
+  - N=0: 미니 영역 숨김 + "참가자 대기 중" 안내
+  - N=1/2/3: 같은 코드, `forEach` 로 분할 자동 (자세한 매트릭스 + ASCII 는 `doc/ui-layout.md §5`)
+  - 방향 감지: `LocalConfiguration.current.orientation`
 - [ ] **4-F**: 호스트 relay — 인바운드 `Frame.Event` 를 source 제외 다른 조인자에게 재송신. **`PhotoMeta`/`PhotoRemove`/`MergeBackground` 는 relay 안 함** (자기 사진은 자기만). `Frame.PeerJoined`/`PeerLeft` 로 조인자 목록 변동 알림.
 - [ ] **4-G**: "동기화" 선택 다이얼로그. 피어 리스트 → 선택 → 컨펌 (사진 안내 문구 포함) → 타겟 SnapshotReq (호스트 relay). 응답에 사진 동반되면 자동 적용.
 - [ ] **4-H**: 끊김 처리 (조인자 1명 빠져도 세션 유지, 호스트 빠지면 모두 종료), 4명 초과 시 reject, 도구바 액션 가시성 정리.
