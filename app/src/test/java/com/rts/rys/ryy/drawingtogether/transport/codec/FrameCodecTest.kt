@@ -104,4 +104,29 @@ class FrameCodecTest {
         )
         assertEquals(src, FrameCodec.decode(FrameCodec.encode(src)))
     }
+
+    @Test
+    fun photoMetaRoundtrip() {
+        val src = Frame.PhotoMeta(
+            payloadId = 12345L,
+            byteSize = 2_400_000L,
+            widthPx = 1920,
+            heightPx = 1280,
+            mime = "image/jpeg",
+        )
+        assertEquals(src, FrameCodec.decode(FrameCodec.encode(src)))
+    }
+
+    @Test
+    fun photoRemoveRoundtrip() {
+        val src: Frame = Frame.PhotoRemove
+        assertEquals(src, FrameCodec.decode(FrameCodec.encode(src)))
+    }
+
+    @Test
+    fun mergeBackgroundRoundtrip() {
+        listOf(Frame.MergeBackground(true), Frame.MergeBackground(false)).forEach { src ->
+            assertEquals(src, FrameCodec.decode(FrameCodec.encode(src)))
+        }
+    }
 }

@@ -74,8 +74,8 @@
 - [~] 원격 작성자 획 시각 구분 — "함께 그리기" 단일 모드 확정으로 보류. 자기/상대 stroke 동등 가시. Phase 4 "따라 그리기" 옵션 도입 시 알파 감쇠 재추가 검토
 - [ ] PING/PONG (BYE는 Phase 2에서 구현됨)
 - [ ] 늦참가/재연결 시 `SNAPSHOT_REQ` → `SNAPSHOT`
-- [ ] **사진 전송**: `PHOTO_META` + `Payload.Type.FILE` → 수신 측 `BackgroundImage` 설정
-- [ ] 사진 수신 진행률 UI
+- [x] **사진 전송**: `PHOTO_META` + `Payload.Type.FILE` → 수신 측 `BackgroundImage` 설정. `PhotoRemove` 도 같이. "배경 합치기" 토글(`MergeBackground`) 도 양방향 동기화
+- [ ] 사진 수신 진행률 UI (`PayloadTransferUpdate` 활용)
 
 **완료 기준**: 두 사람이 동시에 그려도 양쪽 캔버스가 일치. 한쪽이 사진을 보내면 양쪽 모두 같은 배경 위에 그림. 끊김/재연결 시 상태 복원.
 

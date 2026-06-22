@@ -2,6 +2,7 @@ package com.rts.rys.ryy.drawingtogether.session
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.net.Uri
 import com.rts.rys.ryy.drawingtogether.drawing.model.DrawingEvent
 import com.rts.rys.ryy.drawingtogether.transport.Frame
 import com.rts.rys.ryy.drawingtogether.transport.PROTO_VERSION
@@ -32,6 +33,12 @@ sealed class SessionState {
     data class Failed(val reason: String) : SessionState()
 }
 
+// 원격에서 도착한 배경 변경. Photo = 새 사진 적용, Remove = 배경 제거.
+sealed class BackgroundChange {
+    data class Photo(val uri: Uri) : BackgroundChange()
+    data object Remove : BackgroundChange()
+}
+
 // 프로세스 전역 싱글톤. WorkStore와 동일한 패턴.
 class SessionManager private constructor(
     val transport: Transport,
@@ -51,6 +58,19 @@ class SessionManager private constructor(
     private val _incomingDrawing = MutableSharedFlow<DrawingEvent>(extraBufferCapacity = 256)
     val incomingDrawing: SharedFlow<DrawingEvent> = _incomingDrawing.asSharedFlow()
 
+    // 원격에서 도착한 배경 변경 (사진 적용 or 제거).
+    // PhotoMeta + FILE 페이로드 매칭이 끝난 시점에만 Photo 가 발행된다.
+    private val _incomingBackground = MutableSharedFlow<BackgroundChange>(extraBufferCapacity = 4)
+    val incomingBackground: SharedFlow<BackgroundChange> = _incomingBackground.asSharedFlow()
+
+    // 원격에서 도착한 "저장 시 배경 합치기" 토글 값.
+    private val _incomingMergeToggle = MutableSharedFlow<Boolean>(extraBufferCapacity = 4)
+    val incomingMergeToggle: SharedFlow<Boolean> = _incomingMergeToggle.asSharedFlow()
+
+    // PhotoMeta 와 FILE 페이로드는 도착 순서가 달라질 수 있으니 양방향 버퍼.
+    private val pendingPhotoMeta = mutableMapOf<Long, Frame.PhotoMeta>()
+    private val pendingPhotoFiles = mutableMapOf<Long, Uri>()
+
     val peerId: String = prefs.getString(KEY_PEER_ID, null) ?: run {
         val newId = UUID.randomUUID().toString()
         prefs.edit().putString(KEY_PEER_ID, newId).apply()
@@ -68,6 +88,17 @@ class SessionManager private constructor(
             .launchIn(scope)
         transport.incoming
             .onEach { handleIncoming(it) }
+            .launchIn(scope)
+        // FILE 페이로드 도착 → 대응 PhotoMeta 매칭 시도
+        transport.incomingFiles
+            .onEach { file ->
+                val meta = pendingPhotoMeta.remove(file.payloadId)
+                if (meta != null) {
+                    _incomingBackground.tryEmit(BackgroundChange.Photo(file.uri))
+                } else {
+                    pendingPhotoFiles[file.payloadId] = file.uri
+                }
+            }
             .launchIn(scope)
     }
 
@@ -137,6 +168,21 @@ class SessionManager private constructor(
                 // 핸드셰이크 완료(Connected) 후에만 의미 있는 이벤트이지만,
                 // 안전상 그 외 상태에서도 들어오면 일단 broadcast 만 하고 적용은 소비자가 결정.
                 _incomingDrawing.tryEmit(frame.e)
+            }
+            is Frame.PhotoMeta -> {
+                // 짝이 되는 FILE 페이로드가 이미 도착해 있는지 확인.
+                val fileUri = pendingPhotoFiles.remove(frame.payloadId)
+                if (fileUri != null) {
+                    _incomingBackground.tryEmit(BackgroundChange.Photo(fileUri))
+                } else {
+                    pendingPhotoMeta[frame.payloadId] = frame
+                }
+            }
+            is Frame.PhotoRemove -> {
+                _incomingBackground.tryEmit(BackgroundChange.Remove)
+            }
+            is Frame.MergeBackground -> {
+                _incomingMergeToggle.tryEmit(frame.enabled)
             }
             is Frame.Hello -> {
                 if (frame.proto != PROTO_VERSION) {

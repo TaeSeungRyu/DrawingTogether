@@ -1,5 +1,6 @@
 package com.rts.rys.ryy.drawingtogether.transport
 
+import android.net.Uri
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -28,6 +29,9 @@ sealed class TransportState {
 
 enum class Role { Host, Joiner }
 
+// 인바운드 FILE 페이로드 1건. payloadId 로 Frame.PhotoMeta 와 매칭.
+data class IncomingFile(val payloadId: Long, val uri: Uri)
+
 // transport 추상화. Nearby 외 다른 구현(예: 페이크/Wi-Fi Direct)을 끼울 여지를 둔다.
 // doc/nearby-connections.md §8.
 interface Transport {
@@ -35,6 +39,7 @@ interface Transport {
     val discovered: StateFlow<List<DiscoveredPeer>>
     val pending: StateFlow<PendingConnection?>
     val incoming: SharedFlow<Frame>
+    val incomingFiles: SharedFlow<IncomingFile>
 
     fun setLocalNick(nick: String)
 
@@ -44,5 +49,10 @@ interface Transport {
     suspend fun acceptPending()
     suspend fun rejectPending()
     suspend fun send(frame: Frame)
+
+    // 사진 파일을 BYTES 가 아닌 FILE 페이로드로 송신. 반환값은 Nearby payload id —
+    // 별도로 Frame.PhotoMeta 를 송신해 수신측이 매칭할 수 있도록 한다.
+    suspend fun sendFile(uri: Uri): Long
+
     fun stop()
 }

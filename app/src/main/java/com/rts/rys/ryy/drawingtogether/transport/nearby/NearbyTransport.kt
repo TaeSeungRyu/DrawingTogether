@@ -1,6 +1,7 @@
 package com.rts.rys.ryy.drawingtogether.transport.nearby
 
 import android.content.Context
+import android.net.Uri
 import com.google.android.gms.nearby.Nearby
 import com.google.android.gms.nearby.connection.AdvertisingOptions
 import com.google.android.gms.nearby.connection.ConnectionInfo
@@ -17,17 +18,20 @@ import com.google.android.gms.nearby.connection.PayloadTransferUpdate
 import com.google.android.gms.nearby.connection.Strategy
 import com.rts.rys.ryy.drawingtogether.transport.DiscoveredPeer
 import com.rts.rys.ryy.drawingtogether.transport.Frame
+import com.rts.rys.ryy.drawingtogether.transport.IncomingFile
 import com.rts.rys.ryy.drawingtogether.transport.PendingConnection
 import com.rts.rys.ryy.drawingtogether.transport.Transport
 import com.rts.rys.ryy.drawingtogether.transport.TransportState
 import com.rts.rys.ryy.drawingtogether.transport.codec.FrameCodec
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withContext
 
 // Nearby Connections 기반 Transport 구현. P2P_POINT_TO_POINT.
 // doc/nearby-connections.md §4 흐름 그대로.
@@ -47,6 +51,9 @@ class NearbyTransport(context: Context) : Transport {
 
     private val _incoming = MutableSharedFlow<Frame>(extraBufferCapacity = 64)
     override val incoming: SharedFlow<Frame> = _incoming.asSharedFlow()
+
+    private val _incomingFiles = MutableSharedFlow<IncomingFile>(extraBufferCapacity = 8)
+    override val incomingFiles: SharedFlow<IncomingFile> = _incomingFiles.asSharedFlow()
 
     private var localNick: String = "User"
     private var connectedEndpoint: String? = null
@@ -112,6 +119,16 @@ class NearbyTransport(context: Context) : Transport {
         val target = connectedEndpoint ?: return
         val bytes = FrameCodec.encode(frame)
         client.sendPayload(target, Payload.fromBytes(bytes))
+    }
+
+    override suspend fun sendFile(uri: Uri): Long {
+        val target = connectedEndpoint ?: error("not connected")
+        val pfd = withContext(Dispatchers.IO) {
+            appContext.contentResolver.openFileDescriptor(uri, "r")
+        } ?: error("cannot open uri: $uri")
+        val payload = Payload.fromFile(pfd)
+        client.sendPayload(target, payload)
+        return payload.id
     }
 
     override fun stop() {
@@ -183,14 +200,22 @@ class NearbyTransport(context: Context) : Transport {
 
     private val payloadCallback = object : PayloadCallback() {
         override fun onPayloadReceived(endpointId: String, payload: Payload) {
-            if (payload.type != Payload.Type.BYTES) return
-            val bytes = payload.asBytes() ?: return
-            val frame = FrameCodec.tryDecode(bytes) ?: return
-            _incoming.tryEmit(frame)
+            when (payload.type) {
+                Payload.Type.BYTES -> {
+                    val bytes = payload.asBytes() ?: return
+                    val frame = FrameCodec.tryDecode(bytes) ?: return
+                    _incoming.tryEmit(frame)
+                }
+                Payload.Type.FILE -> {
+                    val uri = payload.asFile()?.asUri() ?: return
+                    _incomingFiles.tryEmit(IncomingFile(payloadId = payload.id, uri = uri))
+                }
+                else -> Unit
+            }
         }
 
         override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {
-            // BYTES 페이로드는 별도 진행률 처리 불필요. FILE은 Phase 3에서.
+            // 진행률 UI 는 Phase 3-B 추가 작업. 현재는 무시.
         }
     }
 

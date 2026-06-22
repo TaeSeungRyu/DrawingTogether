@@ -50,14 +50,44 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rts.rys.ryy.drawingtogether.drawing.model.BackgroundImage
 import com.rts.rys.ryy.drawingtogether.photo.CameraCaptureFile
 import com.rts.rys.ryy.drawingtogether.photo.PhotoLoader
+import com.rts.rys.ryy.drawingtogether.session.BackgroundChange
 import com.rts.rys.ryy.drawingtogether.session.SessionManager
 import com.rts.rys.ryy.drawingtogether.session.SessionState
+import com.rts.rys.ryy.drawingtogether.transport.Frame
 import com.rts.rys.ryy.drawingtogether.works.PngComposer
 import com.rts.rys.ryy.drawingtogether.works.WorkStore
 import kotlinx.coroutines.launch
 
 private const val ASPECT_TOAST_TEXT = "사진 비율로 화면을 맞췄어요"
 private const val SAVED_TOAST_TEXT = "작품을 저장했어요"
+
+// 멀티모드 — 사진을 상대에게 전송. FILE 페이로드 + PhotoMeta(BYTES).
+// Connected 가 아니면 noop. doc/protocol.md §6.
+private suspend fun shareBackgroundToPeer(
+    context: android.content.Context,
+    session: SessionManager,
+    uri: android.net.Uri,
+    image: BackgroundImage,
+) {
+    if (session.state.value !is SessionState.Connected) return
+    runCatching {
+        val payloadId = session.transport.sendFile(uri)
+        val mime = context.contentResolver.getType(uri) ?: "image/jpeg"
+        val byteSize = context.contentResolver
+            .openAssetFileDescriptor(uri, "r")
+            ?.use { it.length }
+            ?: 0L
+        session.transport.send(
+            Frame.PhotoMeta(
+                payloadId = payloadId,
+                byteSize = byteSize,
+                widthPx = image.widthPx,
+                heightPx = image.heightPx,
+                mime = mime,
+            )
+        )
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -120,6 +150,26 @@ fun DrawingScreen(
         }
     }
 
+    // Phase 3-B 배경 동기화 — 원격에서 도착한 사진 / 제거 / 합치기 토글을 캔버스에 반영.
+    // vm.setBackground / setMergeBackgroundOnSave 는 outbound 를 발화하지 않으므로 루프 없음.
+    LaunchedEffect(vm, session) {
+        session.incomingBackground.collect { change ->
+            when (change) {
+                is BackgroundChange.Photo -> {
+                    runCatching {
+                        PhotoLoader.load(context, change.uri, BackgroundImage.Source.Remote)
+                    }.onSuccess { vm.setBackground(it) }
+                }
+                BackgroundChange.Remove -> vm.setBackground(null)
+            }
+        }
+    }
+    LaunchedEffect(vm, session) {
+        session.incomingMergeToggle.collect { enabled ->
+            vm.setMergeBackgroundOnSave(enabled)
+        }
+    }
+
     // 갤러리 선택 — 권한 불필요 (Android PhotoPicker)
     val pickPhoto = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
@@ -128,9 +178,10 @@ fun DrawingScreen(
             scope.launch {
                 runCatching {
                     PhotoLoader.load(context, uri, BackgroundImage.Source.Gallery)
-                }.onSuccess {
-                    vm.setBackground(it)
+                }.onSuccess { image ->
+                    vm.setBackground(image)
                     Toast.makeText(context, ASPECT_TOAST_TEXT, Toast.LENGTH_SHORT).show()
+                    shareBackgroundToPeer(context, session, uri, image)
                 }
             }
         }
@@ -147,9 +198,10 @@ fun DrawingScreen(
             scope.launch {
                 runCatching {
                     PhotoLoader.load(context, uri, BackgroundImage.Source.Camera)
-                }.onSuccess {
-                    vm.setBackground(it)
+                }.onSuccess { image ->
+                    vm.setBackground(image)
                     Toast.makeText(context, ASPECT_TOAST_TEXT, Toast.LENGTH_SHORT).show()
+                    shareBackgroundToPeer(context, session, uri, image)
                 }
             }
         }
@@ -178,7 +230,14 @@ fun DrawingScreen(
                 ) {
                     MergeBackgroundToggle(
                         checked = vm.canvas.mergeBackgroundOnSave,
-                        onCheckedChange = vm::setMergeBackgroundOnSave,
+                        onCheckedChange = { value ->
+                            vm.setMergeBackgroundOnSave(value)
+                            if (session.state.value is SessionState.Connected) {
+                                scope.launch {
+                                    runCatching { session.transport.send(Frame.MergeBackground(value)) }
+                                }
+                            }
+                        },
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     CuteToolButton(
@@ -206,7 +265,14 @@ fun DrawingScreen(
                         Spacer(modifier = Modifier.width(6.dp))
                         CuteToolButton(
                             text = "제거",
-                            onClick = { vm.setBackground(null) },
+                            onClick = {
+                                vm.setBackground(null)
+                                if (session.state.value is SessionState.Connected) {
+                                    scope.launch {
+                                        runCatching { session.transport.send(Frame.PhotoRemove) }
+                                    }
+                                }
+                            },
                             container = MaterialTheme.colorScheme.errorContainer,
                             content = MaterialTheme.colorScheme.onErrorContainer,
                         )
