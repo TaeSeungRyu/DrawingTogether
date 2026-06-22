@@ -6,13 +6,16 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
@@ -112,52 +115,58 @@ fun DrawingScreen(
                 }
             },
             actions = {
-                MergeBackgroundToggle(
-                    checked = vm.canvas.mergeBackgroundOnSave,
-                    onCheckedChange = vm::setMergeBackgroundOnSave,
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                CuteToolButton(
-                    text = "사진",
-                    onClick = {
-                        pickPhoto.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-                        )
-                    },
-                    container = MaterialTheme.colorScheme.primaryContainer,
-                    content = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                CuteToolButton(
-                    text = "촬영",
-                    onClick = {
-                        val uri = CameraCaptureFile.create(context)
-                        pendingCameraUri = uri
-                        capturePhoto.launch(uri)
-                    },
-                    container = MaterialTheme.colorScheme.tertiaryContainer,
-                    content = MaterialTheme.colorScheme.onTertiaryContainer,
-                )
-                if (vm.canvas.background != null) {
+                // 좁은 폭(예: 갤럭시 S21) 에서 액션이 겹치면 가로 스크롤로 풀어준다.
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    MergeBackgroundToggle(
+                        checked = vm.canvas.mergeBackgroundOnSave,
+                        onCheckedChange = vm::setMergeBackgroundOnSave,
+                    )
                     Spacer(modifier = Modifier.width(6.dp))
                     CuteToolButton(
-                        text = "제거",
-                        onClick = { vm.setBackground(null) },
-                        container = MaterialTheme.colorScheme.errorContainer,
-                        content = MaterialTheme.colorScheme.onErrorContainer,
+                        text = "사진",
+                        onClick = {
+                            pickPhoto.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                            )
+                        },
+                        container = MaterialTheme.colorScheme.primaryContainer,
+                        content = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    CuteToolButton(
+                        text = "촬영",
+                        onClick = {
+                            val uri = CameraCaptureFile.create(context)
+                            pendingCameraUri = uri
+                            capturePhoto.launch(uri)
+                        },
+                        container = MaterialTheme.colorScheme.tertiaryContainer,
+                        content = MaterialTheme.colorScheme.onTertiaryContainer,
+                    )
+                    if (vm.canvas.background != null) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        CuteToolButton(
+                            text = "제거",
+                            onClick = { vm.setBackground(null) },
+                            container = MaterialTheme.colorScheme.errorContainer,
+                            content = MaterialTheme.colorScheme.onErrorContainer,
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                    CuteToolButton(
+                        text = "저장",
+                        onClick = {
+                            nameInput = ""
+                            showSaveDialog = true
+                        },
+                        container = MaterialTheme.colorScheme.secondaryContainer,
+                        content = MaterialTheme.colorScheme.onSecondaryContainer,
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
                 }
-                Spacer(modifier = Modifier.width(6.dp))
-                CuteToolButton(
-                    text = "저장",
-                    onClick = {
-                        nameInput = ""
-                        showSaveDialog = true
-                    },
-                    container = MaterialTheme.colorScheme.secondaryContainer,
-                    content = MaterialTheme.colorScheme.onSecondaryContainer,
-                )
-                Spacer(modifier = Modifier.width(8.dp))
             },
         )
 

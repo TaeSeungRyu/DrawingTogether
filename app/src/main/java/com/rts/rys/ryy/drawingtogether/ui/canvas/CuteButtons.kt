@@ -49,7 +49,12 @@ fun CuteToolButton(
             modifier = Modifier.padding(horizontal = 18.dp).fillMaxHeight(),
             contentAlignment = Alignment.Center,
         ) {
-            Text(text = text, style = MaterialTheme.typography.labelLarge)
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelLarge,
+                maxLines = 1,
+                softWrap = false,
+            )
         }
     }
 }
@@ -122,6 +127,8 @@ fun MergeBackgroundToggle(
             Text(
                 text = if (checked) "배경 합치기 ON" else "배경 합치기 OFF",
                 style = MaterialTheme.typography.labelLarge,
+                maxLines = 1,
+                softWrap = false,
             )
         }
     }
