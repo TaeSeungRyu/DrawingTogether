@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.geometry.Size
 import com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState
 import com.rts.rys.ryy.drawingtogether.drawing.model.BrushCapStyle
+import com.rts.rys.ryy.drawingtogether.drawing.model.PeerId
 import com.rts.rys.ryy.drawingtogether.drawing.model.Point as DrawPoint
 import com.rts.rys.ryy.drawingtogether.drawing.model.StrokeId
 import com.rts.rys.ryy.drawingtogether.drawing.model.ToolSettings
@@ -94,10 +95,14 @@ fun DrawingCanvas(
                 dstSize = IntSize(canvasSize.width, canvasSize.height),
             )
         }
-        // 2. 완료된 stroke
-        state.strokes.forEach { drawStroke(it, canvasSize, density) }
+        // 2. 완료된 stroke — 원격 작성자 stroke 은 살짝 흐리게 (참고 표시)
+        state.strokes.forEach { stroke ->
+            drawStroke(stroke, canvasSize, density, isRemote = stroke.authorId != PeerId.Local)
+        }
         // 3. 진행 중 stroke
-        state.openStrokes.values.forEach { drawStroke(it, canvasSize, density) }
+        state.openStrokes.values.forEach { stroke ->
+            drawStroke(stroke, canvasSize, density, isRemote = stroke.authorId != PeerId.Local)
+        }
         // 4. 커서 인디케이터
         cursor?.let { pos ->
             drawBrushIndicator(center = pos, tool = tool, density = density)

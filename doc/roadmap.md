@@ -68,11 +68,11 @@
 
 ## Phase 3 — 이벤트 + 사진 동기화
 목표: 1:1 실시간 그림 공유 + 같은 사진 위 작업.
-- [ ] 로컬 입력 → `EVENT` 프레임 전송 (`Payload.Type.BYTES`)
-- [ ] 인바운드 `EVENT` → 같은 `apply()` 루프
-- [ ] 20–30ms 코얼레싱 (`StrokeAppend` 점 묶기)
-- [ ] 원격 작성자 획은 시각적으로 구분 (예: 닉네임 라벨 또는 미세한 색 변조)
-- [ ] PING/PONG, BYE
+- [x] 로컬 입력 → `EVENT` 프레임 전송 (`Payload.Type.BYTES`) — `DrawingViewModel.outboundEvents` → `Frame.Event`
+- [x] 인바운드 `EVENT` → 같은 `apply()` 루프 — `SessionManager.incomingDrawing` → `vm.applyRemoteEvent`
+- [x] 20–30ms 코얼레싱 (`StrokeAppend` 점 묶기) — `transport/OutboundCoalescer.kt`, 25ms 주기
+- [x] 원격 작성자 획은 시각적으로 구분 — 알파 0.65 곱셈 (`StrokeRenderer.colorFor(isRemote)`). 화면만, PNG 저장은 동등 가시
+- [ ] PING/PONG (BYE는 Phase 2에서 구현됨)
 - [ ] 늦참가/재연결 시 `SNAPSHOT_REQ` → `SNAPSHOT`
 - [ ] **사진 전송**: `PHOTO_META` + `Payload.Type.FILE` → 수신 측 `BackgroundImage` 설정
 - [ ] 사진 수신 진행률 UI

@@ -66,21 +66,16 @@ class CanvasState {
                 }
             }
             is DrawingEvent.Clear -> {
-                // 작성자별 데이터 분리 — 자기 stroke만 비움. 상대 stroke은 보존.
-                _strokes.removeAll { it.authorId == event.authorId }
-                val openIdsToRemove = _openStrokes.values
-                    .filter { it.authorId == event.authorId }
-                    .map { it.id }
-                openIdsToRemove.forEach { _openStrokes.remove(it) }
-                if (event.authorId == PeerId.Local) {
-                    _undoStack.clear()
-                }
+                // "함께 그리기" 단일 모드 — Clear 는 양쪽 모두에 적용.
+                // 누군가가 "전체 지우기" 하면 양쪽 캔버스 모두 빈다.
+                _strokes.clear()
+                _openStrokes.clear()
+                _undoStack.clear()
             }
             is DrawingEvent.Undo -> {
-                // 자기 stroke만 되돌릴 수 있다. 다른 작성자 stroke은 보존.
-                val index = _strokes.indexOfFirst {
-                    it.id == event.strokeId && it.authorId == event.authorId
-                }
+                // strokeId 만으로 매칭 — 자기 / 상대 누구 stroke 든 제거 가능.
+                // (지우개도 이 이벤트를 사용)
+                val index = _strokes.indexOfFirst { it.id == event.strokeId }
                 if (index >= 0) {
                     _strokes.removeAt(index)
                     _undoStack.remove(event.strokeId)
