@@ -69,7 +69,7 @@ import kotlinx.coroutines.launch
 private const val ASPECT_TOAST_TEXT = "사진 비율로 화면을 맞췄어요"
 private const val SAVED_TOAST_TEXT = "작품을 저장했어요"
 
-// 멀티모드 — 사진을 상대에게 전송. FILE 페이로드 + PhotoMeta(BYTES).
+// 함께 모드 — 사진을 상대에게 전송. FILE 페이로드 + PhotoMeta(BYTES).
 // Connected 가 아니면 noop. doc/protocol.md §6.
 private suspend fun shareBackgroundToPeer(
     context: android.content.Context,
@@ -192,7 +192,7 @@ fun DrawingScreen(
     var showSyncConfirm by remember { mutableStateOf(false) }
     var nameInput by remember { mutableStateOf("") }
 
-    // 멀티모드 — Connected이면 우측에 peer indicator. 화면을 떠날 때 disconnect.
+    // 함께 모드 — Connected이면 우측에 peer indicator. 화면을 떠날 때 disconnect.
     val session = remember { SessionManager.get(context) }
     val sessionState by session.state.collectAsState()
     DisposableEffect(Unit) {
@@ -309,7 +309,7 @@ fun DrawingScreen(
     }
     // 2분 타임아웃 — transferLabel 이 켜진 채로 120초 이상 유지되면 강제 해제 + 토스트.
     // key 를 transferLabel 로 두면 새 transfer 시작·종료마다 타이머 리셋.
-    // Phase 4 다중모드에선 호스트 relay 거치는 사진 전송도 있어 1분이 빠듯할 수 있음 → 2분으로.
+    // Phase 4 모임 모드에선 호스트 relay 거치는 사진 전송도 있어 1분이 빠듯할 수 있음 → 2분으로.
     LaunchedEffect(transferLabel) {
         if (transferLabel != null) {
             delay(120_000L)
@@ -441,7 +441,7 @@ fun DrawingScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                 }
-                // Phase 2 — 멀티모드 연결 상태 표시. weight(1f) Row 다음이라 우측에 고정.
+                // Phase 2 — 함께 모드 연결 상태 표시. weight(1f) Row 다음이라 우측에 고정.
                 val s = sessionState
                 if (s is SessionState.Connected) {
                     PeerIndicator(nick = s.remoteNick)

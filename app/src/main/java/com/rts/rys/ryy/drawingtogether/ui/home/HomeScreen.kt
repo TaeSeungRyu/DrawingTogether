@@ -1,5 +1,9 @@
 package com.rts.rys.ryy.drawingtogether.ui.home
 
+import android.app.Activity
+import android.os.SystemClock
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -36,6 +40,18 @@ fun HomeScreen(
     val store = remember { WorkStore.get(context) }
     val works by store.works.collectAsState()
     var modalOpen by rememberSaveable { mutableStateOf(false) }
+
+    // 홈 화면에서 뒤로가기: 첫 번째는 안내 토스트, 2초 안에 두 번째 누르면 종료.
+    var lastBackPressMs by remember { mutableStateOf(0L) }
+    BackHandler {
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastBackPressMs < 2_000L) {
+            (context as? Activity)?.finish()
+        } else {
+            lastBackPressMs = now
+            Toast.makeText(context, "한 번 더 누르면 앱을 종료해요", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     Box(modifier = modifier.fillMaxSize()) {
         PastelBlobBackground()
@@ -77,7 +93,7 @@ fun HomeScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // 멀티모드 — 민트(secondary). 같은 위계지만 색으로 구분.
+        // 함께 모드 — 민트(secondary). 같은 위계지만 색으로 구분.
         Button(
             onClick = onMultiMode,
             modifier = Modifier
@@ -90,9 +106,9 @@ fun HomeScreen(
             ),
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("멀티모드", style = MaterialTheme.typography.titleLarge)
+                Text("함께 모드", style = MaterialTheme.typography.titleLarge)
                 Spacer(modifier = Modifier.height(2.dp))
-                Text("가까운 기기와 함께 그리기", style = MaterialTheme.typography.bodySmall)
+                Text("둘이서 한 캔버스에 같이 그리기", style = MaterialTheme.typography.bodySmall)
             }
         }
 

@@ -31,7 +31,7 @@ class DrawingViewModel : ViewModel() {
         private set
 
     // 로컬에서 발생한 모든 DrawingEvent. DrawingScreen 이 collect 해서
-    // 멀티모드 연결 중이면 Frame.Event 로 송신. 멀티모드 아니면 그냥 흘려보냄.
+    // 함께 모드 연결 중이면 Frame.Event 로 송신. 함께 모드 아니면 그냥 흘려보냄.
     private val _outboundEvents = MutableSharedFlow<DrawingEvent>(extraBufferCapacity = 256)
     val outboundEvents: SharedFlow<DrawingEvent> = _outboundEvents.asSharedFlow()
 

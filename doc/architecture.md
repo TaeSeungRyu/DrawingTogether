@@ -5,10 +5,10 @@
 `DrawingTogether`는 세 모드를 같은 UI로 지원합니다.
 
 - **싱글 모드**: 한 기기에서 혼자 그림. 네트워크 비활성. 사진 배경(선택/촬영)도 지원.
-- **멀티 모드 (1:1)**: Nearby Connections (`P2P_POINT_TO_POINT`) 로 연결된 두 기기 사이 드로잉 이벤트 실시간 동기화. 한쪽이 사진을 보내면 양쪽 모두 같은 사진 위에 그림. "함께 그리기" 단일 모드 — 자기·상대 stroke 모두 편집·삭제 가능, 캔버스 공유.
-- **다중 모드 (1:N, Phase 4 예정)**: `P2P_STAR` 호스트 1 + 조인자 최대 3. 각 기기는 자기 캔버스를 크게, 다른 3명은 미니 read-only 뷰로 봄. "동기화" 로 누구 한 명의 캔버스(stroke + 사진까지)를 가져옴. 자기 사진은 자기만 보임 — 자동 broadcast 안 함, 미니 뷰에도 미표시. 호스트가 조인자간 EVENT relay.
+- **함께 모드 (1:1)**: Nearby Connections (`P2P_POINT_TO_POINT`) 로 연결된 두 기기 사이 드로잉 이벤트 실시간 동기화. 한쪽이 사진을 보내면 양쪽 모두 같은 사진 위에 그림. "함께 그리기" 단일 모드 — 자기·상대 stroke 모두 편집·삭제 가능, 캔버스 공유.
+- **모임 모드 (1:N, Phase 4 예정)**: `P2P_STAR` 호스트 1 + 조인자 최대 3. 각 기기는 자기 캔버스를 크게, 다른 3명은 미니 read-only 뷰로 봄. "동기화" 로 누구 한 명의 캔버스(stroke + 사진까지)를 가져옴. 자기 사진은 자기만 보임 — 자동 broadcast 안 함, 미니 뷰에도 미표시. 호스트가 조인자간 EVENT relay.
 
-핵심 결정: **모드의 차이는 주로 "이벤트가 어디서 오는가, 어디로 가는가" 와 "캔버스가 몇 개인가"**. 로컬 입력이든 원격 인바운드든 동일한 `DrawingEvent` 스트림으로 정규화 — 1:1 은 단일 `CanvasState`, 1:N 은 본인용 + 피어별 미니용 `Map<PeerId, CanvasState>`. 사진도 동일 — 자기가 고른 것이든 상대가 보낸 것이든 같은 `BackgroundImage` 상태에 들어감. 다중모드의 차이: 일반 흐름에선 사진이 broadcast 되지 않고 "동기화" 응답에만 동반.
+핵심 결정: **모드의 차이는 주로 "이벤트가 어디서 오는가, 어디로 가는가" 와 "캔버스가 몇 개인가"**. 로컬 입력이든 원격 인바운드든 동일한 `DrawingEvent` 스트림으로 정규화 — 1:1 은 단일 `CanvasState`, 1:N 은 본인용 + 피어별 미니용 `Map<PeerId, CanvasState>`. 사진도 동일 — 자기가 고른 것이든 상대가 보낸 것이든 같은 `BackgroundImage` 상태에 들어감. 모임 모드의 차이: 일반 흐름에선 사진이 broadcast 되지 않고 "동기화" 응답에만 동반.
 
 ```
 [Touch input]   ──┐
@@ -17,7 +17,7 @@
                   │
 [Inbound event] ──┤
 [Inbound photo] ──┘                          │
-                                             └──► outbound (멀티 모드일 때만)
+                                             └──► outbound (함께 모드일 때만)
 ```
 
 ## 2. 레이어 구성
@@ -57,7 +57,7 @@ com.rts.rys.ryy.drawingtogether
 
 ```
 splash ──auto──► home ──싱글모드──► draw   (DrawingScreen)
-                  ├────멀티모드──► pairing (Phase 2)──► draw (멀티 모드 변형)
+                  ├────함께 모드──► pairing (Phase 2)──► draw (함께 모드 변형)
                   └────썸네일 탭──► preview/{workId} (Phase 1.6 PreviewScreen)
 ```
 

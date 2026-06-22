@@ -116,7 +116,7 @@ fun PairingScreen(
 
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text("멀티모드") },
+            title = { Text("함께 모드") },
             navigationIcon = {
                 IconButton(onClick = {
                     session.disconnect()
@@ -294,7 +294,7 @@ private fun PermissionNotice(denied: Boolean, onRetry: () -> Unit) {
     ) {
         Text(
             text = if (denied)
-                "권한이 거부되었어요. 멀티모드를 쓰려면 BT/Wi-Fi 권한이 필요합니다."
+                "권한이 거부되었어요. 함께 모드를 쓰려면 BT/Wi-Fi 권한이 필요합니다."
             else
                 "권한을 요청 중입니다...",
             style = MaterialTheme.typography.bodyMedium,

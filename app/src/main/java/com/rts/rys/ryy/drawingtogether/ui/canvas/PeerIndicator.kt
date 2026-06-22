@@ -19,7 +19,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
 // TopAppBar 우측 끝 peer indicator. doc/ui-layout.md §4.
-// 멀티모드에서 연결 상태 + 상대 닉네임을 항상 노출.
+// 함께 모드에서 연결 상태 + 상대 닉네임을 항상 노출.
 @Composable
 fun PeerIndicator(
     nick: String,
