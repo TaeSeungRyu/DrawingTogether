@@ -174,7 +174,8 @@ fun PairingScreen(
                 text = if (isAdvertising)
                     "💡 이제 상대 기기 화면에서 내 이름 카드가 보일 거예요.\n   상대가 탭하면 양쪽에 인증 토큰이 뜹니다."
                 else
-                    "💡 두 기기 중 한 대만 위 버튼을 누르세요.\n   다른 한 대는 그대로 두면 아래에 카드가 나타납니다.",
+                    "💡 두 기기 중 1대만 위 버튼을 누르세요! \n" +
+                            "    꼭 1대만 눌러야 합니다! \n    다른 1대는 그대로 두면 아래에 카드가 나타납니다.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

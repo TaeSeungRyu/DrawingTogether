@@ -21,37 +21,25 @@
 
 ## 3. 권한 (Android 버전별)
 
+`minSdk = 31` 기준. Play Console 위치 권한 선언 폼을 피하기 위해 `ACCESS_FINE_LOCATION` 은 의도적으로 미선언. 트레이드오프: API 31-32 (Android 12/12L) 기기에서는 Wi-Fi Direct 없이 BT 위주로 동작 (사진 전송이 느려질 수 있음).
+
 ### `AndroidManifest.xml`
 
 ```xml
-<!-- API 33+ (Android 13+) -->
+<!-- API 33+ Wi-Fi P2P 신권한 -->
 <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES"
-    android:usesPermissionFlags="neverForLocation" />
+    android:usesPermissionFlags="neverForLocation"
+    tools:targetApi="33" />
+
+<!-- API 31+ BT 신권한 -->
 <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
     android:usesPermissionFlags="neverForLocation" />
 <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
 
-<!-- API 31-32 (Android 12) — 위치 권한 대신 BT 권한 사용 -->
-<uses-permission android:name="android.permission.BLUETOOTH_SCAN"
-    android:usesPermissionFlags="neverForLocation"
-    android:minSdkVersion="31" />
-<uses-permission android:name="android.permission.BLUETOOTH_CONNECT"
-    android:minSdkVersion="31" />
-<uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE"
-    android:minSdkVersion="31" />
-
-<!-- API ≤30 -->
-<uses-permission android:name="android.permission.BLUETOOTH"
-    android:maxSdkVersion="30" />
-<uses-permission android:name="android.permission.BLUETOOTH_ADMIN"
-    android:maxSdkVersion="30" />
+<!-- Wi-Fi 상태 (일반 권한, 런타임 묻지 않음) -->
 <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
-
-<!-- 모든 버전: Wi-Fi P2P 가능성 위해 스캔 시 위치 권한 (API 30 이하 필수) -->
-<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"
-    android:maxSdkVersion="32" />
 ```
 
 ### 런타임 요청 순서
@@ -60,7 +48,8 @@
 
 1. API 33+: `BLUETOOTH_SCAN`, `BLUETOOTH_CONNECT`, `BLUETOOTH_ADVERTISE`, `NEARBY_WIFI_DEVICES`
 2. API 31-32: 위와 동일하되 `NEARBY_WIFI_DEVICES` 제외
-3. API ≤30: `BLUETOOTH`, `BLUETOOTH_ADMIN`, `ACCESS_FINE_LOCATION`
+
+Android의 "Nearby devices" 권한 그룹 덕에 위 권한들이 단일 다이얼로그로 통합되어 표시됨.
 
 솔로 모드에서는 권한 요구 없음 — 사용자 신뢰 측면에서 중요.
 

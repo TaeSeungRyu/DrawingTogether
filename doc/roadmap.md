@@ -56,13 +56,13 @@
 
 ## Phase 2 — Nearby Connections 페어링 & 연결
 목표: 두 기기가 Nearby로 연결되어 "HELLO/HELLO_ACK" 핸드셰이크까지.
-- [ ] `play-services-nearby` 의존성 추가
-- [ ] 권한 요청 흐름 (API 33+ `NEARBY_WIFI_DEVICES`, API 31-32 BT 권한, API ≤30 위치 + BT, [nearby-connections.md](nearby-connections.md) §3)
-- [ ] `pairing` 화면: 호스트는 `startAdvertising`, 조인은 `startDiscovery` + 발견된 디바이스 리스트
-- [ ] `Transport` 인터페이스 + `NearbyTransport` 구현 (`P2P_POINT_TO_POINT` strategy)
-- [ ] `Frame` 직렬화 (CBOR, [protocol.md](protocol.md))
-- [ ] `session` 상태 머신: Idle → Discovering → Connecting → Connected
-- [ ] 끊김 감지 + 사용자 알림
+- [x] `play-services-nearby` 의존성 추가
+- [x] 권한 요청 흐름 (API 33+ `NEARBY_WIFI_DEVICES`, API 31-32 BT 권한, API ≤30 위치 + BT, [nearby-connections.md](nearby-connections.md) §3)
+- [x] `pairing` 화면: 호스트는 `startAdvertising`, 조인은 `startDiscovery` + 발견된 디바이스 리스트
+- [x] `Transport` 인터페이스 + `NearbyTransport` 구현 (`P2P_POINT_TO_POINT` strategy)
+- [x] `Frame` 직렬화 (CBOR, [protocol.md](protocol.md))
+- [x] `session` 상태 머신: Idle → Discovering → Connecting → Connected
+- [x] 끊김 감지 + 사용자 알림
 
 **완료 기준**: 두 기기에서 앱 켜고 한쪽 호스트, 한쪽 조인 → "연결됨" 표시. 그림은 아직 동기화 안 됨.
 
