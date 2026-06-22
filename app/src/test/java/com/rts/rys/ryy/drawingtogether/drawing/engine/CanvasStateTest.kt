@@ -97,17 +97,52 @@ class CanvasStateTest {
     }
 
     @Test
-    fun `Clear empties everything`() {
+    fun `Clear removes only own-author strokes, peer strokes survive`() {
         val state = CanvasState()
-        val id = StrokeId("s1")
-        state.apply(DrawingEvent.StrokeStart(next(), local, id, pen, Point(0f, 0f)))
-        state.apply(DrawingEvent.StrokeEnd(next(), local, id))
+        val localId = StrokeId("L")
+        val remoteId = StrokeId("R")
+        state.apply(DrawingEvent.StrokeStart(next(), local, localId, pen, Point(0f, 0f)))
+        state.apply(DrawingEvent.StrokeEnd(next(), local, localId))
+        state.apply(DrawingEvent.StrokeStart(next(), remote, remoteId, pen, Point(0.5f, 0.5f)))
+        state.apply(DrawingEvent.StrokeEnd(next(), remote, remoteId))
 
         state.apply(DrawingEvent.Clear(next(), local))
 
-        assertTrue(state.strokes.isEmpty())
+        assertEquals(1, state.strokes.size)
+        assertEquals(remoteId, state.strokes[0].id)
         assertTrue(state.openStrokes.isEmpty())
         assertFalse(state.canUndo)
+    }
+
+    @Test
+    fun `Clear by remote author leaves local strokes intact`() {
+        val state = CanvasState()
+        val localId = StrokeId("L")
+        val remoteId = StrokeId("R")
+        state.apply(DrawingEvent.StrokeStart(next(), local, localId, pen, Point(0f, 0f)))
+        state.apply(DrawingEvent.StrokeEnd(next(), local, localId))
+        state.apply(DrawingEvent.StrokeStart(next(), remote, remoteId, pen, Point(0.5f, 0.5f)))
+        state.apply(DrawingEvent.StrokeEnd(next(), remote, remoteId))
+
+        state.apply(DrawingEvent.Clear(next(), remote))
+
+        assertEquals(1, state.strokes.size)
+        assertEquals(localId, state.strokes[0].id)
+        assertTrue(state.canUndo)
+    }
+
+    @Test
+    fun `Undo with cross-author strokeId is rejected`() {
+        val state = CanvasState()
+        val remoteId = StrokeId("R")
+        state.apply(DrawingEvent.StrokeStart(next(), remote, remoteId, pen, Point(0f, 0f)))
+        state.apply(DrawingEvent.StrokeEnd(next(), remote, remoteId))
+
+        // local 이 remote 의 stroke 을 Undo 시도 — 무시되어야 한다.
+        state.apply(DrawingEvent.Undo(next(), local, remoteId))
+
+        assertEquals(1, state.strokes.size)
+        assertEquals(remoteId, state.strokes[0].id)
     }
 
     @Test

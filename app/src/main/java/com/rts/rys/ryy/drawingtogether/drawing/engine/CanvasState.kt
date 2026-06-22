@@ -66,12 +66,21 @@ class CanvasState {
                 }
             }
             is DrawingEvent.Clear -> {
-                _strokes.clear()
-                _openStrokes.clear()
-                _undoStack.clear()
+                // 작성자별 데이터 분리 — 자기 stroke만 비움. 상대 stroke은 보존.
+                _strokes.removeAll { it.authorId == event.authorId }
+                val openIdsToRemove = _openStrokes.values
+                    .filter { it.authorId == event.authorId }
+                    .map { it.id }
+                openIdsToRemove.forEach { _openStrokes.remove(it) }
+                if (event.authorId == PeerId.Local) {
+                    _undoStack.clear()
+                }
             }
             is DrawingEvent.Undo -> {
-                val index = _strokes.indexOfFirst { it.id == event.strokeId }
+                // 자기 stroke만 되돌릴 수 있다. 다른 작성자 stroke은 보존.
+                val index = _strokes.indexOfFirst {
+                    it.id == event.strokeId && it.authorId == event.authorId
+                }
                 if (index >= 0) {
                     _strokes.removeAt(index)
                     _undoStack.remove(event.strokeId)

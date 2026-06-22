@@ -13,7 +13,6 @@ import com.rts.rys.ryy.drawingtogether.drawing.model.BrushCapStyle
 import com.rts.rys.ryy.drawingtogether.drawing.model.BrushType
 import com.rts.rys.ryy.drawingtogether.drawing.model.ShapeMode
 import com.rts.rys.ryy.drawingtogether.drawing.model.Stroke
-import com.rts.rys.ryy.drawingtogether.drawing.model.ToolKind
 import com.rts.rys.ryy.drawingtogether.drawing.model.ToolSettings
 
 // stroke 한 개를 그린다. 화면 렌더링과 PNG 합성 양쪽에서 같은 함수를 사용 — 보이는 것 = 저장되는 것.
@@ -117,12 +116,10 @@ private fun DrawScope.drawShapeForm(stroke: Stroke, canvasSize: IntSize, density
     }
 }
 
-// 지우개 = 배경색(흰색)으로 덮어쓰기. Phase 1 단순화 — 실제 픽셀 삭제 아님.
-// 지우개 자체는 BrushType의 alpha 무시 (항상 불투명).
-internal fun colorFor(tool: ToolSettings): Color {
-    if (tool.kind == ToolKind.Eraser) return Color.White
-    return Color(tool.colorArgb).copy(alpha = tool.brush.alpha)
-}
+// 지우개는 더 이상 stroke을 만들지 않고 DrawingViewModel에서 자기 stroke을 삭제한다 —
+// 렌더러는 펜 stroke만 그린다.
+internal fun colorFor(tool: ToolSettings): Color =
+    Color(tool.colorArgb).copy(alpha = tool.brush.alpha)
 
 internal fun strokeWidthPxFor(tool: ToolSettings, density: Float): Float =
     tool.strokeWidthDp * tool.brush.widthScale * density

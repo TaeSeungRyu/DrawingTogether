@@ -22,9 +22,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
-// 자주 쓰는 12색 프리셋. 무지개 + 흑/회/갈색 구성.
+// 자주 쓰는 색 프리셋. 흑/백을 앞에 두고 무지개 + 회/갈색.
 val DefaultColorPalette: List<Int> = listOf(
     0xFF000000.toInt(), // black
+    0xFFFFFFFF.toInt(), // white
     0xFFE53935.toInt(), // red
     0xFFFB8C00.toInt(), // orange
     0xFFFDD835.toInt(), // yellow
