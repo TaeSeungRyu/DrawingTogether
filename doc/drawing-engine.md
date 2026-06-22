@@ -113,7 +113,7 @@ Canvas(
 4. brushIndicator            (커서 위치 펜 발자국)
 ```
 
-- **완료된 획 비트맵 캐시**는 Phase 4(다듬기)에서. 현재 트래픽 수준에선 Compose RenderNode 캐싱만으로 충분.
+- **완료된 획 비트맵 캐시**는 Phase 5(다듬기)에서. 현재 트래픽 수준에선 Compose RenderNode 캐싱만으로 충분.
 - 도형 모드(`ShapeMode != None`)면 첫·마지막 점을 바운딩 박스로 도형 외곽선 하나, 그 외엔 폴리라인.
 - 브러시는 `BrushType`의 `capStyle`/`alpha`/`widthScale`을 cap/색알파/굵기에 곱해 적용.
 
@@ -146,7 +146,7 @@ Canvas(
 - `strokeWidthDp`는 dp 단위로 송신. 수신 측에서 자기 `density`로 px 환산.
 - 색은 ARGB Int로 그대로 전송 (32-bit 고정 폭).
 
-## 8. PNG 내보내기 (Phase 4)
+## 8. PNG 내보내기 (Phase 5)
 
 ```kotlin
 fun exportPng(state: CanvasState, density: Float): Bitmap {
