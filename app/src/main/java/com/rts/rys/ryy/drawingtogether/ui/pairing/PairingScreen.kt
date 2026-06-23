@@ -43,6 +43,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.rts.rys.ryy.drawingtogether.session.SessionManager
 import com.rts.rys.ryy.drawingtogether.session.SessionState
 import com.rts.rys.ryy.drawingtogether.transport.TransportState
@@ -228,8 +230,55 @@ fun PairingScreen(
         }
     }
 
-    // 인증 토큰 다이얼로그
+    // 연결 요청 ~ 인증 토큰 다이얼로그 도착 사이 로딩.
+    // requestConnection() 직후 state=Connecting 으로 전이되지만 onConnectionInitiated 가
+    // 올 때까지 짧게는 수백 ms, BT 환경에 따라 수 초 비어있다 — 사용자가 "탭이 먹혔나?" 헷갈리지
+    // 않게 차단형 로딩. acceptPending() 직후 onConnectionResult 사이도 같은 조건이라
+    // 그대로 재사용됨.
     val p = pending
+    val connecting = transportState
+    if (p == null && connecting is TransportState.Connecting) {
+        Dialog(
+            onDismissRequest = { /* 차단 */ },
+            properties = DialogProperties(
+                dismissOnBackPress = false,
+                dismissOnClickOutside = false,
+            ),
+        ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                ),
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    CircularProgressIndicator()
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "연결 중...",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "잠시만 기다려 주세요",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
+
+    // 인증 토큰 다이얼로그
     if (p != null) {
         AlertDialog(
             onDismissRequest = {
