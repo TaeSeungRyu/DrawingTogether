@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.net.Uri
 import com.rts.rys.ryy.drawingtogether.drawing.model.DrawingEvent
+import com.rts.rys.ryy.drawingtogether.drawing.model.PeerId
 import com.rts.rys.ryy.drawingtogether.drawing.model.Stroke
 import com.rts.rys.ryy.drawingtogether.transport.ConnectedPeer
 import com.rts.rys.ryy.drawingtogether.transport.FileTransferEvent
@@ -44,6 +45,15 @@ sealed class BackgroundChange {
     data class Photo(val uri: Uri) : BackgroundChange()
     data object Remove : BackgroundChange()
 }
+
+// 핸드셰이크가 완료된 원격 피어. 모임 모드의 미니 뷰 라벨 / 동기화 다이얼로그용.
+// peerId = Frame.Hello.peerId (설치당 UUID), nick = Hello.nick.
+// vm.peerCanvases 의 키와 peerId 가 일치해야 미니 뷰 라벨 매칭이 된다.
+data class RemotePeerInfo(
+    val endpointId: String,
+    val peerId: PeerId,
+    val nick: String,
+)
 
 // 프로세스 전역 싱글톤. WorkStore와 동일한 패턴.
 class SessionManager private constructor(
@@ -109,6 +119,11 @@ class SessionManager private constructor(
             get() = remoteHello != null && localAckSent && remoteAckReceived
     }
     private val handshakes = mutableMapOf<String, PeerHandshake>()
+
+    // Phase 4-E: 핸드셰이크 완료된 원격 피어 명단. 모임 모드 미니 뷰 라벨 매칭 + 동기화
+    // 다이얼로그용. handshakes 갱신 시점마다 동기화 (maybeFinishHandshake / syncHandshakesWithPeers).
+    private val _remotePeers = MutableStateFlow<List<RemotePeerInfo>>(emptyList())
+    val remotePeers: StateFlow<List<RemotePeerInfo>> = _remotePeers.asStateFlow()
 
     init {
         // transport 상태 → 세션 상태 전이
@@ -206,6 +221,7 @@ class SessionManager private constructor(
     //   handleTransportState 가 Disconnected 처리.
     private fun syncHandshakesWithPeers(peers: List<ConnectedPeer>) {
         val activeIds = peers.map { it.endpointId }.toSet()
+        // 끊긴 피어는 remotePeers 에서도 같이 제거 — handshakes 정리 후 publishRemotePeers().
         handshakes.keys.toList().forEach { id ->
             if (id !in activeIds) handshakes.remove(id)
         }
@@ -223,6 +239,20 @@ class SessionManager private constructor(
                     )
                 }
             }
+        }
+        publishRemotePeers()
+    }
+
+    // remotePeers 를 handshakes 의 완료된 항목 기준으로 다시 발행. 핸드셰이크가 진행 중인
+    // (아직 Hello 수신 전) 피어는 nick 을 모르니 제외.
+    private fun publishRemotePeers() {
+        _remotePeers.value = handshakes.entries.mapNotNull { (endpointId, h) ->
+            val hello = h.remoteHello ?: return@mapNotNull null
+            RemotePeerInfo(
+                endpointId = endpointId,
+                peerId = PeerId(hello.peerId),
+                nick = hello.nick,
+            )
         }
     }
 
@@ -277,6 +307,7 @@ class SessionManager private constructor(
                 }
                 val h = handshakes.getOrPut(endpointId) { PeerHandshake() }
                 h.remoteHello = frame
+                publishRemotePeers()  // Hello 수신 시점에 nick 알게 됨 → remotePeers 갱신
                 scope.launch {
                     transport.sendTo(endpointId, Frame.HelloAck(peerId = peerId))
                     h.localAckSent = true
@@ -330,6 +361,7 @@ class SessionManager private constructor(
 
     private fun resetHandshake() {
         handshakes.clear()
+        publishRemotePeers()
     }
 
     companion object {

@@ -1,5 +1,6 @@
 package com.rts.rys.ryy.drawingtogether.ui.canvas
 
+import android.content.res.Configuration
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -12,8 +13,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
@@ -48,6 +51,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -475,31 +479,31 @@ fun DrawingScreen(
             },
         )
 
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-            contentAlignment = Alignment.Center,
-        ) {
-            val bg = vm.canvas.background
-            val canvasModifier = if (bg != null) {
-                Modifier
-                    .aspectRatio(bg.aspectRatio)
-                    .background(Color.White)
-            } else {
-                Modifier
-                    .fillMaxSize()
-                    .background(Color.White)
-            }
-            DrawingCanvas(
-                state = vm.canvas,
-                tool = vm.tool,
-                onStrokeStart = vm::strokeStart,
-                onStrokeAppend = vm::strokeAppend,
-                onStrokeEnd = vm::strokeEnd,
-                modifier = canvasModifier,
+        // Phase 4-E: 모임 모드는 캔버스 영역을 자기 캔버스 + 미니 뷰로 분할.
+        // 그 외(싱글/함께)는 기존 단일 캔버스 letterbox.
+        if (mode == DrawMode.Party) {
+            val cfg = LocalConfiguration.current
+            val isLandscape = cfg.orientation == Configuration.ORIENTATION_LANDSCAPE
+            val peers by session.remotePeers.collectAsState()
+            PartyCanvasArea(
+                vm = vm,
+                peers = peers,
+                isLandscape = isLandscape,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
             )
+        } else {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center,
+            ) {
+                MyCanvasContent(vm = vm)
+            }
         }
 
         Toolbar(
@@ -590,5 +594,113 @@ fun DrawingScreen(
                 TextButton(onClick = { showSaveDialog = false }) { Text("취소") }
             },
         )
+    }
+}
+
+// Phase 4-E: 자기 캔버스 — 사진 있으면 사진 비율 letterbox, 없으면 fillMaxSize 흰 배경.
+// DrawingCanvas 가 pointerInput 으로 입력을 받는 영역.
+@Composable
+private fun MyCanvasContent(vm: DrawingViewModel) {
+    val bg = vm.canvas.background
+    val canvasModifier = if (bg != null) {
+        Modifier
+            .aspectRatio(bg.aspectRatio)
+            .background(Color.White)
+    } else {
+        Modifier
+            .fillMaxSize()
+            .background(Color.White)
+    }
+    DrawingCanvas(
+        state = vm.canvas,
+        tool = vm.tool,
+        onStrokeStart = vm::strokeStart,
+        onStrokeAppend = vm::strokeAppend,
+        onStrokeEnd = vm::strokeEnd,
+        modifier = canvasModifier,
+    )
+}
+
+// Phase 4-E: 모임 모드 캔버스 영역. 자기 캔버스 + 피어 미니 뷰들.
+// doc/ui-layout.md §5.4 의 weight(3f)/weight(1f) 가이드.
+@Composable
+private fun PartyCanvasArea(
+    vm: DrawingViewModel,
+    peers: List<com.rts.rys.ryy.drawingtogether.session.RemotePeerInfo>,
+    isLandscape: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    if (peers.isEmpty()) {
+        // 0명 — 캔버스가 영역 전체를 차지하고, 작은 안내 텍스트만 우상단에 띄움.
+        Box(modifier = modifier, contentAlignment = Alignment.Center) {
+            MyCanvasContent(vm = vm)
+            Text(
+                text = "참가자를 기다리는 중...",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp),
+            )
+        }
+        return
+    }
+
+    if (isLandscape) {
+        Row(modifier = modifier) {
+            Box(
+                modifier = Modifier
+                    .weight(3f)
+                    .fillMaxHeight(),
+                contentAlignment = Alignment.Center,
+            ) {
+                MyCanvasContent(vm = vm)
+            }
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+            ) {
+                peers.forEach { peer ->
+                    MiniCanvas(
+                        nick = peer.nick,
+                        state = vm.peerCanvases.getOrPut(peer.peerId) {
+                            com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState()
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                    )
+                }
+            }
+        }
+    } else {
+        Column(modifier = modifier) {
+            Box(
+                modifier = Modifier
+                    .weight(3f)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
+                MyCanvasContent(vm = vm)
+            }
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+            ) {
+                peers.forEach { peer ->
+                    MiniCanvas(
+                        nick = peer.nick,
+                        state = vm.peerCanvases.getOrPut(peer.peerId) {
+                            com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState()
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                    )
+                }
+            }
+        }
     }
 }

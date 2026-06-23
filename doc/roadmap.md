@@ -139,12 +139,12 @@
 - [x] **4-B**: `SessionManager` 다중 피어 상태 머신. `PeerHandshake` 내부 클래스 + `Map<endpointId, PeerHandshake>` 로 피어별 HELLO/ACK 추적. `transport.connectedPeers` flow 가 신규 피어에 `sendTo(Hello)` unicast. HELLO/HelloAck/Pong/proto-Bye 모두 source endpointId 에 unicast. `DrawingViewModel.setAuthor()` 로 `DrawingEvent.authorId` 를 실제 `session.peerId` 로 박음 (`DrawingScreen` 진입 시 주입).
 - [x] **4-C**: `DrawingViewModel.peerCanvases: SnapshotStateMap<PeerId, CanvasState>` + `CanvasRouting { Shared, PerPeer }` enum. 기본 Shared (싱글 + 1:1 함께 모드), 모임 모드 진입점에서 `setRouting(PerPeer)` 호출. `applyRemoteEvent` 가 routing 에 따라 내 canvas vs `peerCanvases[authorId]` 로 분기. SnapshotStateMap 이라 새 peer 등장 시 미니 뷰 (4-E) 가 자동 등장.
 - [x] **4-D**: `DrawMode { Single, Duo, Party }` enum + path-param 라우트 `draw/{mode}`. `SessionManager.get(context, mode)` 모드별 싱글톤 (prefs 만 공유). NearbyTransport 가 Party 호스트 (Role.Host) 일 때 `STATUS_OK` 후에도 광고 유지, `stopAdvertising()` public 메서드 추가. HomeScreen 4번째 버튼 "모임 모드" + 높이 88→72dp 조정. `PartyPairingScreen` 신규 — 호스트/조인 명시적 RolePicker → 호스트는 다중 accept + "그리기 시작" 버튼으로 명시 종료, 조인자는 1:1 흐름과 동일. DrawingScreen 에 mode 인자 — Party 면 `vm.setRouting(PerPeer)`. (호스트 3명 reject + Draw 진입 후 추가 조인 흡수는 4-H.)
-- [ ] **4-E**: `DrawingScreen` 반응형 레이아웃 (방향 × 참가자 수). 미니 캔버스는 input 비활성 + 미니 뷰 렌더 시 사진 배경 무시(strokes 만). 자기 캔버스의 사진 관련 액션은 유지.
-  - **세로**: 캔버스 위, 미니 뷰 N개를 캔버스 아래 가로 분할 (`Row` + `Modifier.weight(1f)`)
-  - **가로**: 캔버스 좌측, 미니 뷰 N개를 우측 세로 스택 (`Column` + `Modifier.weight(1f)`)
-  - N=0: 미니 영역 숨김 + "참가자 대기 중" 안내
-  - N=1/2/3: 같은 코드, `forEach` 로 분할 자동 (자세한 매트릭스 + ASCII 는 `doc/ui-layout.md §5`)
-  - 방향 감지: `LocalConfiguration.current.orientation`
+- [x] **4-E**: `DrawingScreen` 반응형 레이아웃. `SessionManager.remotePeers: StateFlow<List<RemotePeerInfo>>` 노출 (peerId + nick + endpointId) — `handshakes` 갱신 시점에 publishRemotePeers. `MiniCanvas` 신규 — read-only, 사진 배경 무시, 닉네임 라벨, 빈 상태 placeholder. `DrawingScreen` mode == Party 분기:
+  - 세로: `Column` weight 3f/1f, 미니 뷰는 `Row` 가로 분할
+  - 가로: `Row` weight 3f/1f, 미니 뷰는 `Column` 세로 스택
+  - peers.isEmpty(): 캔버스가 영역 전체 차지 + 우상단 "참가자를 기다리는 중..." 작은 안내
+  - 방향: `LocalConfiguration.current.orientation`
+  - 분할은 `peers.forEach { MiniCanvas(weight(1f)) }` 한 줄로 1/2/3명 자동 처리
 - [ ] **4-F**: 호스트 relay — 인바운드 `Frame.Event` 를 source 제외 다른 조인자에게 재송신. **`PhotoMeta`/`PhotoRemove`/`MergeBackground` 는 relay 안 함** (자기 사진은 자기만). `Frame.PeerJoined`/`PeerLeft` 로 조인자 목록 변동 알림.
 - [ ] **4-G**: "동기화" 선택 다이얼로그. 피어 리스트 → 선택 → 컨펌 (사진 안내 문구 포함) → 타겟 SnapshotReq (호스트 relay). 응답에 사진 동반되면 자동 적용.
 - [ ] **4-H**: 끊김 처리 (조인자 1명 빠져도 세션 유지, 호스트 빠지면 모두 종료), 4명 초과 시 reject, 도구바 액션 가시성 정리.
