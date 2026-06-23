@@ -135,7 +135,7 @@
 - 모임 모드 컨펌 문구 추가: "상대방 사진이 있는 경우 사진 정보도 가져옵니다"
 
 **구현 항목 — 8단계로 분할**
-- [ ] **4-A**: `Transport` 다중 endpoint 지원. `connectedEndpoint: String?` → `connectedEndpoints: Map<String, PeerInfo>`. `send(frame)` = 브로드캐스트, `sendTo(endpointId, frame)` = 유니캐스트. Strategy 파라미터화. `incoming` 이 source endpointId 동반.
+- [x] **4-A**: `Transport` 다중 endpoint 지원. `connectedEndpoint: String?` → `connectedPeers: StateFlow<List<ConnectedPeer>>`. `send(frame)` = 브로드캐스트, `sendTo(endpointId, frame)` = 유니캐스트. `sendFile`/`sendFileTo` 분리. `incoming` 이 `InboundFrame(endpointId, frame)`, `IncomingFile` 에 endpointId 동반. `TransportState.Connected` → data object. `TransportMode { Duo, Party }` 로 모드별 SERVICE_ID + Strategy 격리 (cross-mode 발견 차단).
 - [ ] **4-B**: `SessionManager` 다중 피어 상태 머신. 피어별 HELLO/ACK 추적, **송신 시 `DrawingEvent.authorId` 를 실제 peerId 로 채워서** 박음 (현재 `PeerId.Local` 그대로 → 다중에선 라우팅 깨짐).
 - [ ] **4-C**: `DrawingViewModel.peerCanvases: Map<PeerId, CanvasState>`. 인바운드 이벤트를 발신자 peerId 기준으로 해당 캔버스에 라우팅.
 - [ ] **4-D**: Home 화면에 "모임 모드" 버튼 추가. 모임 모드 페어링 화면 — 호스트/조인 명시적 선택, 호스트는 최대 3명 까지 accept.

@@ -16,11 +16,13 @@ import com.google.android.gms.nearby.connection.Payload
 import com.google.android.gms.nearby.connection.PayloadCallback
 import com.google.android.gms.nearby.connection.PayloadTransferUpdate
 import com.google.android.gms.nearby.connection.Strategy
+import com.rts.rys.ryy.drawingtogether.transport.ConnectedPeer
 import com.rts.rys.ryy.drawingtogether.transport.DiscoveredPeer
 import com.rts.rys.ryy.drawingtogether.transport.FileTransferDirection
 import com.rts.rys.ryy.drawingtogether.transport.FileTransferEvent
 import com.rts.rys.ryy.drawingtogether.transport.FileTransferStatus
 import com.rts.rys.ryy.drawingtogether.transport.Frame
+import com.rts.rys.ryy.drawingtogether.transport.InboundFrame
 import com.rts.rys.ryy.drawingtogether.transport.IncomingFile
 import com.rts.rys.ryy.drawingtogether.transport.PendingConnection
 import com.rts.rys.ryy.drawingtogether.transport.Transport
@@ -36,9 +38,27 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 
-// Nearby Connections 기반 Transport 구현. P2P_POINT_TO_POINT.
+// Phase 4-A: 두 모드를 SERVICE_ID + Strategy 로 격리. 같은 모드끼리만 발견된다.
+// Duo  = 1:1 함께 모드 (P2P_POINT_TO_POINT)
+// Party = 1:N 모임 모드 (P2P_STAR, 호스트 + 최대 3 조인자)
+enum class TransportMode(val serviceId: String, val strategy: Strategy) {
+    Duo(
+        serviceId = "com.rts.rys.ryy.drawingtogether.duo",
+        strategy = Strategy.P2P_POINT_TO_POINT,
+    ),
+    Party(
+        serviceId = "com.rts.rys.ryy.drawingtogether.party",
+        strategy = Strategy.P2P_STAR,
+    ),
+}
+
+// Nearby Connections 기반 Transport 구현.
 // doc/nearby-connections.md §4 흐름 그대로.
-class NearbyTransport(context: Context) : Transport {
+// mode 디폴트 = Duo 라 기존 함께 모드 호출부 (SessionManager) 는 변경 없이 동작.
+class NearbyTransport(
+    context: Context,
+    private val mode: TransportMode = TransportMode.Duo,
+) : Transport {
 
     private val appContext = context.applicationContext
     private val client: ConnectionsClient = Nearby.getConnectionsClient(appContext)
@@ -52,8 +72,11 @@ class NearbyTransport(context: Context) : Transport {
     private val _pending = MutableStateFlow<PendingConnection?>(null)
     override val pending: StateFlow<PendingConnection?> = _pending.asStateFlow()
 
-    private val _incoming = MutableSharedFlow<Frame>(extraBufferCapacity = 64)
-    override val incoming: SharedFlow<Frame> = _incoming.asSharedFlow()
+    private val _connectedPeers = MutableStateFlow<List<ConnectedPeer>>(emptyList())
+    override val connectedPeers: StateFlow<List<ConnectedPeer>> = _connectedPeers.asStateFlow()
+
+    private val _incoming = MutableSharedFlow<InboundFrame>(extraBufferCapacity = 64)
+    override val incoming: SharedFlow<InboundFrame> = _incoming.asSharedFlow()
 
     private val _incomingFiles = MutableSharedFlow<IncomingFile>(extraBufferCapacity = 8)
     override val incomingFiles: SharedFlow<IncomingFile> = _incomingFiles.asSharedFlow()
@@ -66,7 +89,6 @@ class NearbyTransport(context: Context) : Transport {
     private val incomingFilePayloads = mutableSetOf<Long>()
 
     private var localNick: String = "User"
-    private var connectedEndpoint: String? = null
     private val nickByEndpoint = mutableMapOf<String, String>()
 
     override fun setLocalNick(nick: String) {
@@ -76,9 +98,9 @@ class NearbyTransport(context: Context) : Transport {
     override suspend fun startAdvertising() {
         stopInternal(updateState = false)
         _state.value = TransportState.Advertising
-        val opts = AdvertisingOptions.Builder().setStrategy(STRATEGY).build()
+        val opts = AdvertisingOptions.Builder().setStrategy(mode.strategy).build()
         val deferred = CompletableDeferred<Unit>()
-        client.startAdvertising(localNick, SERVICE_ID, lifecycleCallback, opts)
+        client.startAdvertising(localNick, mode.serviceId, lifecycleCallback, opts)
             .addOnSuccessListener { deferred.complete(Unit) }
             .addOnFailureListener {
                 _state.value = TransportState.Failed("advertise: ${it.message}")
@@ -90,9 +112,9 @@ class NearbyTransport(context: Context) : Transport {
     override suspend fun startDiscovery() {
         stopInternal(updateState = false)
         _state.value = TransportState.Discovering
-        val opts = DiscoveryOptions.Builder().setStrategy(STRATEGY).build()
+        val opts = DiscoveryOptions.Builder().setStrategy(mode.strategy).build()
         val deferred = CompletableDeferred<Unit>()
-        client.startDiscovery(SERVICE_ID, endpointDiscoveryCallback, opts)
+        client.startDiscovery(mode.serviceId, endpointDiscoveryCallback, opts)
             .addOnSuccessListener { deferred.complete(Unit) }
             .addOnFailureListener {
                 _state.value = TransportState.Failed("discover: ${it.message}")
@@ -126,19 +148,43 @@ class NearbyTransport(context: Context) : Transport {
     }
 
     override suspend fun send(frame: Frame) {
-        val target = connectedEndpoint ?: return
+        val targets = _connectedPeers.value
+        if (targets.isEmpty()) return
         val bytes = FrameCodec.encode(frame)
-        client.sendPayload(target, Payload.fromBytes(bytes))
+        targets.forEach { peer ->
+            client.sendPayload(peer.endpointId, Payload.fromBytes(bytes))
+        }
+    }
+
+    override suspend fun sendTo(endpointId: String, frame: Frame) {
+        if (_connectedPeers.value.none { it.endpointId == endpointId }) return
+        val bytes = FrameCodec.encode(frame)
+        client.sendPayload(endpointId, Payload.fromBytes(bytes))
     }
 
     override suspend fun sendFile(uri: Uri): Long {
-        val target = connectedEndpoint ?: error("not connected")
+        val targets = _connectedPeers.value
+        if (targets.isEmpty()) error("not connected")
         val pfd = withContext(Dispatchers.IO) {
             appContext.contentResolver.openFileDescriptor(uri, "r")
         } ?: error("cannot open uri: $uri")
         val payload = Payload.fromFile(pfd)
         outgoingFilePayloads.add(payload.id)
-        client.sendPayload(target, payload)
+        // Nearby 는 한 Payload 객체를 여러 endpoint 에 sendPayload 해도 안전 — 동일 payload.id 재사용.
+        targets.forEach { peer ->
+            client.sendPayload(peer.endpointId, payload)
+        }
+        return payload.id
+    }
+
+    override suspend fun sendFileTo(endpointId: String, uri: Uri): Long {
+        if (_connectedPeers.value.none { it.endpointId == endpointId }) error("not connected: $endpointId")
+        val pfd = withContext(Dispatchers.IO) {
+            appContext.contentResolver.openFileDescriptor(uri, "r")
+        } ?: error("cannot open uri: $uri")
+        val payload = Payload.fromFile(pfd)
+        outgoingFilePayloads.add(payload.id)
+        client.sendPayload(endpointId, payload)
         return payload.id
     }
 
@@ -150,7 +196,7 @@ class NearbyTransport(context: Context) : Transport {
         client.stopAdvertising()
         client.stopDiscovery()
         client.stopAllEndpoints()
-        connectedEndpoint = null
+        _connectedPeers.value = emptyList()
         nickByEndpoint.clear()
         _discovered.value = emptyList()
         _pending.value = null
@@ -170,15 +216,16 @@ class NearbyTransport(context: Context) : Transport {
         override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {
             when (result.status.statusCode) {
                 ConnectionsStatusCodes.STATUS_OK -> {
-                    connectedEndpoint = endpointId
-                    // 광고/검색은 연결 성립 시 중단 — 같은 단말이 또 발견되지 않도록.
+                    val nick = nickByEndpoint[endpointId] ?: "peer"
+                    _connectedPeers.value = _connectedPeers.value
+                        .filter { it.endpointId != endpointId } +
+                        ConnectedPeer(endpointId = endpointId, nick = nick)
+                    // 광고/검색은 첫 연결 성립 시 중단 — 같은 단말이 또 발견되지 않도록.
+                    // (1:N 모임 모드 호스트는 4-D 에서 다중 accept 흐름 도입 시 별도 처리.)
                     client.stopAdvertising()
                     client.stopDiscovery()
                     _discovered.value = emptyList()
-                    _state.value = TransportState.Connected(
-                        endpointId = endpointId,
-                        remoteNick = nickByEndpoint[endpointId] ?: "peer",
-                    )
+                    _state.value = TransportState.Connected
                 }
                 ConnectionsStatusCodes.STATUS_CONNECTION_REJECTED -> {
                     _state.value = TransportState.Failed("rejected")
@@ -190,8 +237,8 @@ class NearbyTransport(context: Context) : Transport {
         }
 
         override fun onDisconnected(endpointId: String) {
-            if (connectedEndpoint == endpointId) {
-                connectedEndpoint = null
+            _connectedPeers.value = _connectedPeers.value.filter { it.endpointId != endpointId }
+            if (_connectedPeers.value.isEmpty() && _state.value is TransportState.Connected) {
                 _state.value = TransportState.Idle
             }
         }
@@ -199,7 +246,7 @@ class NearbyTransport(context: Context) : Transport {
 
     private val endpointDiscoveryCallback = object : EndpointDiscoveryCallback() {
         override fun onEndpointFound(endpointId: String, info: DiscoveredEndpointInfo) {
-            if (info.serviceId != SERVICE_ID) return
+            if (info.serviceId != mode.serviceId) return
             val peer = DiscoveredPeer(endpointId = endpointId, nick = info.endpointName)
             // 같은 endpointId 와 같은 nick 둘 다 제거하고 새 entry 만 남긴다.
             // 한 기기가 광고를 재시작하면 Nearby 가 새 endpointId 를 부여해서 같은 기기가
@@ -220,12 +267,18 @@ class NearbyTransport(context: Context) : Transport {
                 Payload.Type.BYTES -> {
                     val bytes = payload.asBytes() ?: return
                     val frame = FrameCodec.tryDecode(bytes) ?: return
-                    _incoming.tryEmit(frame)
+                    _incoming.tryEmit(InboundFrame(endpointId = endpointId, frame = frame))
                 }
                 Payload.Type.FILE -> {
                     val uri = payload.asFile()?.asUri() ?: return
                     incomingFilePayloads.add(payload.id)
-                    _incomingFiles.tryEmit(IncomingFile(payloadId = payload.id, uri = uri))
+                    _incomingFiles.tryEmit(
+                        IncomingFile(
+                            endpointId = endpointId,
+                            payloadId = payload.id,
+                            uri = uri,
+                        )
+                    )
                 }
                 else -> Unit
             }
@@ -257,10 +310,5 @@ class NearbyTransport(context: Context) : Transport {
                 incomingFilePayloads.remove(update.payloadId)
             }
         }
-    }
-
-    companion object {
-        const val SERVICE_ID: String = "com.rts.rys.ryy.drawingtogether"
-        private val STRATEGY: Strategy = Strategy.P2P_POINT_TO_POINT
     }
 }

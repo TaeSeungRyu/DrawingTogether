@@ -108,7 +108,10 @@ class SessionManager private constructor(
             .onEach { handleTransportState(it) }
             .launchIn(scope)
         transport.incoming
-            .onEach { handleIncoming(it) }
+            // 4-A: incoming 시그니처가 InboundFrame(endpointId, frame) 로 바뀌었지만
+            // 함께 모드 1:1 에선 source 가 단일이라 frame 만 꺼내 처리.
+            // 모임 모드의 author/relay 라우팅은 4-B 에서 endpointId 활용 도입.
+            .onEach { handleIncoming(it.frame) }
             .launchIn(scope)
         // FILE 페이로드 도착 → PhotoMeta 또는 Snapshot 메타 매칭 시도
         transport.incomingFiles
