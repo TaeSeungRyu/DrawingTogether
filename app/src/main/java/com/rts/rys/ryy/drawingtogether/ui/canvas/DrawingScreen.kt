@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -225,6 +226,18 @@ fun DrawingScreen(
             }
         )
     }
+
+    // 끊긴 피어의 미니 캔버스 정리 — remotePeers 에 없는 PeerId 의 캔버스 데이터 제거.
+    if (mode == DrawMode.Party) {
+        LaunchedEffect(session) {
+            session.remotePeers.collect { peers ->
+                val active = peers.map { it.peerId }.toSet()
+                vm.peerCanvases.keys.toList().forEach { id ->
+                    if (id !in active) vm.peerCanvases.remove(id)
+                }
+            }
+        }
+    }
     DisposableEffect(Unit) {
         onDispose {
             if (session.state.value is SessionState.Connected ||
@@ -238,8 +251,14 @@ fun DrawingScreen(
     // 여기 알림은 진짜 끊김에서만 발화. 캔버스 데이터는 그대로 남아있고, "재연결" 액션을 누르면
     // PairingScreen 으로 가서 재페어링. 페어링 성공 시 popBackStack 으로 이 화면으로 복귀 →
     // 같은 ViewModel + CanvasState 유지, 끊기기 전 자기 stroke 그대로 보존.
+    //
+    // 모임 모드 호스트 예외: 마지막 조인자가 나가도 알림 안 띄움 — 호스트는 그대로 자기 캔버스에서
+    // 작업하다가 도구바 "방 열기" 로 새 조인자를 받는 흐름을 쓴다.
     LaunchedEffect(sessionState) {
         if (sessionState is SessionState.Failed) {
+            val isPartyHost = mode == DrawMode.Party &&
+                session.transport.localRole == com.rts.rys.ryy.drawingtogether.transport.Role.Host
+            if (isPartyHost) return@LaunchedEffect
             val result = snackbarHostState.showSnackbar(
                 message = "상대와의 연결이 끊겼어요. 그림은 그대로예요.",
                 actionLabel = "재연결",
@@ -506,6 +525,12 @@ fun DrawingScreen(
             }
         }
 
+        // 모임 모드 호스트만 "방 열기" 버튼 노출 — 광고를 다시 켜 새 조인자(또는 끊긴 조인자의
+        // 재참여) 를 받는다. localRole 은 transport.stop() 까지는 변경되지 않으니 화면 진입 시점에
+        // 한 번 평가하면 충분.
+        val isPartyHost = mode == DrawMode.Party &&
+            session.transport.localRole == com.rts.rys.ryy.drawingtogether.transport.Role.Host
+
         Toolbar(
             tool = vm.tool,
             canUndo = vm.canvas.canUndo,
@@ -519,6 +544,13 @@ fun DrawingScreen(
             // 동기화 버튼은 Connected 일 때만 노출. 탭 시 컨펌 다이얼로그 → 승인 후 SnapshotReq 송신.
             onSync = if (sessionState is SessionState.Connected) {
                 { showSyncConfirm = true }
+            } else null,
+            onOpenRoom = if (isPartyHost) {
+                {
+                    scope.launch {
+                        runCatching { session.transport.startAdvertising() }
+                    }
+                }
             } else null,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -550,6 +582,41 @@ fun DrawingScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showSyncConfirm = false }) { Text("취소") }
+            },
+        )
+    }
+
+    // 모임 모드 호스트가 "방 열기" 로 광고를 다시 켰을 때 새 조인자의 토큰 컨펌 다이얼로그.
+    // PartyPairingScreen 의 동일 흐름을 Draw 단계에서도 노출 — 새 조인자가 자연스럽게 합류.
+    val pendingConn by session.transport.pending.collectAsState()
+    val p = pendingConn
+    if (p != null && mode == DrawMode.Party) {
+        AlertDialog(
+            onDismissRequest = {
+                scope.launch { session.transport.rejectPending() }
+            },
+            title = { Text("${p.remoteNick}과 연결할까요?") },
+            text = {
+                Column {
+                    Text("양쪽 기기에 같은 토큰이 보이면 안전한 연결입니다.")
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = p.token,
+                        style = MaterialTheme.typography.headlineMedium,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch { session.transport.acceptPending() }
+                }) { Text("연결") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    scope.launch { session.transport.rejectPending() }
+                }) { Text("취소") }
             },
         )
     }

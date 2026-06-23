@@ -10,6 +10,7 @@ import com.rts.rys.ryy.drawingtogether.transport.ConnectedPeer
 import com.rts.rys.ryy.drawingtogether.transport.FileTransferEvent
 import com.rts.rys.ryy.drawingtogether.transport.Frame
 import com.rts.rys.ryy.drawingtogether.transport.PROTO_VERSION
+import com.rts.rys.ryy.drawingtogether.transport.Role
 import com.rts.rys.ryy.drawingtogether.transport.Transport
 import com.rts.rys.ryy.drawingtogether.transport.TransportState
 import com.rts.rys.ryy.drawingtogether.transport.codec.FrameCodec
@@ -57,6 +58,7 @@ data class RemotePeerInfo(
 
 // 프로세스 전역 싱글톤. WorkStore와 동일한 패턴.
 class SessionManager private constructor(
+    val mode: TransportMode,
     val transport: Transport,
     private val prefs: SharedPreferences,
     private val appContext: Context,
@@ -204,8 +206,14 @@ class SessionManager private constructor(
             }
             TransportState.Idle -> {
                 // 연결됐다가 끊긴 경우만 Disconnected 알림. Pairing 진행 중 Idle은 무시.
-                if (_state.value is SessionState.Connected ||
-                    _state.value is SessionState.Handshaking) {
+                // 모임 모드 호스트는 마지막 조인자가 끊겨도 sessionState 유지 — 방을 지키는
+                // 자연스러운 상태. ("방 열기" / 동기화 버튼 유지)
+                val partyHost = mode == TransportMode.Party &&
+                    transport.localRole == Role.Host
+                if (!partyHost &&
+                    (_state.value is SessionState.Connected ||
+                        _state.value is SessionState.Handshaking)
+                ) {
                     _state.value = SessionState.Failed("disconnected")
                     resetHandshake()
                 }
@@ -320,11 +328,19 @@ class SessionManager private constructor(
                 maybeFinishHandshake(endpointId)
             }
             is Frame.Bye -> {
-                // 1:N 에서 한 피어 BYE 가 전체 종료여선 안 되지만 1:1 호환 위해 일단 전체 stop.
-                // 4-H 에서 PeerLeft 와 함께 정교화 — 호스트 BYE 면 전체 종료, 조인자 BYE 면 그 피어만.
-                _state.value = SessionState.Failed("peer-bye: ${frame.reason}")
-                transport.stop()
-                resetHandshake()
+                // 그 endpoint 의 핸드셰이크만 정리 — 다른 피어가 살아있으면 sessionState 그대로.
+                handshakes.remove(endpointId)
+                publishRemotePeers()
+                if (handshakes.isEmpty()) {
+                    // 마지막 피어 BYE. 모임 모드 호스트는 "혼자 방을 지키는" 상태로 두어야
+                    // "방 열기" 와 동기화 버튼 등 호스트 UI 가 유지된다. 그 외(Duo / Party 조인자)
+                    // 는 진짜 끊긴 거라 Failed.
+                    val partyHost = mode == TransportMode.Party &&
+                        transport.localRole == Role.Host
+                    if (!partyHost) {
+                        _state.value = SessionState.Failed("peer-bye: ${frame.reason}")
+                    }
+                }
             }
             is Frame.Ping -> {
                 // Pong 은 보낸 피어에게만 unicast — 1:N 에서 broadcast 면 불필요한 RTT 측정 노이즈.
@@ -390,7 +406,7 @@ class SessionManager private constructor(
             val app = context.applicationContext
             val prefs = app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             val transport = NearbyTransport(app, mode)
-            return SessionManager(transport, prefs, app)
+            return SessionManager(mode, transport, prefs, app)
         }
     }
 }

@@ -92,14 +92,18 @@ class NearbyTransport(
     private var localNick: String = "User"
     private val nickByEndpoint = mutableMapOf<String, String>()
     // Phase 4-D: 호스트/조인자 구분. Party 호스트는 첫 연결 후에도 광고 유지 (최대 3명 더 수용).
-    private var localRole: Role? = null
+    // Transport 인터페이스로 노출 — UI 에서 호스트 전용 분기(예: "방 열기" 버튼) 에 사용.
+    override var localRole: Role? = null
+        private set
 
     override fun setLocalNick(nick: String) {
         localNick = nick.ifBlank { "User" }
     }
 
     override suspend fun startAdvertising() {
-        stopInternal(updateState = false)
+        // 광고/검색만 정리 — 기존 연결 (connectedPeers) 과 localRole 유지. "방 열기" 처럼
+        // Connected 상태에서 광고를 재개해야 하는 케이스에서 기존 조인자가 끊기지 않아야 한다.
+        resetAdvertiseDiscovery()
         localRole = Role.Host
         _state.value = TransportState.Advertising
         val opts = AdvertisingOptions.Builder().setStrategy(mode.strategy).build()
@@ -114,7 +118,7 @@ class NearbyTransport(
     }
 
     override suspend fun startDiscovery() {
-        stopInternal(updateState = false)
+        resetAdvertiseDiscovery()
         localRole = Role.Joiner
         _state.value = TransportState.Discovering
         val opts = DiscoveryOptions.Builder().setStrategy(mode.strategy).build()
@@ -200,19 +204,22 @@ class NearbyTransport(
     }
 
     override fun stop() {
-        stopInternal(updateState = true)
-    }
-
-    private fun stopInternal(updateState: Boolean) {
-        client.stopAdvertising()
-        client.stopDiscovery()
+        resetAdvertiseDiscovery()
         client.stopAllEndpoints()
         localRole = null
         _connectedPeers.value = emptyList()
         nickByEndpoint.clear()
+        _state.value = TransportState.Idle
+    }
+
+    // 광고/검색만 멈추고 발견 캐시·pending 만 정리. 기존 연결과 localRole 은 그대로 — 광고를
+    // 재시작하는 케이스 ("방 열기") 에서 기존 조인자가 끊기지 않아야 한다.
+    // 완전 종료는 stop() 가 담당 (stopAllEndpoints + connectedPeers 비우기 + localRole reset).
+    private fun resetAdvertiseDiscovery() {
+        client.stopAdvertising()
+        client.stopDiscovery()
         _discovered.value = emptyList()
         _pending.value = null
-        if (updateState) _state.value = TransportState.Idle
     }
 
     private val lifecycleCallback = object : ConnectionLifecycleCallback() {

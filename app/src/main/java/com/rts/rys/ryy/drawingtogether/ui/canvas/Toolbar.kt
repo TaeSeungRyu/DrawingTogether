@@ -39,6 +39,8 @@ fun Toolbar(
     modifier: Modifier = Modifier,
     // null 이면 버튼 숨김 — 싱글 모드 또는 미연결 상태.
     onSync: (() -> Unit)? = null,
+    // 모임 모드 호스트가 새 조인자를 받기 위해 광고를 다시 켤 때. 호스트일 때만 노출.
+    onOpenRoom: (() -> Unit)? = null,
 ) {
     var colorPickerOpen by remember { mutableStateOf(false) }
     var brushSheetOpen by remember { mutableStateOf(false) }
@@ -105,6 +107,15 @@ fun Toolbar(
                         onClick = onSync,
                         container = MaterialTheme.colorScheme.tertiary,
                         content = MaterialTheme.colorScheme.onTertiary,
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+                if (onOpenRoom != null) {
+                    CuteToolButton(
+                        text = "방 열기",
+                        onClick = onOpenRoom,
+                        container = MaterialTheme.colorScheme.secondaryContainer,
+                        content = MaterialTheme.colorScheme.onSecondaryContainer,
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                 }

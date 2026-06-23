@@ -85,6 +85,10 @@ interface Transport {
     val incomingFiles: SharedFlow<IncomingFile>
     val fileTransfers: SharedFlow<FileTransferEvent>
 
+    // 광고/검색을 시작한 단말의 역할. startAdvertising → Host, startDiscovery → Joiner.
+    // stop() 시 null 로 reset. 모임 모드에서 호스트 전용 UI (예: "방 열기" 버튼) 분기에 사용.
+    val localRole: Role?
+
     fun setLocalNick(nick: String)
 
     suspend fun startAdvertising()
