@@ -137,7 +137,7 @@
 **구현 항목 — 8단계로 분할**
 - [x] **4-A**: `Transport` 다중 endpoint 지원. `connectedEndpoint: String?` → `connectedPeers: StateFlow<List<ConnectedPeer>>`. `send(frame)` = 브로드캐스트, `sendTo(endpointId, frame)` = 유니캐스트. `sendFile`/`sendFileTo` 분리. `incoming` 이 `InboundFrame(endpointId, frame)`, `IncomingFile` 에 endpointId 동반. `TransportState.Connected` → data object. `TransportMode { Duo, Party }` 로 모드별 SERVICE_ID + Strategy 격리 (cross-mode 발견 차단).
 - [x] **4-B**: `SessionManager` 다중 피어 상태 머신. `PeerHandshake` 내부 클래스 + `Map<endpointId, PeerHandshake>` 로 피어별 HELLO/ACK 추적. `transport.connectedPeers` flow 가 신규 피어에 `sendTo(Hello)` unicast. HELLO/HelloAck/Pong/proto-Bye 모두 source endpointId 에 unicast. `DrawingViewModel.setAuthor()` 로 `DrawingEvent.authorId` 를 실제 `session.peerId` 로 박음 (`DrawingScreen` 진입 시 주입).
-- [ ] **4-C**: `DrawingViewModel.peerCanvases: Map<PeerId, CanvasState>`. 인바운드 이벤트를 발신자 peerId 기준으로 해당 캔버스에 라우팅.
+- [x] **4-C**: `DrawingViewModel.peerCanvases: SnapshotStateMap<PeerId, CanvasState>` + `CanvasRouting { Shared, PerPeer }` enum. 기본 Shared (싱글 + 1:1 함께 모드), 모임 모드 진입점에서 `setRouting(PerPeer)` 호출. `applyRemoteEvent` 가 routing 에 따라 내 canvas vs `peerCanvases[authorId]` 로 분기. SnapshotStateMap 이라 새 peer 등장 시 미니 뷰 (4-E) 가 자동 등장.
 - [ ] **4-D**: Home 화면에 "모임 모드" 버튼 추가. 모임 모드 페어링 화면 — 호스트/조인 명시적 선택, 호스트는 최대 3명 까지 accept.
 - [ ] **4-E**: `DrawingScreen` 반응형 레이아웃 (방향 × 참가자 수). 미니 캔버스는 input 비활성 + 미니 뷰 렌더 시 사진 배경 무시(strokes 만). 자기 캔버스의 사진 관련 액션은 유지.
   - **세로**: 캔버스 위, 미니 뷰 N개를 캔버스 아래 가로 분할 (`Row` + `Modifier.weight(1f)`)
