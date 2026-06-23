@@ -555,6 +555,13 @@ fun DrawingScreen(
                 {
                     scope.launch {
                         runCatching { session.transport.startAdvertising() }
+                            .onSuccess {
+                                Toast.makeText(
+                                    context,
+                                    "방을 열었어요. 새 친구가 들어올 수 있어요.",
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                            }
                     }
                 }
             } else null,
