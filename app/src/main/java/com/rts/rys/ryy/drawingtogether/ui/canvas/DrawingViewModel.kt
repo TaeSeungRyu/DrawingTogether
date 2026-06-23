@@ -24,8 +24,14 @@ import kotlinx.coroutines.flow.asSharedFlow
 class DrawingViewModel : ViewModel() {
     val canvas = CanvasState()
 
-    private val author = PeerId.Local
+    // Phase 4-B: 멀티 모드에서는 실제 SessionManager.peerId 로 교체된다.
+    // DrawingScreen 진입 시 setAuthor() 호출 — 싱글 모드는 PeerId.Local 그대로 유지.
+    private var author: PeerId = PeerId.Local
     private var seq: Long = 0L
+
+    fun setAuthor(peerId: PeerId) {
+        author = peerId
+    }
 
     var tool by mutableStateOf(ToolSettings.defaultPen())
         private set

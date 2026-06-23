@@ -52,6 +52,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rts.rys.ryy.drawingtogether.drawing.model.BackgroundImage
+import com.rts.rys.ryy.drawingtogether.drawing.model.PeerId
 import com.rts.rys.ryy.drawingtogether.photo.CameraCaptureFile
 import com.rts.rys.ryy.drawingtogether.photo.PhotoLoader
 import androidx.compose.ui.graphics.asAndroidBitmap
@@ -195,6 +196,13 @@ fun DrawingScreen(
     // 함께 모드 — Connected이면 우측에 peer indicator. 화면을 떠날 때 disconnect.
     val session = remember { SessionManager.get(context) }
     val sessionState by session.state.collectAsState()
+
+    // Phase 4-B: 발신 DrawingEvent.authorId 를 실제 설치 UUID 로 박는다.
+    // 1:1 함께 모드에서도 정확한 작성자 식별 — 싱글 모드는 Pairing 거치지 않고 진입이라
+    // 무해 (canvas 가 author 를 라우팅에 쓰지 않음).
+    LaunchedEffect(session) {
+        vm.setAuthor(PeerId(session.peerId))
+    }
     DisposableEffect(Unit) {
         onDispose {
             if (session.state.value is SessionState.Connected ||

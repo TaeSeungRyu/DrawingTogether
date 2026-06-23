@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import android.net.Uri
 import com.rts.rys.ryy.drawingtogether.drawing.model.DrawingEvent
 import com.rts.rys.ryy.drawingtogether.drawing.model.Stroke
+import com.rts.rys.ryy.drawingtogether.transport.ConnectedPeer
 import com.rts.rys.ryy.drawingtogether.transport.FileTransferEvent
 import com.rts.rys.ryy.drawingtogether.transport.Frame
 import com.rts.rys.ryy.drawingtogether.transport.PROTO_VERSION
@@ -98,20 +99,29 @@ class SessionManager private constructor(
         newId
     }
 
-    private var remoteHelloReceived: Frame.Hello? = null
-    private var localAckSent: Boolean = false
-    private var remoteAckReceived: Boolean = false
+    // Phase 4-B: 피어별 핸드셰이크 상태. 1:1 함께 모드는 항상 size <= 1, 1:N 모임 모드는 최대 3.
+    private class PeerHandshake {
+        var remoteHello: Frame.Hello? = null
+        var localAckSent: Boolean = false
+        var remoteAckReceived: Boolean = false
+        val done: Boolean
+            get() = remoteHello != null && localAckSent && remoteAckReceived
+    }
+    private val handshakes = mutableMapOf<String, PeerHandshake>()
 
     init {
-        // transport 상태 → 세션 상태 + 핸드셰이크 트리거
+        // transport 상태 → 세션 상태 전이
         transport.state
             .onEach { handleTransportState(it) }
             .launchIn(scope)
+        // 새 피어 등장 → HELLO unicast / 끊긴 피어 → handshake 제거.
+        // transport.state 의 Connected 전이와 별도 채널이지만 양쪽 핸들러가 idempotent 라
+        // 도착 순서 무관 (handshakes 맵 키 가드 + _state 분기 가드).
+        transport.connectedPeers
+            .onEach { syncHandshakesWithPeers(it) }
+            .launchIn(scope)
         transport.incoming
-            // 4-A: incoming 시그니처가 InboundFrame(endpointId, frame) 로 바뀌었지만
-            // 함께 모드 1:1 에선 source 가 단일이라 frame 만 꺼내 처리.
-            // 모임 모드의 author/relay 라우팅은 4-B 에서 endpointId 활용 도입.
-            .onEach { handleIncoming(it.frame) }
+            .onEach { handleIncoming(it.endpointId, it.frame) }
             .launchIn(scope)
         // FILE 페이로드 도착 → PhotoMeta 또는 Snapshot 메타 매칭 시도
         transport.incomingFiles
@@ -165,17 +175,12 @@ class SessionManager private constructor(
     private fun handleTransportState(s: TransportState) {
         when (s) {
             is TransportState.Connected -> {
-                // 양쪽 모두 핸드셰이크로 진입. HELLO를 송신.
-                _state.value = SessionState.Handshaking
-                resetHandshake()
-                scope.launch {
-                    transport.send(
-                        Frame.Hello(
-                            proto = PROTO_VERSION,
-                            peerId = peerId,
-                            nick = _nick.value.ifBlank { "User" },
-                        )
-                    )
+                // 첫 피어 연결 시 Handshaking 으로 전이. 실제 HELLO 송신은 syncHandshakesWithPeers 가
+                // connectedPeers 변화를 보고 신규 피어에게 unicast.
+                if (_state.value !is SessionState.Connected &&
+                    _state.value !is SessionState.Handshaking
+                ) {
+                    _state.value = SessionState.Handshaking
                 }
             }
             is TransportState.Failed -> {
@@ -193,7 +198,34 @@ class SessionManager private constructor(
         }
     }
 
-    private fun handleIncoming(frame: Frame) {
+    // connectedPeers 변경에 맞춰 handshakes 맵 동기화 + 신규 피어에 HELLO unicast.
+    // - 새 피어: handshakes 등록 후 sendTo(Hello) — broadcast 가 아니라 unicast 라
+    //   기존 피어에게 HELLO 가 중복 전달되지 않는다.
+    // - 사라진 피어: handshakes 에서 제거. 마지막 피어가 빠지면 transport.state 가 Idle 로 가서
+    //   handleTransportState 가 Disconnected 처리.
+    private fun syncHandshakesWithPeers(peers: List<ConnectedPeer>) {
+        val activeIds = peers.map { it.endpointId }.toSet()
+        handshakes.keys.toList().forEach { id ->
+            if (id !in activeIds) handshakes.remove(id)
+        }
+        peers.forEach { peer ->
+            if (peer.endpointId !in handshakes.keys) {
+                handshakes[peer.endpointId] = PeerHandshake()
+                scope.launch {
+                    transport.sendTo(
+                        peer.endpointId,
+                        Frame.Hello(
+                            proto = PROTO_VERSION,
+                            peerId = peerId,
+                            nick = _nick.value.ifBlank { "User" },
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    private fun handleIncoming(endpointId: String, frame: Frame) {
         when (frame) {
             is Frame.Event -> {
                 // 원격 DrawingEvent → DrawingScreen 으로 흘려보냄.
@@ -218,6 +250,7 @@ class SessionManager private constructor(
             }
             is Frame.SnapshotReq -> {
                 // 상대가 내 캔버스 상태를 요청. DrawingScreen 이 canvas 의 strokes/photo 로 응답.
+                // 1:N 에서는 source endpointId 에만 응답해야 하지만 그 라우팅은 4-G 에서 도입.
                 _snapshotRequests.tryEmit(Unit)
             }
             is Frame.Snapshot -> {
@@ -234,30 +267,36 @@ class SessionManager private constructor(
             is Frame.Hello -> {
                 if (frame.proto != PROTO_VERSION) {
                     scope.launch {
-                        transport.send(Frame.Bye("incompatible-proto"))
+                        transport.sendTo(endpointId, Frame.Bye("incompatible-proto"))
+                        // 1:1 호환 위해 전체 stop. 1:N 에서 한 피어만 끊는 정교화는 4-H 에서.
                         transport.stop()
                     }
                     _state.value = SessionState.Failed("proto v${frame.proto} 호환 안 됨")
                     return
                 }
-                remoteHelloReceived = frame
+                val h = handshakes.getOrPut(endpointId) { PeerHandshake() }
+                h.remoteHello = frame
                 scope.launch {
-                    transport.send(Frame.HelloAck(peerId = peerId))
-                    localAckSent = true
-                    maybeFinishHandshake()
+                    transport.sendTo(endpointId, Frame.HelloAck(peerId = peerId))
+                    h.localAckSent = true
+                    maybeFinishHandshake(endpointId)
                 }
             }
             is Frame.HelloAck -> {
-                remoteAckReceived = true
-                maybeFinishHandshake()
+                val h = handshakes[endpointId] ?: return
+                h.remoteAckReceived = true
+                maybeFinishHandshake(endpointId)
             }
             is Frame.Bye -> {
+                // 1:N 에서 한 피어 BYE 가 전체 종료여선 안 되지만 1:1 호환 위해 일단 전체 stop.
+                // 4-H 에서 PeerLeft 와 함께 정교화 — 호스트 BYE 면 전체 종료, 조인자 BYE 면 그 피어만.
                 _state.value = SessionState.Failed("peer-bye: ${frame.reason}")
                 transport.stop()
                 resetHandshake()
             }
             is Frame.Ping -> {
-                scope.launch { transport.send(Frame.Pong(ts = frame.ts)) }
+                // Pong 은 보낸 피어에게만 unicast — 1:N 에서 broadcast 면 불필요한 RTT 측정 노이즈.
+                scope.launch { transport.sendTo(endpointId, Frame.Pong(ts = frame.ts)) }
             }
             is Frame.Pong -> Unit
         }
@@ -276,17 +315,20 @@ class SessionManager private constructor(
         }
     }
 
-    private fun maybeFinishHandshake() {
-        val remote = remoteHelloReceived ?: return
-        if (localAckSent && remoteAckReceived) {
-            _state.value = SessionState.Connected(remoteNick = remote.nick)
+    // 특정 피어의 핸드셰이크가 완료되면 첫 한 명 기준으로 SessionState.Connected 전이.
+    // 1:N 에서는 두 번째/세 번째 피어가 추가로 완료돼도 이미 Connected 상태라 nick 갱신 안 함 —
+    // 다중 피어 UI 는 4-E 에서 connectedPeers flow 를 직접 collect 하는 방향으로 정리.
+    private fun maybeFinishHandshake(endpointId: String) {
+        val h = handshakes[endpointId] ?: return
+        if (!h.done) return
+        if (_state.value !is SessionState.Connected) {
+            val nick = h.remoteHello?.nick ?: "peer"
+            _state.value = SessionState.Connected(remoteNick = nick)
         }
     }
 
     private fun resetHandshake() {
-        remoteHelloReceived = null
-        localAckSent = false
-        remoteAckReceived = false
+        handshakes.clear()
     }
 
     companion object {
