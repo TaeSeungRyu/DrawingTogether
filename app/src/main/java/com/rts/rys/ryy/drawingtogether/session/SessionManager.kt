@@ -127,6 +127,11 @@ class SessionManager private constructor(
     private val _remotePeers = MutableStateFlow<List<RemotePeerInfo>>(emptyList())
     val remotePeers: StateFlow<List<RemotePeerInfo>> = _remotePeers.asStateFlow()
 
+    // Phase 4-F: 호스트 relay 로 알게 된 다른 조인자들. 조인자 입장에서 자기와 직접 연결 안 됐지만
+    // 호스트가 PeerJoined 로 알려준 피어. 호스트 측은 비어있음 (호스트는 모두 직접 연결).
+    private data class IndirectPeerInfo(val nick: String)
+    private val indirectPeers = mutableMapOf<PeerId, IndirectPeerInfo>()
+
     init {
         // transport 상태 → 세션 상태 전이
         transport.state
@@ -229,9 +234,25 @@ class SessionManager private constructor(
     //   handleTransportState 가 Disconnected 처리.
     private fun syncHandshakesWithPeers(peers: List<ConnectedPeer>) {
         val activeIds = peers.map { it.endpointId }.toSet()
-        // 끊긴 피어는 remotePeers 에서도 같이 제거 — handshakes 정리 후 publishRemotePeers().
+        // 끊긴 피어 추출. Phase 4-F: 호스트면 그 피어의 PeerLeft 를 다른 조인자에게 broadcast.
+        val removedPeerIds = mutableListOf<String>()
         handshakes.keys.toList().forEach { id ->
-            if (id !in activeIds) handshakes.remove(id)
+            if (id !in activeIds) {
+                val removed = handshakes.remove(id)
+                removed?.remoteHello?.peerId?.let { removedPeerIds.add(it) }
+            }
+        }
+        if (mode == TransportMode.Party && transport.localRole == Role.Host && removedPeerIds.isNotEmpty()) {
+            val survivors = handshakes.keys.toList()
+            scope.launch {
+                removedPeerIds.forEach { leftPeerId ->
+                    survivors.forEach { survivor ->
+                        runCatching {
+                            transport.sendTo(survivor, Frame.PeerLeft(peerId = leftPeerId))
+                        }
+                    }
+                }
+            }
         }
         peers.forEach { peer ->
             if (peer.endpointId !in handshakes.keys) {
@@ -251,10 +272,12 @@ class SessionManager private constructor(
         publishRemotePeers()
     }
 
-    // remotePeers 를 handshakes 의 완료된 항목 기준으로 다시 발행. 핸드셰이크가 진행 중인
-    // (아직 Hello 수신 전) 피어는 nick 을 모르니 제외.
+    // remotePeers 를 handshakes 의 완료된 항목 + indirectPeers (호스트 relay 로 알게 된 피어) 로
+    // 다시 발행. 핸드셰이크가 진행 중인 (아직 Hello 수신 전) 피어는 nick 을 모르니 제외.
+    // 조인자 입장: direct = [호스트] + indirect = [다른 조인자들]. 같은 PeerId 가 양쪽에 있을
+    // 일은 없음 (직접 연결되었으면 PeerJoined 송신 안 함).
     private fun publishRemotePeers() {
-        _remotePeers.value = handshakes.entries.mapNotNull { (endpointId, h) ->
+        val direct = handshakes.entries.mapNotNull { (endpointId, h) ->
             val hello = h.remoteHello ?: return@mapNotNull null
             RemotePeerInfo(
                 endpointId = endpointId,
@@ -262,6 +285,13 @@ class SessionManager private constructor(
                 nick = hello.nick,
             )
         }
+        val directIds = direct.map { it.peerId }.toSet()
+        val indirect = indirectPeers
+            .filterKeys { it !in directIds }
+            .map { (peerId, info) ->
+                RemotePeerInfo(endpointId = "", peerId = peerId, nick = info.nick)
+            }
+        _remotePeers.value = direct + indirect
     }
 
     private fun handleIncoming(endpointId: String, frame: Frame) {
@@ -271,6 +301,19 @@ class SessionManager private constructor(
                 // 핸드셰이크 완료(Connected) 후에만 의미 있는 이벤트이지만,
                 // 안전상 그 외 상태에서도 들어오면 일단 broadcast 만 하고 적용은 소비자가 결정.
                 _incomingDrawing.tryEmit(frame.e)
+                // 호스트 relay — source 제외 다른 조인자에게 같은 Event 재송신.
+                // 사진 관련 frame (PhotoMeta/PhotoRemove/MergeBackground) 은 의도적으로 relay 안 함
+                // (자기 사진은 자기만 보기, 4-D 정책).
+                relayIfHost(endpointId, frame)
+            }
+            is Frame.PeerJoined -> {
+                // 조인자 측에서 호스트 relay 로 다른 조인자의 합류 알림 수신.
+                indirectPeers[PeerId(frame.peerId)] = IndirectPeerInfo(nick = frame.nick)
+                publishRemotePeers()
+            }
+            is Frame.PeerLeft -> {
+                indirectPeers.remove(PeerId(frame.peerId))
+                publishRemotePeers()
             }
             is Frame.PhotoMeta -> {
                 // 짝이 되는 FILE 페이로드가 이미 도착해 있는지 확인.
@@ -329,14 +372,28 @@ class SessionManager private constructor(
             }
             is Frame.Bye -> {
                 // 그 endpoint 의 핸드셰이크만 정리 — 다른 피어가 살아있으면 sessionState 그대로.
+                val leftHello = handshakes[endpointId]?.remoteHello
                 handshakes.remove(endpointId)
                 publishRemotePeers()
+                // Phase 4-F: 호스트면 다른 조인자들에게 PeerLeft 알림. onDisconnected 가 곧 자동
+                // 발화하지만 그땐 handshakes 가 이미 비어있어 syncHandshakesWithPeers 가 PeerLeft 를
+                // 송신하지 않으므로 여기서 명시 송신.
+                val partyHost = mode == TransportMode.Party &&
+                    transport.localRole == Role.Host
+                if (partyHost && leftHello != null) {
+                    val survivors = handshakes.keys.toList()
+                    scope.launch {
+                        survivors.forEach { survivor ->
+                            runCatching {
+                                transport.sendTo(survivor, Frame.PeerLeft(peerId = leftHello.peerId))
+                            }
+                        }
+                    }
+                }
                 if (handshakes.isEmpty()) {
                     // 마지막 피어 BYE. 모임 모드 호스트는 "혼자 방을 지키는" 상태로 두어야
                     // "방 열기" 와 동기화 버튼 등 호스트 UI 가 유지된다. 그 외(Duo / Party 조인자)
                     // 는 진짜 끊긴 거라 Failed.
-                    val partyHost = mode == TransportMode.Party &&
-                        transport.localRole == Role.Host
                     if (!partyHost) {
                         _state.value = SessionState.Failed("peer-bye: ${frame.reason}")
                     }
@@ -366,17 +423,71 @@ class SessionManager private constructor(
     // 특정 피어의 핸드셰이크가 완료되면 첫 한 명 기준으로 SessionState.Connected 전이.
     // 1:N 에서는 두 번째/세 번째 피어가 추가로 완료돼도 이미 Connected 상태라 nick 갱신 안 함 —
     // 다중 피어 UI 는 4-E 에서 connectedPeers flow 를 직접 collect 하는 방향으로 정리.
+    // Phase 4-F: 호스트면 새 조인자에게 기존 조인자들 정보, 기존 조인자들에게 새 조인자 정보를
+    // 양방향 PeerJoined 로 알림.
     private fun maybeFinishHandshake(endpointId: String) {
         val h = handshakes[endpointId] ?: return
         if (!h.done) return
+        val finishedHello = h.remoteHello ?: return
         if (_state.value !is SessionState.Connected) {
-            val nick = h.remoteHello?.nick ?: "peer"
-            _state.value = SessionState.Connected(remoteNick = nick)
+            _state.value = SessionState.Connected(remoteNick = finishedHello.nick)
+        }
+        if (mode == TransportMode.Party && transport.localRole == Role.Host) {
+            announcePeerJoined(newlyJoinedEndpoint = endpointId, newlyJoinedHello = finishedHello)
+        }
+    }
+
+    // 호스트가 새 조인자의 핸드셰이크 완료 시 호출. 양방향 멤버십 동기화:
+    //   1) 새 조인자 (endpointId) 에게 기존 다른 조인자들의 PeerJoined 송신
+    //   2) 기존 다른 조인자들에게 새 조인자의 PeerJoined 송신
+    private fun announcePeerJoined(newlyJoinedEndpoint: String, newlyJoinedHello: Frame.Hello) {
+        val others = handshakes.entries.mapNotNull { (otherId, otherH) ->
+            if (otherId == newlyJoinedEndpoint) return@mapNotNull null
+            val otherHello = otherH.remoteHello ?: return@mapNotNull null
+            otherId to otherHello
+        }
+        scope.launch {
+            others.forEach { (otherId, otherHello) ->
+                // 1) 새 조인자에게 기존 피어 알림
+                runCatching {
+                    transport.sendTo(
+                        newlyJoinedEndpoint,
+                        Frame.PeerJoined(peerId = otherHello.peerId, nick = otherHello.nick),
+                    )
+                }
+                // 2) 기존 피어에게 새 조인자 알림
+                runCatching {
+                    transport.sendTo(
+                        otherId,
+                        Frame.PeerJoined(
+                            peerId = newlyJoinedHello.peerId,
+                            nick = newlyJoinedHello.nick,
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    // 호스트가 인바운드 Frame.Event 를 source 제외 다른 조인자에게 재송신. P2P_STAR 토폴로지에서
+    // 조인자끼리 직접 안 보이니 이걸로 다대다 동기화. 사진 관련 frame 은 호출하지 않는다.
+    private fun relayIfHost(sourceEndpointId: String, frame: Frame) {
+        if (mode != TransportMode.Party) return
+        if (transport.localRole != Role.Host) return
+        val targets = transport.connectedPeers.value
+            .map { it.endpointId }
+            .filter { it != sourceEndpointId }
+        if (targets.isEmpty()) return
+        scope.launch {
+            targets.forEach { targetEndpointId ->
+                runCatching { transport.sendTo(targetEndpointId, frame) }
+            }
         }
     }
 
     private fun resetHandshake() {
         handshakes.clear()
+        indirectPeers.clear()
         publishRemotePeers()
     }
 

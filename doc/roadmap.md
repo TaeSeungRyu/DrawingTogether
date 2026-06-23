@@ -145,7 +145,7 @@
   - peers.isEmpty(): 캔버스가 영역 전체 차지 + 우상단 "참가자를 기다리는 중..." 작은 안내
   - 방향: `LocalConfiguration.current.orientation`
   - 분할은 `peers.forEach { MiniCanvas(weight(1f)) }` 한 줄로 1/2/3명 자동 처리
-- [ ] **4-F**: 호스트 relay — 인바운드 `Frame.Event` 를 source 제외 다른 조인자에게 재송신. **`PhotoMeta`/`PhotoRemove`/`MergeBackground` 는 relay 안 함** (자기 사진은 자기만). `Frame.PeerJoined`/`PeerLeft` 로 조인자 목록 변동 알림.
+- [x] **4-F**: 호스트 relay 도입. `relayIfHost(sourceEndpointId, frame)` 헬퍼 — `Frame.Event` 만 source 제외 다른 조인자에게 sendTo 재송신. **사진 관련(`PhotoMeta`/`PhotoRemove`/`MergeBackground`) 은 호출 안 함** + DrawingScreen 에서 Party 모드일 때 broadcast 자체 차단 (4-D 정책 마무리). `Frame.PeerJoined`/`PeerLeft` 신규 frame — `maybeFinishHandshake` 에서 호스트가 양방향 PeerJoined (새 조인자에 기존 멤버, 기존 멤버에 새 조인자) 송신. 끊김 시 `syncHandshakesWithPeers`/Bye 분기에서 호스트가 PeerLeft broadcast. SessionManager 에 `indirectPeers: Map<PeerId, IndirectPeerInfo>` — 조인자가 호스트 relay 로 알게 된 다른 조인자. `publishRemotePeers` 가 direct + indirect 합쳐 발행 → 미니 뷰가 다른 조인자도 표시.
 - [ ] **4-G**: "동기화" 선택 다이얼로그. 피어 리스트 → 선택 → 컨펌 (사진 안내 문구 포함) → 타겟 SnapshotReq (호스트 relay). 응답에 사진 동반되면 자동 적용.
 - [ ] **4-H**: 끊김 처리 (조인자 1명 빠져도 세션 유지, 호스트 빠지면 모두 종료), 4명 초과 시 reject, 도구바 액션 가시성 정리.
 

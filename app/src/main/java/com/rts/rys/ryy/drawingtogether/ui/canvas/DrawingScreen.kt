@@ -79,12 +79,14 @@ private const val SAVED_TOAST_TEXT = "작품을 저장했어요"
 
 // 함께 모드 — 사진을 상대에게 전송. FILE 페이로드 + PhotoMeta(BYTES).
 // Connected 가 아니면 noop. doc/protocol.md §6.
+// 모임 모드(Party) 에서는 호출하지 않는다 — 자기 사진은 자기만 본다는 정책 (4-D §사진 정책).
 private suspend fun shareBackgroundToPeer(
     context: android.content.Context,
     session: SessionManager,
     uri: android.net.Uri,
     image: BackgroundImage,
 ) {
+    if (session.mode == com.rts.rys.ryy.drawingtogether.transport.nearby.TransportMode.Party) return
     if (session.state.value !is SessionState.Connected) return
     runCatching {
         val payloadId = session.transport.sendFile(uri)
@@ -433,7 +435,9 @@ fun DrawingScreen(
                         checked = vm.canvas.mergeBackgroundOnSave,
                         onCheckedChange = { value ->
                             vm.setMergeBackgroundOnSave(value)
-                            if (session.state.value is SessionState.Connected) {
+                            // 모임 모드는 자기 토글만 적용, 다른 사람에게 broadcast 안 함 (4-F).
+                            if (mode != DrawMode.Party &&
+                                session.state.value is SessionState.Connected) {
                                 scope.launch {
                                     runCatching { session.transport.send(Frame.MergeBackground(value)) }
                                 }
@@ -468,7 +472,9 @@ fun DrawingScreen(
                             text = "제거",
                             onClick = {
                                 vm.setBackground(null)
-                                if (session.state.value is SessionState.Connected) {
+                                // 모임 모드는 자기 사진 제거만 적용, broadcast 안 함 (4-F).
+                                if (mode != DrawMode.Party &&
+                                    session.state.value is SessionState.Connected) {
                                     scope.launch {
                                         runCatching { session.transport.send(Frame.PhotoRemove) }
                                     }
