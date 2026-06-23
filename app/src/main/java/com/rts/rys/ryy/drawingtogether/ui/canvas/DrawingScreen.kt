@@ -597,19 +597,17 @@ fun DrawingScreen(
     }
 }
 
-// Phase 4-E: 자기 캔버스 — 사진 있으면 사진 비율 letterbox, 없으면 fillMaxSize 흰 배경.
-// DrawingCanvas 가 pointerInput 으로 입력을 받는 영역.
+// Phase 4-E: 자기 캔버스 — 기본은 사진 있으면 사진 비율 letterbox, 없으면 fillMaxSize 흰 배경.
+// forceSquare=true (모임 모드) 면 사진 있어도 1:1 정사각형 letterbox — 모든 참가자가 같은
+// 비율의 캔버스에 그려야 stroke 의 normalized 좌표가 서로의 미니 뷰에서 동일 모양으로 보인다.
+// 사진은 1:1 letterbox 안에서 다시 Fit 으로 표시 (위/아래 또는 좌/우 여백 발생 가능).
 @Composable
-private fun MyCanvasContent(vm: DrawingViewModel) {
+private fun MyCanvasContent(vm: DrawingViewModel, forceSquare: Boolean = false) {
     val bg = vm.canvas.background
-    val canvasModifier = if (bg != null) {
-        Modifier
-            .aspectRatio(bg.aspectRatio)
-            .background(Color.White)
-    } else {
-        Modifier
-            .fillMaxSize()
-            .background(Color.White)
+    val canvasModifier = when {
+        forceSquare -> Modifier.aspectRatio(1f).background(Color.White)
+        bg != null -> Modifier.aspectRatio(bg.aspectRatio).background(Color.White)
+        else -> Modifier.fillMaxSize().background(Color.White)
     }
     DrawingCanvas(
         state = vm.canvas,
@@ -623,6 +621,9 @@ private fun MyCanvasContent(vm: DrawingViewModel) {
 
 // Phase 4-E: 모임 모드 캔버스 영역. 자기 캔버스 + 피어 미니 뷰들.
 // doc/ui-layout.md §5.4 의 weight(3f)/weight(1f) 가이드.
+// - 자기 캔버스 forceSquare = 1:1 letterbox → 모든 참가자 동일 비율 → 미니 뷰에서 모양 일치.
+// - 미니 슬롯은 항상 PARTY_MINI_SLOTS 개 고정 — 빈 자리는 EmptyMiniSlot placeholder. 새 조인자
+//   들어와도 자기 캔버스 영역 크기가 변하지 않는다.
 @Composable
 private fun PartyCanvasArea(
     vm: DrawingViewModel,
@@ -630,22 +631,6 @@ private fun PartyCanvasArea(
     isLandscape: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    if (peers.isEmpty()) {
-        // 0명 — 캔버스가 영역 전체를 차지하고, 작은 안내 텍스트만 우상단에 띄움.
-        Box(modifier = modifier, contentAlignment = Alignment.Center) {
-            MyCanvasContent(vm = vm)
-            Text(
-                text = "참가자를 기다리는 중...",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(8.dp),
-            )
-        }
-        return
-    }
-
     if (isLandscape) {
         Row(modifier = modifier) {
             Box(
@@ -654,24 +639,20 @@ private fun PartyCanvasArea(
                     .fillMaxHeight(),
                 contentAlignment = Alignment.Center,
             ) {
-                MyCanvasContent(vm = vm)
+                MyCanvasContent(vm = vm, forceSquare = true)
             }
             Column(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight(),
             ) {
-                peers.forEach { peer ->
-                    MiniCanvas(
-                        nick = peer.nick,
-                        state = vm.peerCanvases.getOrPut(peer.peerId) {
-                            com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState()
-                        },
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                    )
-                }
+                PartyMiniSlots(
+                    vm = vm,
+                    peers = peers,
+                    slotModifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                )
             }
         }
     } else {
@@ -682,25 +663,47 @@ private fun PartyCanvasArea(
                     .fillMaxWidth(),
                 contentAlignment = Alignment.Center,
             ) {
-                MyCanvasContent(vm = vm)
+                MyCanvasContent(vm = vm, forceSquare = true)
             }
             Row(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
             ) {
-                peers.forEach { peer ->
-                    MiniCanvas(
-                        nick = peer.nick,
-                        state = vm.peerCanvases.getOrPut(peer.peerId) {
-                            com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState()
-                        },
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight(),
-                    )
-                }
+                PartyMiniSlots(
+                    vm = vm,
+                    peers = peers,
+                    slotModifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                )
             }
+        }
+    }
+}
+
+// PARTY_MINI_SLOTS 개 슬롯 — peers 가 차례로 채우고 빈 자리는 EmptyMiniSlot.
+// 호스트 + 조인자 = 4명, 자기 제외하면 미니 최대 3 슬롯.
+private const val PARTY_MINI_SLOTS = 3
+
+@Composable
+private fun PartyMiniSlots(
+    vm: DrawingViewModel,
+    peers: List<com.rts.rys.ryy.drawingtogether.session.RemotePeerInfo>,
+    slotModifier: Modifier,
+) {
+    repeat(PARTY_MINI_SLOTS) { i ->
+        val peer = peers.getOrNull(i)
+        if (peer != null) {
+            MiniCanvas(
+                nick = peer.nick,
+                state = vm.peerCanvases.getOrPut(peer.peerId) {
+                    com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState()
+                },
+                modifier = slotModifier,
+            )
+        } else {
+            EmptyMiniSlot(modifier = slotModifier)
         }
     }
 }
