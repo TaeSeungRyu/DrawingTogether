@@ -13,6 +13,7 @@ import com.rts.rys.ryy.drawingtogether.transport.Transport
 import com.rts.rys.ryy.drawingtogether.transport.TransportState
 import com.rts.rys.ryy.drawingtogether.transport.codec.FrameCodec
 import com.rts.rys.ryy.drawingtogether.transport.nearby.NearbyTransport
+import com.rts.rys.ryy.drawingtogether.transport.nearby.TransportMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -336,15 +337,28 @@ class SessionManager private constructor(
         private const val KEY_NICK = "nick"
         private const val KEY_PEER_ID = "peer_id"
 
-        @Volatile private var instance: SessionManager? = null
+        // Phase 4-D: 모드별 별도 싱글톤. 두 인스턴스는 prefs (peerId/nick) 만 공유하고
+        // transport 와 핸드셰이크 상태는 완전 격리. 사용자 요구 "1:1 은 1:1 만, 1:N 은 1:N 만".
+        @Volatile private var duoInstance: SessionManager? = null
+        @Volatile private var partyInstance: SessionManager? = null
 
-        fun get(context: Context): SessionManager = instance ?: synchronized(this) {
-            instance ?: run {
-                val app = context.applicationContext
-                val prefs = app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                val transport = NearbyTransport(app)
-                SessionManager(transport, prefs, app).also { instance = it }
+        fun get(
+            context: Context,
+            mode: TransportMode = TransportMode.Duo,
+        ): SessionManager = when (mode) {
+            TransportMode.Duo -> duoInstance ?: synchronized(this) {
+                duoInstance ?: build(context, mode).also { duoInstance = it }
             }
+            TransportMode.Party -> partyInstance ?: synchronized(this) {
+                partyInstance ?: build(context, mode).also { partyInstance = it }
+            }
+        }
+
+        private fun build(context: Context, mode: TransportMode): SessionManager {
+            val app = context.applicationContext
+            val prefs = app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val transport = NearbyTransport(app, mode)
+            return SessionManager(transport, prefs, app)
         }
     }
 }

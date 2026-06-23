@@ -32,7 +32,8 @@ import com.rts.rys.ryy.drawingtogether.works.WorkStore
 @Composable
 fun HomeScreen(
     onSingleMode: () -> Unit,
-    onMultiMode: () -> Unit,
+    onDuoMode: () -> Unit,
+    onPartyMode: () -> Unit,
     onWorkClick: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -81,7 +82,7 @@ fun HomeScreen(
             onClick = onSingleMode,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(88.dp),
+                .height(72.dp),
             shape = MaterialTheme.shapes.extraLarge,
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -91,14 +92,14 @@ fun HomeScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        // 함께 모드 — 민트(secondary). 같은 위계지만 색으로 구분.
+        // 함께 모드 — 민트(secondary). 1:1 공유 캔버스.
         Button(
-            onClick = onMultiMode,
+            onClick = onDuoMode,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(88.dp),
+                .height(72.dp),
             shape = MaterialTheme.shapes.extraLarge,
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.secondary,
@@ -112,14 +113,36 @@ fun HomeScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // 모임 모드 — secondary 의 컨테이너 톤으로 같은 계열이지만 위계 한 단계 낮춤.
+        // 함께 모드와 같은 "연결" 군 이지만 좀 더 큰 규모.
+        Button(
+            onClick = onPartyMode,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(72.dp),
+            shape = MaterialTheme.shapes.extraLarge,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            ),
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("모임 모드", style = MaterialTheme.typography.titleLarge)
+                Spacer(modifier = Modifier.height(2.dp))
+                Text("최대 4명, 각자 캔버스 + 미니 뷰", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
 
         // 최근 작업 — 라벤더(tertiary). 보조 액션이지만 같은 시각 무게.
         Button(
             onClick = { modalOpen = true },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(88.dp),
+                .height(72.dp),
             shape = MaterialTheme.shapes.extraLarge,
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.tertiary,

@@ -62,6 +62,8 @@ import com.rts.rys.ryy.drawingtogether.session.SessionState
 import com.rts.rys.ryy.drawingtogether.transport.FileTransferDirection
 import com.rts.rys.ryy.drawingtogether.transport.FileTransferStatus
 import com.rts.rys.ryy.drawingtogether.transport.Frame
+import com.rts.rys.ryy.drawingtogether.transport.nearby.TransportMode
+import com.rts.rys.ryy.drawingtogether.ui.DrawMode
 import kotlinx.coroutines.delay
 import com.rts.rys.ryy.drawingtogether.works.PngComposer
 import com.rts.rys.ryy.drawingtogether.works.WorkStore
@@ -180,6 +182,7 @@ private suspend fun respondToSnapshotRequest(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DrawingScreen(
+    mode: DrawMode = DrawMode.Single,
     onBack: () -> Unit,
     onReconnect: () -> Unit,
     modifier: Modifier = Modifier,
@@ -193,8 +196,13 @@ fun DrawingScreen(
     var showSyncConfirm by remember { mutableStateOf(false) }
     var nameInput by remember { mutableStateOf("") }
 
-    // 함께 모드 — Connected이면 우측에 peer indicator. 화면을 떠날 때 disconnect.
-    val session = remember { SessionManager.get(context) }
+    // Phase 4-D: 모드별 SessionManager 인스턴스. Single 도 Duo 싱글톤을 쓰지만
+    // Pairing 을 거치지 않으니 transport 가 idle 이라 무해.
+    val transportMode = when (mode) {
+        DrawMode.Party -> TransportMode.Party
+        else -> TransportMode.Duo
+    }
+    val session = remember(transportMode) { SessionManager.get(context, transportMode) }
     val sessionState by session.state.collectAsState()
 
     // Phase 4-B: 발신 DrawingEvent.authorId 를 실제 설치 UUID 로 박는다.
@@ -202,6 +210,16 @@ fun DrawingScreen(
     // 무해 (canvas 가 author 를 라우팅에 쓰지 않음).
     LaunchedEffect(session) {
         vm.setAuthor(PeerId(session.peerId))
+    }
+
+    // Phase 4-C: 모임 모드는 인바운드 stroke 을 peer 별 캔버스로 라우팅. 그 외는 Shared 유지.
+    LaunchedEffect(mode) {
+        vm.setRouting(
+            when (mode) {
+                DrawMode.Party -> CanvasRouting.PerPeer
+                else -> CanvasRouting.Shared
+            }
+        )
     }
     DisposableEffect(Unit) {
         onDispose {

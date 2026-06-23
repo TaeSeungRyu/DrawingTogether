@@ -89,6 +89,9 @@ interface Transport {
 
     suspend fun startAdvertising()
     suspend fun startDiscovery()
+    // 광고만 중단. 기존 연결과 discovery 는 유지. 1:N 모임 모드 호스트가
+    // "그리기 시작" 시점에 더 이상 새 조인자를 안 받기 위해 호출.
+    fun stopAdvertising()
     suspend fun requestConnection(endpointId: String)
     suspend fun acceptPending()
     suspend fun rejectPending()

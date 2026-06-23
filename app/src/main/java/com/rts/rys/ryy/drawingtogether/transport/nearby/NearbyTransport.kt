@@ -25,6 +25,7 @@ import com.rts.rys.ryy.drawingtogether.transport.Frame
 import com.rts.rys.ryy.drawingtogether.transport.InboundFrame
 import com.rts.rys.ryy.drawingtogether.transport.IncomingFile
 import com.rts.rys.ryy.drawingtogether.transport.PendingConnection
+import com.rts.rys.ryy.drawingtogether.transport.Role
 import com.rts.rys.ryy.drawingtogether.transport.Transport
 import com.rts.rys.ryy.drawingtogether.transport.TransportState
 import com.rts.rys.ryy.drawingtogether.transport.codec.FrameCodec
@@ -90,6 +91,8 @@ class NearbyTransport(
 
     private var localNick: String = "User"
     private val nickByEndpoint = mutableMapOf<String, String>()
+    // Phase 4-D: 호스트/조인자 구분. Party 호스트는 첫 연결 후에도 광고 유지 (최대 3명 더 수용).
+    private var localRole: Role? = null
 
     override fun setLocalNick(nick: String) {
         localNick = nick.ifBlank { "User" }
@@ -97,6 +100,7 @@ class NearbyTransport(
 
     override suspend fun startAdvertising() {
         stopInternal(updateState = false)
+        localRole = Role.Host
         _state.value = TransportState.Advertising
         val opts = AdvertisingOptions.Builder().setStrategy(mode.strategy).build()
         val deferred = CompletableDeferred<Unit>()
@@ -111,6 +115,7 @@ class NearbyTransport(
 
     override suspend fun startDiscovery() {
         stopInternal(updateState = false)
+        localRole = Role.Joiner
         _state.value = TransportState.Discovering
         val opts = DiscoveryOptions.Builder().setStrategy(mode.strategy).build()
         val deferred = CompletableDeferred<Unit>()
@@ -188,6 +193,12 @@ class NearbyTransport(
         return payload.id
     }
 
+    override fun stopAdvertising() {
+        // 광고만 중단. 연결/검색 상태와 _state 는 그대로 — 호출자(예: PartyPairingScreen
+        // "그리기 시작" 버튼)가 후속 흐름을 결정.
+        client.stopAdvertising()
+    }
+
     override fun stop() {
         stopInternal(updateState = true)
     }
@@ -196,6 +207,7 @@ class NearbyTransport(
         client.stopAdvertising()
         client.stopDiscovery()
         client.stopAllEndpoints()
+        localRole = null
         _connectedPeers.value = emptyList()
         nickByEndpoint.clear()
         _discovered.value = emptyList()
@@ -220,9 +232,10 @@ class NearbyTransport(
                     _connectedPeers.value = _connectedPeers.value
                         .filter { it.endpointId != endpointId } +
                         ConnectedPeer(endpointId = endpointId, nick = nick)
-                    // 광고/검색은 첫 연결 성립 시 중단 — 같은 단말이 또 발견되지 않도록.
-                    // (1:N 모임 모드 호스트는 4-D 에서 다중 accept 흐름 도입 시 별도 처리.)
-                    client.stopAdvertising()
+                    // Party 모드 호스트는 광고 유지 — 추가 조인자 (최대 3명) 수용.
+                    // Duo 호스트 / 모든 조인자 / Party 조인자는 첫 연결 성립 시 광고·검색 중단.
+                    val keepAdvertising = mode == TransportMode.Party && localRole == Role.Host
+                    if (!keepAdvertising) client.stopAdvertising()
                     client.stopDiscovery()
                     _discovered.value = emptyList()
                     _state.value = TransportState.Connected

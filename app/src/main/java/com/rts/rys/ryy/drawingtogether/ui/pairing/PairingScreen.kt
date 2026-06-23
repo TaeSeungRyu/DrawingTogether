@@ -334,8 +334,9 @@ private fun DiscoveredCard(nick: String, onClick: () -> Unit) {
     }
 }
 
+// Phase 4-D: PartyPairingScreen 에서도 공유 — internal 로 노출.
 @Composable
-private fun PermissionNotice(denied: Boolean, onRetry: () -> Unit) {
+internal fun PermissionNotice(denied: Boolean, onRetry: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.Center,
@@ -375,7 +376,7 @@ private fun AdvertisingHint() {
 }
 
 @Composable
-private fun EmptyDiscoveryHint(state: TransportState) {
+internal fun EmptyDiscoveryHint(state: TransportState) {
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.Center,
