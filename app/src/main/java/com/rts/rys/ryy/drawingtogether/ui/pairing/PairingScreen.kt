@@ -56,6 +56,7 @@ import kotlinx.coroutines.launch
 fun PairingScreen(
     onBack: () -> Unit,
     onConnected: () -> Unit,
+    autoStartAsHost: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -89,9 +90,18 @@ fun PairingScreen(
         }
     }
 
-    // 권한 OK 되면 자동으로 discovery 시작 (사용자가 광고로 전환할 수도 있음)
-    LaunchedEffect(permissionsGranted) {
-        if (permissionsGranted && transportState == TransportState.Idle) {
+    // 권한 OK 되면 자동 시작 — 기본은 discovery, 재연결 시(autoStartAsHost=true) 는 100ms 후
+    // 자동 advertising. 100ms 지연은 disconnect 직후 transport.stop() 의 onDisconnected 콜백
+    // 사이클이 끝날 시간을 보장 (state 가 stale Idle/Failed 였다 곧 정리되는 케이스 회피).
+    LaunchedEffect(permissionsGranted, autoStartAsHost) {
+        if (!permissionsGranted) return@LaunchedEffect
+        if (autoStartAsHost) {
+            kotlinx.coroutines.delay(100)
+            val s = session.transport.state.value
+            if (s !is TransportState.Advertising && s !is TransportState.Connected) {
+                session.transport.startAdvertising()
+            }
+        } else if (session.transport.state.value == TransportState.Idle) {
             session.transport.startDiscovery()
         }
     }

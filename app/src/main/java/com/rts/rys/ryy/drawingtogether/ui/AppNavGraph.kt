@@ -26,13 +26,18 @@ object Routes {
     // path: draw/{mode}
     const val Draw = "draw"
     const val DrawArg = "mode"
-    const val Pairing = "pairing"             // 함께 모드 (1:1) 페어링
+    // path: pairing/{autoHost}. autoHost=true 면 진입 직후 자동 startAdvertising —
+    // 재연결 시나리오에서 사용자 한 번 더 탭 없이 바로 호스트 광고를 켠다.
+    const val Pairing = "pairing"
+    const val PairingArg = "autoHost"
     const val PartyPairing = "party-pairing"  // 모임 모드 (1:N) 페어링
     const val Preview = "preview"             // path 인자: workId
     const val PreviewArg = "workId"
 }
 
 private fun drawRoute(mode: DrawMode): String = "${Routes.Draw}/${mode.name}"
+
+private fun pairingRoute(autoHost: Boolean): String = "${Routes.Pairing}/$autoHost"
 
 @Composable
 fun AppNavGraph(modifier: Modifier = Modifier) {
@@ -52,7 +57,7 @@ fun AppNavGraph(modifier: Modifier = Modifier) {
         composable(Routes.Home) {
             HomeScreen(
                 onSingleMode = { nav.navigate(drawRoute(DrawMode.Single)) },
-                onDuoMode = { nav.navigate(Routes.Pairing) },
+                onDuoMode = { nav.navigate(pairingRoute(autoHost = false)) },
                 onPartyMode = { nav.navigate(Routes.PartyPairing) },
                 onWorkClick = { workId ->
                     nav.navigate("${Routes.Preview}/$workId")
@@ -69,16 +74,23 @@ fun AppNavGraph(modifier: Modifier = Modifier) {
                 mode = mode,
                 onBack = { nav.popBackStack() },
                 onReconnect = {
+                    // 재연결 흐름. Duo 면 자동 호스트 광고 시작 (autoHost=true) — 사용자가
+                    // 페어링 화면에서 다시 한 번 호스트 버튼을 탭하지 않아도 된다.
                     val target = when (mode) {
                         DrawMode.Party -> Routes.PartyPairing
-                        else -> Routes.Pairing
+                        else -> pairingRoute(autoHost = true)
                     }
                     nav.navigate(target)
                 },
             )
         }
-        composable(Routes.Pairing) {
+        composable(
+            route = "${Routes.Pairing}/{${Routes.PairingArg}}",
+            arguments = listOf(navArgument(Routes.PairingArg) { type = NavType.BoolType }),
+        ) { entry ->
+            val autoHost = entry.arguments?.getBoolean(Routes.PairingArg) ?: false
             PairingScreen(
+                autoStartAsHost = autoHost,
                 onBack = { nav.popBackStack() },
                 onConnected = {
                     val target = drawRoute(DrawMode.Duo)
@@ -87,7 +99,7 @@ fun AppNavGraph(modifier: Modifier = Modifier) {
                     val popped = nav.popBackStack(target, inclusive = false)
                     if (!popped) {
                         nav.navigate(target) {
-                            popUpTo(Routes.Pairing) { inclusive = true }
+                            popUpTo("${Routes.Pairing}/{${Routes.PairingArg}}") { inclusive = true }
                         }
                     }
                 },
