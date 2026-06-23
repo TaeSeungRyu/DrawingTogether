@@ -90,8 +90,11 @@ class SessionManager private constructor(
     val photoTransfers: SharedFlow<FileTransferEvent> get() = transport.fileTransfers
 
     // "동기화" — 상대가 내 캔버스 상태를 요청. DrawingScreen 이 canvas 의 strokes/photo 로 응답.
-    private val _snapshotRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 4)
-    val snapshotRequests: SharedFlow<Unit> = _snapshotRequests.asSharedFlow()
+    // Phase 4-G: requesterPeerId 동반 — 모임 모드 응답 시 target 박아 호스트 relay 거치게 한다.
+    // Duo (1:1) 는 requester 무시하고 broadcast 응답.
+    data class SnapshotRequest(val requesterPeerId: PeerId)
+    private val _snapshotRequests = MutableSharedFlow<SnapshotRequest>(extraBufferCapacity = 4)
+    val snapshotRequests: SharedFlow<SnapshotRequest> = _snapshotRequests.asSharedFlow()
 
     // 내가 SnapshotReq 를 보냈고, 상대가 Snapshot 으로 응답한 stroke 목록.
     private val _incomingSnapshot = MutableSharedFlow<List<Stroke>>(extraBufferCapacity = 4)
@@ -105,6 +108,15 @@ class SessionManager private constructor(
     private val pendingPhotoMeta = mutableMapOf<Long, Frame.PhotoMeta>()
     private val pendingSnapshotMeta = mutableMapOf<Long, Frame.Snapshot>()
     private val pendingFiles = mutableMapOf<Long, Uri>()
+
+    // Phase 4-G: 호스트 relay 보관소. target!=self 인 Snapshot/PhotoMeta 가 도착하면 frame 을
+    // 보관하고, 짝 FILE 도착 시 그 endpoint 로 sendFileTo → 새 payloadId 받아 frame 갱신 후
+    // sendTo. key = 원본 payloadId.
+    private data class PendingRelay(
+        val targetEndpointId: String,
+        val frame: Frame,  // Snapshot 또는 PhotoMeta. payloadId 필드를 갱신해 forward.
+    )
+    private val pendingRelays = mutableMapOf<Long, PendingRelay>()
 
     val peerId: String = prefs.getString(KEY_PEER_ID, null) ?: run {
         val newId = UUID.randomUUID().toString()
@@ -146,9 +158,16 @@ class SessionManager private constructor(
         transport.incoming
             .onEach { handleIncoming(it.endpointId, it.frame) }
             .launchIn(scope)
-        // FILE 페이로드 도착 → PhotoMeta 또는 Snapshot 메타 매칭 시도
+        // FILE 페이로드 도착 → PhotoMeta 또는 Snapshot 메타 매칭 시도.
+        // Phase 4-G: pendingRelays 에 있는 payloadId 면 호스트가 relay (sendFileTo + 새 payloadId
+        // 박은 frame 도 sendTo) — 자기 데이터로 처리하지 않음.
         transport.incomingFiles
             .onEach { file ->
+                val relay = pendingRelays.remove(file.payloadId)
+                if (relay != null) {
+                    forwardFile(relay, file.uri)
+                    return@onEach
+                }
                 val photoMeta = pendingPhotoMeta.remove(file.payloadId)
                 val snapshotMeta = pendingSnapshotMeta.remove(file.payloadId)
                 when {
@@ -316,6 +335,14 @@ class SessionManager private constructor(
                 publishRemotePeers()
             }
             is Frame.PhotoMeta -> {
+                // Phase 4-G: target 가 자기가 아니면 호스트 relay (FILE 도착 시 forwardFile 가 처리).
+                if (shouldRelay(frame.targetPeerId)) {
+                    pendingRelays[frame.payloadId] = PendingRelay(
+                        targetEndpointId = endpointForPeerId(frame.targetPeerId) ?: return,
+                        frame = frame,
+                    )
+                    return
+                }
                 // 짝이 되는 FILE 페이로드가 이미 도착해 있는지 확인.
                 val fileUri = pendingFiles.remove(frame.payloadId)
                 if (fileUri != null) {
@@ -325,17 +352,42 @@ class SessionManager private constructor(
                 }
             }
             is Frame.PhotoRemove -> {
+                // Phase 4-G: PhotoRemove 는 FILE 없으니 즉시 forward.
+                if (shouldRelay(frame.targetPeerId)) {
+                    val targetEndpoint = endpointForPeerId(frame.targetPeerId) ?: return
+                    scope.launch {
+                        runCatching { transport.sendTo(targetEndpoint, frame) }
+                    }
+                    return
+                }
                 _incomingBackground.tryEmit(BackgroundChange.Remove)
             }
             is Frame.MergeBackground -> {
                 _incomingMergeToggle.tryEmit(frame.enabled)
             }
             is Frame.SnapshotReq -> {
-                // 상대가 내 캔버스 상태를 요청. DrawingScreen 이 canvas 의 strokes/photo 로 응답.
-                // 1:N 에서는 source endpointId 에만 응답해야 하지만 그 라우팅은 4-G 에서 도입.
-                _snapshotRequests.tryEmit(Unit)
+                // Phase 4-G: target!=self 면 호스트 relay. target 비/self 면 자기가 응답.
+                if (shouldRelay(frame.targetPeerId)) {
+                    val targetEndpoint = endpointForPeerId(frame.targetPeerId) ?: return
+                    scope.launch {
+                        runCatching { transport.sendTo(targetEndpoint, frame) }
+                    }
+                    return
+                }
+                // requesterPeerId 가 없으면 (Duo broadcast) 그냥 broadcast 요청. 모임 모드는
+                // requester 박혀서 응답 시 target 으로 사용.
+                val requester = PeerId(frame.requesterPeerId)
+                _snapshotRequests.tryEmit(SnapshotRequest(requesterPeerId = requester))
             }
             is Frame.Snapshot -> {
+                // Phase 4-G: target!=self 면 호스트 relay (FILE 도착 시 forwardFile 가 처리).
+                if (shouldRelay(frame.targetPeerId)) {
+                    pendingRelays[frame.strokesPayloadId] = PendingRelay(
+                        targetEndpointId = endpointForPeerId(frame.targetPeerId) ?: return,
+                        frame = frame,
+                    )
+                    return
+                }
                 // 내가 보낸 SnapshotReq 의 응답 — strokes 는 FILE 페이로드로 따로 도착.
                 // 짝이 되는 FILE 이 이미 와있으면 즉시 처리, 아니면 buffer.
                 val fileUri = pendingFiles.remove(frame.strokesPayloadId)
@@ -465,6 +517,39 @@ class SessionManager private constructor(
                         ),
                     )
                 }
+            }
+        }
+    }
+
+    // Phase 4-G: target 이 자기가 아니라 다른 peerId 면 호스트가 relay 해야 한다.
+    // - targetPeerId 빈 문자열 → broadcast 의미 (Duo 호환) → relay 아님
+    // - target == 자기 peerId → 자기 처리 → relay 아님
+    // - 그 외 → relay (단, 호스트만 가능. 조인자는 무시)
+    private fun shouldRelay(targetPeerId: String): Boolean {
+        if (targetPeerId.isEmpty() || targetPeerId == peerId) return false
+        return mode == TransportMode.Party && transport.localRole == Role.Host
+    }
+
+    // 모임 모드 호스트가 target peerId 로 송신할 때 매칭되는 endpointId 찾기.
+    // handshakes 안에서 remoteHello.peerId == target 인 항목 검색.
+    private fun endpointForPeerId(targetPeerId: String): String? {
+        return handshakes.entries.firstOrNull { (_, h) ->
+            h.remoteHello?.peerId == targetPeerId
+        }?.key
+    }
+
+    // pendingRelays 의 항목 — FILE 도착 시 호출. 호스트가 target endpoint 로 sendFileTo 호출 →
+    // 새 payloadId 받고, 보관해둔 frame (Snapshot/PhotoMeta) 의 payloadId 를 갱신해 sendTo.
+    private fun forwardFile(relay: PendingRelay, uri: Uri) {
+        scope.launch {
+            runCatching {
+                val newPayloadId = transport.sendFileTo(relay.targetEndpointId, uri)
+                val updated: Frame = when (val f = relay.frame) {
+                    is Frame.Snapshot -> f.copy(strokesPayloadId = newPayloadId)
+                    is Frame.PhotoMeta -> f.copy(payloadId = newPayloadId)
+                    else -> f
+                }
+                transport.sendTo(relay.targetEndpointId, updated)
             }
         }
     }

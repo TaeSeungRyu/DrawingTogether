@@ -146,7 +146,7 @@
   - 방향: `LocalConfiguration.current.orientation`
   - 분할은 `peers.forEach { MiniCanvas(weight(1f)) }` 한 줄로 1/2/3명 자동 처리
 - [x] **4-F**: 호스트 relay 도입. `relayIfHost(sourceEndpointId, frame)` 헬퍼 — `Frame.Event` 만 source 제외 다른 조인자에게 sendTo 재송신. **사진 관련(`PhotoMeta`/`PhotoRemove`/`MergeBackground`) 은 호출 안 함** + DrawingScreen 에서 Party 모드일 때 broadcast 자체 차단 (4-D 정책 마무리). `Frame.PeerJoined`/`PeerLeft` 신규 frame — `maybeFinishHandshake` 에서 호스트가 양방향 PeerJoined (새 조인자에 기존 멤버, 기존 멤버에 새 조인자) 송신. 끊김 시 `syncHandshakesWithPeers`/Bye 분기에서 호스트가 PeerLeft broadcast. SessionManager 에 `indirectPeers: Map<PeerId, IndirectPeerInfo>` — 조인자가 호스트 relay 로 알게 된 다른 조인자. `publishRemotePeers` 가 direct + indirect 합쳐 발행 → 미니 뷰가 다른 조인자도 표시.
-- [ ] **4-G**: "동기화" 선택 다이얼로그. 피어 리스트 → 선택 → 컨펌 (사진 안내 문구 포함) → 타겟 SnapshotReq (호스트 relay). 응답에 사진 동반되면 자동 적용.
+- [x] **4-G**: 동기화 다이얼로그 + 타겟 라우팅. Frame `SnapshotReq`/`Snapshot`/`PhotoMeta`/`PhotoRemove` 에 `targetPeerId` 필드 (빈 문자열 = Duo broadcast). SessionManager 의 `shouldRelay`/`endpointForPeerId`/`forwardFile` 헬퍼로 호스트 relay 도입 — Snapshot/PhotoMeta FILE 도착 시 `sendFileTo` 로 forward 하면서 새 payloadId 박은 frame 도 함께 sendTo (target 측 매칭 보존). `SnapshotRequest(requesterPeerId)` SharedFlow shape 변경 — 응답 시 requester 를 target 으로 박음. DrawingScreen 동기화 다이얼로그 `SyncStep` sealed (None / DuoConfirm / PartyPicker / PartyConfirm). Duo 는 1단계, Party 는 피어 피커 → 컨펌 (사진 안내 문구 포함). 컨펌 시 `SnapshotReq(target=peer, requester=self)` 송신 → 호스트 relay → target 응답 → 호스트 relay → 자기 캔버스 덮어쓰기.
 - [ ] **4-H**: 끊김 처리 (조인자 1명 빠져도 세션 유지, 호스트 빠지면 모두 종료), 4명 초과 시 reject, 도구바 액션 가시성 정리.
 
 **완료 기준**:

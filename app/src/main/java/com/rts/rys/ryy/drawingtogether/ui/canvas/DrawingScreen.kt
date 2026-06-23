@@ -77,6 +77,16 @@ import kotlinx.coroutines.launch
 private const val ASPECT_TOAST_TEXT = "사진 비율로 화면을 맞췄어요"
 private const val SAVED_TOAST_TEXT = "작품을 저장했어요"
 
+// Phase 4-G: 동기화 다이얼로그 단계.
+private sealed class SyncStep {
+    data object None : SyncStep()
+    data object DuoConfirm : SyncStep()
+    data object PartyPicker : SyncStep()
+    data class PartyConfirm(
+        val target: com.rts.rys.ryy.drawingtogether.session.RemotePeerInfo,
+    ) : SyncStep()
+}
+
 // 함께 모드 — 사진을 상대에게 전송. FILE 페이로드 + PhotoMeta(BYTES).
 // Connected 가 아니면 noop. doc/protocol.md §6.
 // 모임 모드(Party) 에서는 호출하지 않는다 — 자기 사진은 자기만 본다는 정책 (4-D §사진 정책).
@@ -151,9 +161,17 @@ private suspend fun strokesToCacheUri(
 //    (BYTES 32KB 한도 회피 — Phase 3.5-A. 큰 캔버스에서도 안전)
 // 2) hasPhoto == true: bitmap → cache JPEG → sendFile + Frame.PhotoMeta
 //    hasPhoto == false: Frame.PhotoRemove (상대 캔버스의 사진도 제거되도록)
+//
+// Phase 4-G: targetPeerId 가 비어있으면 broadcast (Duo 1:1 — 어차피 1명). 명시되면 호스트가
+// 직접 연결된 피어면 sendTo, 아니면 (다른 조인자) 호스트 거쳐 relay 위해 broadcast(여기서는
+// 호스트만 받음 → 호스트가 relay). 가장 단순하게 호스트가 target 인 경우와 그 외를 분기:
+//   - 직접 연결 (handshakes 안에 target peerId): sendFileTo / sendTo 로 unicast
+//   - 그 외: send / sendFile broadcast → 호스트가 relay (handleIncoming.Snapshot/PhotoMeta
+//     에서 pendingRelays 등록 후 forwardFile)
 private suspend fun respondToSnapshotRequest(
     context: android.content.Context,
     session: SessionManager,
+    targetPeerId: String,
     strokes: List<com.rts.rys.ryy.drawingtogether.drawing.model.Stroke>,
     background: BackgroundImage?,
 ) {
@@ -163,7 +181,11 @@ private suspend fun respondToSnapshotRequest(
         val strokesUri = strokesToCacheUri(context, strokes)
         val strokesPayloadId = session.transport.sendFile(strokesUri)
         session.transport.send(
-            Frame.Snapshot(strokesPayloadId = strokesPayloadId, hasPhoto = background != null)
+            Frame.Snapshot(
+                strokesPayloadId = strokesPayloadId,
+                hasPhoto = background != null,
+                targetPeerId = targetPeerId,
+            )
         )
         if (background != null) {
             val uri = bitmapToCacheUri(context, background.bitmap)
@@ -178,10 +200,11 @@ private suspend fun respondToSnapshotRequest(
                     widthPx = background.widthPx,
                     heightPx = background.heightPx,
                     mime = "image/jpeg",
+                    targetPeerId = targetPeerId,
                 )
             )
         } else {
-            session.transport.send(Frame.PhotoRemove)
+            session.transport.send(Frame.PhotoRemove(targetPeerId = targetPeerId))
         }
     }
 }
@@ -200,7 +223,8 @@ fun DrawingScreen(
     val density = androidx.compose.ui.platform.LocalDensity.current.density
     val snackbarHostState = remember { SnackbarHostState() }
     var showSaveDialog by remember { mutableStateOf(false) }
-    var showSyncConfirm by remember { mutableStateOf(false) }
+    // Phase 4-G: 동기화 다이얼로그 단계 — Duo 는 컨펌 1단계, Party 는 피커 → 컨펌 2단계.
+    var syncStep by remember { mutableStateOf<SyncStep>(SyncStep.None) }
     var nameInput by remember { mutableStateOf("") }
 
     // Phase 4-D: 모드별 SessionManager 인스턴스. Single 도 Duo 싱글톤을 쓰지만
@@ -318,11 +342,13 @@ fun DrawingScreen(
     }
 
     // "동기화" — 상대가 내 캔버스 상태를 요청 (SnapshotReq). 현재 strokes + photo 로 응답.
+    // Phase 4-G: requester peerId 가 동반 → 응답 frame 에 박아 호스트 relay 가 라우팅 가능.
     LaunchedEffect(vm, session) {
-        session.snapshotRequests.collect {
+        session.snapshotRequests.collect { request ->
             respondToSnapshotRequest(
                 context = context,
                 session = session,
+                targetPeerId = request.requesterPeerId.value,
                 strokes = vm.canvas.strokes.toList(),
                 background = vm.canvas.background,
             )
@@ -476,7 +502,7 @@ fun DrawingScreen(
                                 if (mode != DrawMode.Party &&
                                     session.state.value is SessionState.Connected) {
                                     scope.launch {
-                                        runCatching { session.transport.send(Frame.PhotoRemove) }
+                                        runCatching { session.transport.send(Frame.PhotoRemove()) }
                                     }
                                 }
                             },
@@ -547,9 +573,17 @@ fun DrawingScreen(
             onStrokeWidth = vm::setStrokeWidth,
             onUndo = vm::undoLastLocal,
             onClear = vm::clearAll,
-            // 동기화 버튼은 Connected 일 때만 노출. 탭 시 컨펌 다이얼로그 → 승인 후 SnapshotReq 송신.
+            // 동기화 버튼은 Connected 일 때만 노출. 모드별 다이얼로그 분기:
+            //  - Duo: 바로 컨펌 (1:1 이라 상대 1명 확정)
+            //  - Party: 피어 피커 (target 선택) → 컨펌
             onSync = if (sessionState is SessionState.Connected) {
-                { showSyncConfirm = true }
+                {
+                    syncStep = if (mode == DrawMode.Party) {
+                        SyncStep.PartyPicker
+                    } else {
+                        SyncStep.DuoConfirm
+                    }
+                }
             } else null,
             onOpenRoom = if (isPartyHost) {
                 {
@@ -580,23 +614,100 @@ fun DrawingScreen(
         TransferLoadingOverlay(label = activeLabel, fraction = transferFraction)
     }
 
-    if (showSyncConfirm) {
-        AlertDialog(
-            onDismissRequest = { showSyncConfirm = false },
-            title = { Text("동기화") },
-            text = { Text("상대방 데이터를 전부 가져와 적용 합니다.\n내가 그린 그림은 전부 제거됩니다.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    showSyncConfirm = false
-                    scope.launch {
-                        runCatching { session.transport.send(Frame.SnapshotReq) }
+    // Phase 4-G: 동기화 다이얼로그 — Duo 1단계 / Party 2단계.
+    when (val step = syncStep) {
+        SyncStep.None -> Unit
+        SyncStep.DuoConfirm -> {
+            AlertDialog(
+                onDismissRequest = { syncStep = SyncStep.None },
+                title = { Text("동기화") },
+                text = {
+                    Text("상대방 데이터를 전부 가져와 적용 합니다.\n내가 그린 그림은 전부 제거됩니다.")
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        syncStep = SyncStep.None
+                        scope.launch {
+                            runCatching { session.transport.send(Frame.SnapshotReq()) }
+                        }
+                    }) { Text("적용") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { syncStep = SyncStep.None }) { Text("취소") }
+                },
+            )
+        }
+        SyncStep.PartyPicker -> {
+            val peers by session.remotePeers.collectAsState()
+            AlertDialog(
+                onDismissRequest = { syncStep = SyncStep.None },
+                title = { Text("누구 캔버스를 가져올까요?") },
+                text = {
+                    Column {
+                        if (peers.isEmpty()) {
+                            Text(
+                                text = "아직 참가자가 없어요.",
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        } else {
+                            peers.forEach { peer ->
+                                TextButton(
+                                    onClick = {
+                                        syncStep = SyncStep.PartyConfirm(peer)
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Text("🟢  ${peer.nick}")
+                                }
+                            }
+                        }
                     }
-                }) { Text("적용") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showSyncConfirm = false }) { Text("취소") }
-            },
-        )
+                },
+                confirmButton = {},
+                dismissButton = {
+                    TextButton(onClick = { syncStep = SyncStep.None }) { Text("취소") }
+                },
+            )
+        }
+        is SyncStep.PartyConfirm -> {
+            AlertDialog(
+                onDismissRequest = { syncStep = SyncStep.None },
+                title = { Text("${step.target.nick} 의 캔버스 가져오기") },
+                text = {
+                    Column {
+                        Text(
+                            text = "상대방 데이터를 전부 가져와 적용 합니다.\n" +
+                                "내가 그린 그림은 전부 제거됩니다.",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "ⓘ 상대방 사진이 있는 경우 사진 정보도 가져옵니다.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        syncStep = SyncStep.None
+                        scope.launch {
+                            runCatching {
+                                session.transport.send(
+                                    Frame.SnapshotReq(
+                                        targetPeerId = step.target.peerId.value,
+                                        requesterPeerId = session.peerId,
+                                    )
+                                )
+                            }
+                        }
+                    }) { Text("적용") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { syncStep = SyncStep.None }) { Text("취소") }
+                },
+            )
+        }
     }
 
     // 모임 모드 호스트가 "방 열기" 로 광고를 다시 켰을 때 새 조인자의 토큰 컨펌 다이얼로그.

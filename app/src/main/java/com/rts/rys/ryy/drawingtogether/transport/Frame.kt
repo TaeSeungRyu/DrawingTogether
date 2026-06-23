@@ -26,21 +26,30 @@ sealed class Frame {
     data class Event(val e: DrawingEvent) : Frame()
 
     // "동기화" 버튼 — 내 캔버스를 상대 캔버스로 덮어쓰기 위해 상대에게 현재 상태 요청.
+    // Phase 4-G: targetPeerId 가 비어있으면 broadcast (Duo 1:1 호환). 명시되면 호스트가
+    // 그 peerId 의 조인자에게 relay (sendTo). 응답도 같은 라우팅.
     @Serializable
     @SerialName("snapshot_req")
-    data object SnapshotReq : Frame()
+    data class SnapshotReq(
+        val targetPeerId: String = "",
+        val requesterPeerId: String = "",
+    ) : Frame()
 
     // SnapshotReq 응답. strokes 는 별도 FILE 페이로드로 송신 (BYTES 32KB 한도 회피).
     // strokesPayloadId 로 FILE 매칭 — 사진의 PhotoMeta 와 동일 패턴.
     // hasPhoto 가 true 면 별도로 Frame.PhotoMeta + FILE 가 따라오고, false 면 Frame.PhotoRemove.
+    // Phase 4-G: targetPeerId 는 응답 받을 사람 (요청자) — 호스트가 그쪽으로 relay.
     @Serializable
     @SerialName("snapshot")
     data class Snapshot(
         val strokesPayloadId: Long,
         val hasPhoto: Boolean,
+        val targetPeerId: String = "",
     ) : Frame()
 
     // 사진 파일이 곧 도착함을 알리는 메타. payloadId 로 FILE 페이로드와 매칭.
+    // Phase 4-G: 모임 모드 Snapshot 응답 동반 시 targetPeerId 박힘 → 호스트가 그쪽으로 relay.
+    // Duo 모드는 빈 문자열 → broadcast.
     @Serializable
     @SerialName("photo_meta")
     data class PhotoMeta(
@@ -49,12 +58,14 @@ sealed class Frame {
         val widthPx: Int,
         val heightPx: Int,
         val mime: String,
+        val targetPeerId: String = "",
     ) : Frame()
 
     // 사진 배경 제거 요청 — 양쪽에 적용.
+    // Phase 4-G: Snapshot 응답에서 hasPhoto=false 면 동반 송신. targetPeerId 박힘.
     @Serializable
     @SerialName("photo_remove")
-    data object PhotoRemove : Frame()
+    data class PhotoRemove(val targetPeerId: String = "") : Frame()
 
     // "저장 시 배경 합치기" 토글 동기화.
     @Serializable

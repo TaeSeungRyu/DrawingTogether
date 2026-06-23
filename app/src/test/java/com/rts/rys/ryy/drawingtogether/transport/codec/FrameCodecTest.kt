@@ -120,7 +120,7 @@ class FrameCodecTest {
 
     @Test
     fun photoRemoveRoundtrip() {
-        val src: Frame = Frame.PhotoRemove
+        val src: Frame = Frame.PhotoRemove()
         assertEquals(src, FrameCodec.decode(FrameCodec.encode(src)))
     }
 
@@ -133,7 +133,7 @@ class FrameCodecTest {
 
     @Test
     fun snapshotReqRoundtrip() {
-        val src: Frame = Frame.SnapshotReq
+        val src: Frame = Frame.SnapshotReq()
         assertEquals(src, FrameCodec.decode(FrameCodec.encode(src)))
     }
 
