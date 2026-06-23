@@ -87,22 +87,24 @@ private sealed class SyncStep {
     ) : SyncStep()
 }
 
-// 함께 모드 — 사진을 상대에게 전송. FILE 페이로드 + PhotoMeta(BYTES).
-// Connected 가 아니면 noop. doc/protocol.md §6.
-// 모임 모드(Party) 에서는 호출하지 않는다 — 자기 사진은 자기만 본다는 정책 (4-D §사진 정책).
+// 사진 broadcast. FILE 페이로드 + PhotoMeta(BYTES).
+// - 함께 모드(Duo): 양쪽 메인 캔버스에 같은 사진 (1:1 공유 캔버스).
+// - 모임 모드(Party): 자기 메인 + 다른 사람들이 보는 자기 미니뷰. SessionManager 가 sender 박힌
+//   BackgroundChange.Photo 를 emit → DrawingScreen 이 발신자의 peerCanvases.background 에 적용.
+//
+// 큰 사진 안정성: 원본 uri 대신 PhotoLoader 가 다운샘플한 image.bitmap 을 JPEG cache 로
+// 변환해 송신 — Nearby FILE 가 원본 (수십 MB) 보낼 때 중간에 끊기는 현상 회피.
 private suspend fun shareBackgroundToPeer(
     context: android.content.Context,
     session: SessionManager,
-    uri: android.net.Uri,
     image: BackgroundImage,
 ) {
-    if (session.mode == com.rts.rys.ryy.drawingtogether.transport.nearby.TransportMode.Party) return
     if (session.state.value !is SessionState.Connected) return
     runCatching {
-        val payloadId = session.transport.sendFile(uri)
-        val mime = context.contentResolver.getType(uri) ?: "image/jpeg"
+        val cacheUri = bitmapToCacheUri(context, image.bitmap)
+        val payloadId = session.transport.sendFile(cacheUri)
         val byteSize = context.contentResolver
-            .openAssetFileDescriptor(uri, "r")
+            .openAssetFileDescriptor(cacheUri, "r")
             ?.use { it.length }
             ?: 0L
         session.transport.send(
@@ -111,7 +113,7 @@ private suspend fun shareBackgroundToPeer(
                 byteSize = byteSize,
                 widthPx = image.widthPx,
                 heightPx = image.heightPx,
-                mime = mime,
+                mime = "image/jpeg",
             )
         )
     }
@@ -154,6 +156,49 @@ private suspend fun strokesToCacheUri(
         "${context.packageName}.fileprovider",
         file,
     )
+}
+
+// 모임 모드에서 내가 동기화로 자기 메인 캔버스를 갱신한 직후, 그 결과를 다른 참가자들에게도
+// broadcast 해 "다른 화면의 내 미니뷰" 까지 동기화. respondToSnapshotRequest 와 비슷하지만:
+//  - targetPeerId 빈 문자열 (broadcast)
+//  - 받는 측의 SessionManager 분기: sender == 내 peerId 매칭 후 peerCanvases[내] 갱신
+private suspend fun broadcastMyCanvasAsPeer(
+    context: android.content.Context,
+    session: SessionManager,
+    strokes: List<com.rts.rys.ryy.drawingtogether.drawing.model.Stroke>,
+    background: BackgroundImage?,
+) {
+    if (session.state.value !is SessionState.Connected) return
+    runCatching {
+        val strokesUri = strokesToCacheUri(context, strokes)
+        val strokesPayloadId = session.transport.sendFile(strokesUri)
+        session.transport.send(
+            Frame.Snapshot(
+                strokesPayloadId = strokesPayloadId,
+                hasPhoto = background != null,
+                targetPeerId = "",
+            )
+        )
+        if (background != null) {
+            val uri = bitmapToCacheUri(context, background.bitmap)
+            val payloadId = session.transport.sendFile(uri)
+            session.transport.send(
+                Frame.PhotoMeta(
+                    payloadId = payloadId,
+                    byteSize = context.contentResolver
+                        .openAssetFileDescriptor(uri, "r")
+                        ?.use { it.length }
+                        ?: 0L,
+                    widthPx = background.widthPx,
+                    heightPx = background.heightPx,
+                    mime = "image/jpeg",
+                    targetPeerId = "",
+                )
+            )
+        } else {
+            session.transport.send(Frame.PhotoRemove(targetPeerId = ""))
+        }
+    }
 }
 
 // SnapshotReq 를 받은 쪽에서 호출. 현재 strokes + photo 를 상대에게 전송.
@@ -225,6 +270,10 @@ fun DrawingScreen(
     var showSaveDialog by remember { mutableStateOf(false) }
     // Phase 4-G: 동기화 다이얼로그 단계 — Duo 는 컨펌 1단계, Party 는 피커 → 컨펌 2단계.
     var syncStep by remember { mutableStateOf<SyncStep>(SyncStep.None) }
+    // 모임 모드 동기화 응답 후 broadcast 대기 플래그. strokes 가 먼저 적용된 다음 사진이
+    // 도착해 vm.canvas.background 까지 갱신된 시점에 broadcast 송신 — 사진 적용 전에 송신하면
+    // 사진 없는 빈 캔버스가 다른 참가자의 미니뷰에 가버린다.
+    var pendingPartySyncBroadcast by remember { mutableStateOf(false) }
     var nameInput by remember { mutableStateOf("") }
 
     // Phase 4-D: 모드별 SessionManager 인스턴스. Single 도 Duo 싱글톤을 쓰지만
@@ -321,17 +370,48 @@ fun DrawingScreen(
         }
     }
 
-    // Phase 3-B 배경 동기화 — 원격에서 도착한 사진 / 제거 / 합치기 토글을 캔버스에 반영.
-    // vm.setBackground / setMergeBackgroundOnSave 는 outbound 를 발화하지 않으므로 루프 없음.
+    // 원격 배경 변경. 모드별 라우팅:
+    //  - 함께 모드(Duo): 자기 메인 캔버스에 적용 (1:1 공유 캔버스)
+    //  - 모임 모드(Party): 발신자의 peerCanvases.background 에 적용 — 자기 메인은 변경 없음.
+    //    다른 사람들이 보는 그 발신자의 미니뷰에 사진이 나타남.
+    //  - sender 미상 (안전망): 자기 메인 fallback.
     LaunchedEffect(vm, session) {
         session.incomingBackground.collect { change ->
+            val partyTargetCanvas = if (mode == DrawMode.Party) {
+                change.senderPeerId?.let { id ->
+                    vm.peerCanvases.getOrPut(id) {
+                        com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState()
+                    }
+                }
+            } else null
             when (change) {
                 is BackgroundChange.Photo -> {
                     runCatching {
                         PhotoLoader.load(context, change.uri, BackgroundImage.Source.Remote)
-                    }.onSuccess { vm.setBackground(it) }
+                    }.onSuccess { image ->
+                        if (partyTargetCanvas != null) partyTargetCanvas.setBackground(image)
+                        else vm.setBackground(image)
+                    }
                 }
-                BackgroundChange.Remove -> vm.setBackground(null)
+                is BackgroundChange.Remove -> {
+                    if (partyTargetCanvas != null) partyTargetCanvas.setBackground(null)
+                    else vm.setBackground(null)
+                }
+            }
+            // 모임 모드 동기화 응답 — strokes 적용 후 사진까지 적용된 시점에 자기 캔버스를
+            // broadcast 해 다른 참가자가 보는 내 미니뷰도 동기화. sender=null 은 동기화 응답
+            // (자기 메인 적용) 케이스라 broadcast 트리거 시점으로 적절.
+            if (mode == DrawMode.Party &&
+                change.senderPeerId == null &&
+                pendingPartySyncBroadcast
+            ) {
+                pendingPartySyncBroadcast = false
+                broadcastMyCanvasAsPeer(
+                    context = context,
+                    session = session,
+                    strokes = vm.canvas.strokes.toList(),
+                    background = vm.canvas.background,
+                )
             }
         }
     }
@@ -354,10 +434,25 @@ fun DrawingScreen(
             )
         }
     }
-    // 내가 동기화 요청 → 응답으로 받은 strokes 로 캔버스 덮어쓰기. (사진은 별도 PhotoMeta/FILE 경로.)
+    // 원격 stroke 통째 도착. sender 라우팅:
+    //  - sender == null (동기화 응답): 자기 메인 캔버스 덮어쓰기. 모임 모드면 사진까지 적용된
+    //    후에 broadcast 송신해야 하니 플래그만 켜고 실제 broadcast 는 incomingBackground 분기에서.
+    //  - sender != null (broadcast): 그 peer 의 peerCanvases 에 적용 — 다른 참가자가 동기화로
+    //    자기 캔버스 갱신했을 때, 우리 화면의 그 peer 미니뷰도 갱신.
     LaunchedEffect(vm, session) {
-        session.incomingSnapshot.collect { strokes ->
-            vm.applyRemoteSnapshot(strokes)
+        session.incomingSnapshot.collect { event ->
+            val sender = event.senderPeerId
+            if (sender == null) {
+                vm.applyRemoteSnapshot(event.strokes)
+                if (mode == DrawMode.Party) {
+                    pendingPartySyncBroadcast = true
+                }
+            } else {
+                val peerCanvas = vm.peerCanvases.getOrPut(sender) {
+                    com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState()
+                }
+                peerCanvas.applySnapshot(event.strokes)
+            }
         }
     }
 
@@ -409,7 +504,7 @@ fun DrawingScreen(
                 }.onSuccess { image ->
                     vm.setBackground(image)
                     Toast.makeText(context, ASPECT_TOAST_TEXT, Toast.LENGTH_SHORT).show()
-                    shareBackgroundToPeer(context, session, uri, image)
+                    shareBackgroundToPeer(context, session, image)
                 }
             }
         }
@@ -429,7 +524,7 @@ fun DrawingScreen(
                 }.onSuccess { image ->
                     vm.setBackground(image)
                     Toast.makeText(context, ASPECT_TOAST_TEXT, Toast.LENGTH_SHORT).show()
-                    shareBackgroundToPeer(context, session, uri, image)
+                    shareBackgroundToPeer(context, session, image)
                 }
             }
         }
@@ -461,7 +556,7 @@ fun DrawingScreen(
                         checked = vm.canvas.mergeBackgroundOnSave,
                         onCheckedChange = { value ->
                             vm.setMergeBackgroundOnSave(value)
-                            // 모임 모드는 자기 토글만 적용, 다른 사람에게 broadcast 안 함 (4-F).
+                            // 모임 모드는 자기 토글만 적용, broadcast 안 함 (자기 사진 정책).
                             if (mode != DrawMode.Party &&
                                 session.state.value is SessionState.Connected) {
                                 scope.launch {
@@ -498,9 +593,7 @@ fun DrawingScreen(
                             text = "제거",
                             onClick = {
                                 vm.setBackground(null)
-                                // 모임 모드는 자기 사진 제거만 적용, broadcast 안 함 (4-F).
-                                if (mode != DrawMode.Party &&
-                                    session.state.value is SessionState.Connected) {
+                                if (session.state.value is SessionState.Connected) {
                                     scope.launch {
                                         runCatching { session.transport.send(Frame.PhotoRemove()) }
                                     }

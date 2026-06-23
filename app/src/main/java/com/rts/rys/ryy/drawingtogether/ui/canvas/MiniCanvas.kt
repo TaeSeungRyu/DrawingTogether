@@ -30,11 +30,11 @@ import com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState
 
 // Phase 4-E: 모임 모드 미니 뷰.
 // - pointerInput 미부착 → 탭/드래그 무시 (read-only)
-// - 사진 배경 무시 — stroke 만 렌더 (자기 사진은 자기만 본다는 모임 모드 정책)
+// - 그 peer 의 사진 배경 + stroke 렌더 — 자기 사진은 자기 메인 + 다른 사람들이 보는 미니뷰에
+//   나타남 (정책: 발신자 peerCanvases.background 에 적용됨).
 // - 닉네임 라벨 상단
 // - 빈 캔버스에는 placeholder 텍스트
-// - 슬롯 안에 1:1 정사각형 letterbox — 자기 캔버스(SHARED_CANVAS_RATIO 1:1)와 같은 비율이라
-//   stroke 의 normalized (0..1) 좌표가 동일 모양으로 렌더된다.
+// - 슬롯 안에 1:1 정사각형 letterbox — 자기 캔버스와 같은 비율이라 stroke 좌표 동일 모양.
 @Composable
 fun MiniCanvas(
     nick: String,
@@ -75,10 +75,26 @@ fun MiniCanvas(
                         .fillMaxSize()
                         .onSizeChanged { canvasSize = it },
                 ) {
+                    // 사진 배경 (있으면) — Fit. 1:1 letterbox 안에 사진 비율로 다시 letterbox 가능.
+                    state.background?.bitmap?.let { bg ->
+                        drawImage(
+                            image = bg,
+                            srcOffset = androidx.compose.ui.unit.IntOffset.Zero,
+                            srcSize = androidx.compose.ui.unit.IntSize(bg.width, bg.height),
+                            dstOffset = androidx.compose.ui.unit.IntOffset.Zero,
+                            dstSize = androidx.compose.ui.unit.IntSize(
+                                canvasSize.width,
+                                canvasSize.height,
+                            ),
+                        )
+                    }
                     state.strokes.forEach { drawStroke(it, canvasSize, density) }
                     state.openStrokes.values.forEach { drawStroke(it, canvasSize, density) }
                 }
-                if (state.strokes.isEmpty() && state.openStrokes.isEmpty()) {
+                if (state.background == null &&
+                    state.strokes.isEmpty() &&
+                    state.openStrokes.isEmpty()
+                ) {
                     Text(
                         text = "아직 그리지 않음",
                         style = MaterialTheme.typography.labelSmall,

@@ -95,6 +95,13 @@ sealed class Frame {
     @Serializable
     @SerialName("peer_left")
     data class PeerLeft(val peerId: String) : Frame()
+
+    // Phase 4-H: 모임 모드 호스트가 "그리기 시작" 누른 시점에 broadcast. 조인자들은 핸드셰이크
+    // 완료만으론 페어링 화면에서 대기하다가 이 신호 받으면 함께 Draw 화면으로 진입.
+    // 핸드셰이크 완료 즉시 조인자가 자동 진입하던 4-D 의 비대칭 UX를 정리.
+    @Serializable
+    @SerialName("party_start")
+    data object PartyStart : Frame()
 }
 
 const val PROTO_VERSION: Int = 1

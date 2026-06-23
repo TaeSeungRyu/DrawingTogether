@@ -42,6 +42,9 @@ import kotlinx.coroutines.withContext
 // Phase 4-A: 두 모드를 SERVICE_ID + Strategy 로 격리. 같은 모드끼리만 발견된다.
 // Duo  = 1:1 함께 모드 (P2P_POINT_TO_POINT)
 // Party = 1:N 모임 모드 (P2P_STAR, 호스트 + 최대 3 조인자)
+// 호스트가 받을 수 있는 최대 조인자 수. 호스트 자기 + 3 = 4명.
+private const val PARTY_MAX_JOINERS = 3
+
 enum class TransportMode(val serviceId: String, val strategy: Strategy) {
     Duo(
         serviceId = "com.rts.rys.ryy.drawingtogether.duo",
@@ -224,6 +227,15 @@ class NearbyTransport(
 
     private val lifecycleCallback = object : ConnectionLifecycleCallback() {
         override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {
+            // Phase 4-H: Party 호스트가 이미 3명을 받았으면 자동 reject — 다이얼로그도 안 띄움.
+            // P2P_STAR + 자기 = 4명 한도. Duo / 조인자는 영향 없음.
+            val partyHostFull = mode == TransportMode.Party &&
+                localRole == Role.Host &&
+                _connectedPeers.value.size >= PARTY_MAX_JOINERS
+            if (partyHostFull) {
+                client.rejectConnection(endpointId)
+                return
+            }
             nickByEndpoint[endpointId] = info.endpointName
             _pending.value = PendingConnection(
                 endpointId = endpointId,

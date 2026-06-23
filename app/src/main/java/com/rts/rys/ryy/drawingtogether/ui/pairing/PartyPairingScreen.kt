@@ -112,10 +112,11 @@ fun PartyPairingScreen(
         }
     }
 
-    // 조인자 흐름 — 핸드셰이크 끝나면 즉시 Draw 진입.
-    LaunchedEffect(sessionState, role) {
-        if (role == PartyRole.Joiner && sessionState is SessionState.Connected) {
-            onStart()
+    // Phase 4-H: 조인자는 핸드셰이크 완료만으론 페어링 화면에 머무름. 호스트가 "그리기 시작"
+    // 누르고 PartyStart 신호를 broadcast 하면 그 때 함께 진입 → 비대칭 UX 해결.
+    LaunchedEffect(role) {
+        if (role == PartyRole.Joiner) {
+            session.partyStart.collect { onStart() }
         }
     }
 
@@ -175,8 +176,15 @@ fun PartyPairingScreen(
                     connectedNicks = connectedPeers.map { it.nick },
                     canStart = connectedPeers.isNotEmpty(),
                     onStartClick = {
-                        // 새 조인자 더 안 받기 — Draw 진입 후 추가 조인 흡수는 4-H.
+                        // 새 조인자 더 안 받기 + 조인자들에게 PartyStart 신호 → 동기 진입.
                         session.transport.stopAdvertising()
+                        scope.launch {
+                            runCatching {
+                                session.transport.send(
+                                    com.rts.rys.ryy.drawingtogether.transport.Frame.PartyStart
+                                )
+                            }
+                        }
                         onStart()
                     },
                 )
@@ -185,6 +193,7 @@ fun PartyPairingScreen(
                     permissionDenied = permissionDenied,
                     transportState = transportState,
                     discoveredNicks = discovered,
+                    waitingForHostStart = sessionState is SessionState.Connected,
                     onRetryPermission = { requestPermissions.launch(NearbyPermissions.required()) },
                     onPickPeer = { endpointId ->
                         scope.launch { session.transport.requestConnection(endpointId) }
@@ -407,11 +416,13 @@ private fun ColumnScope.JoinerBody(
     permissionDenied: Boolean,
     transportState: TransportState,
     discoveredNicks: List<com.rts.rys.ryy.drawingtogether.transport.DiscoveredPeer>,
+    waitingForHostStart: Boolean,
     onRetryPermission: () -> Unit,
     onPickPeer: (endpointId: String) -> Unit,
 ) {
     Text(
-        text = "조인 — 주변 호스트 검색 중",
+        text = if (waitingForHostStart) "조인 — 호스트가 시작하기를 기다리는 중"
+               else "조인 — 주변 호스트 검색 중",
         style = MaterialTheme.typography.titleSmall,
         fontWeight = FontWeight.SemiBold,
     )
@@ -423,6 +434,20 @@ private fun ColumnScope.JoinerBody(
                 denied = permissionDenied,
                 onRetry = onRetryPermission,
             )
+            waitingForHostStart -> Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                CircularProgressIndicator()
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "연결됐어요!\n호스트가 \"그리기 시작\"을 누르면 함께 진입해요.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+            }
             discoveredNicks.isEmpty() -> EmptyDiscoveryHint(transportState)
             else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(discoveredNicks, key = { it.endpointId }) { peer ->
