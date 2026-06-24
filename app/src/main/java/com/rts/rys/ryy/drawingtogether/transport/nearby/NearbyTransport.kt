@@ -91,6 +91,10 @@ class NearbyTransport(
     // 우리가 보낸 / 받은 FILE payload id 추적 — 진행률 업데이트 방향 분류용.
     private val outgoingFilePayloads = mutableSetOf<Long>()
     private val incomingFilePayloads = mutableSetOf<Long>()
+    // 인바운드 FILE 의 (endpointId, uri) 보관. onPayloadReceived 시점에 등록하고
+    // onPayloadTransferUpdate SUCCESS 시점에 emit — 그 시점에야 파일이 완전 채워진다.
+    // 너무 일찍 emit 하면 PhotoLoader 가 부분 파일을 디코드해 사진이 절반 짤린다.
+    private val pendingIncomingFiles = mutableMapOf<Long, Pair<String, Uri>>()
 
     private var localNick: String = "User"
     private val nickByEndpoint = mutableMapOf<String, String>()
@@ -304,13 +308,9 @@ class NearbyTransport(
                 Payload.Type.FILE -> {
                     val uri = payload.asFile()?.asUri() ?: return
                     incomingFilePayloads.add(payload.id)
-                    _incomingFiles.tryEmit(
-                        IncomingFile(
-                            endpointId = endpointId,
-                            payloadId = payload.id,
-                            uri = uri,
-                        )
-                    )
+                    // Nearby 의 FILE 은 onPayloadReceived 시점엔 아직 채워지는 중. SUCCESS
+                    // 까지 보관만 하고 emit 은 그 때.
+                    pendingIncomingFiles[payload.id] = endpointId to uri
                 }
                 else -> Unit
             }
@@ -336,10 +336,29 @@ class NearbyTransport(
                     status = status,
                 )
             )
+            // 인바운드 FILE 이 완전 채워진 시점 → 그 때 emit. PhotoLoader 가 부분 파일을 읽지
+            // 않게 한다.
+            if (status == FileTransferStatus.Success &&
+                direction == FileTransferDirection.Incoming
+            ) {
+                val pending = pendingIncomingFiles.remove(update.payloadId)
+                if (pending != null) {
+                    _incomingFiles.tryEmit(
+                        IncomingFile(
+                            endpointId = pending.first,
+                            payloadId = update.payloadId,
+                            uri = pending.second,
+                        )
+                    )
+                }
+            }
             // 종료 상태면 추적 set 에서 제거.
             if (status != FileTransferStatus.InProgress) {
                 outgoingFilePayloads.remove(update.payloadId)
                 incomingFilePayloads.remove(update.payloadId)
+                if (status == FileTransferStatus.Failure) {
+                    pendingIncomingFiles.remove(update.payloadId)
+                }
             }
         }
     }
