@@ -166,11 +166,30 @@
 - **호스트 끊김 = 조인자 모임 종료**: 조인자의 연결이 끊기면(호스트가 유일 직접 연결) "방장이 나가 모임이 종료됐어요" 토스트 + 홈 복귀(`onExitToHome`). 재연결 대신. 홈 복귀로 `peerCanvases`/`indirectPeers` 자동 정리. `disconnect()` 는 `Bye` 송신 후 150ms 대기해 전송 보장(백업: 상대 `onDisconnected`).
 
 ## Phase 5 — 완성품 추출 & 다듬기
-- [ ] PNG 내보내기 — 사진 배경 + 완료된 stroke 합성, `MediaStore.Images`로 저장
-- [ ] 사용자 갤러리 진입 (Share intent로 다른 앱 전달)
-- [ ] 완료된 획 비트맵 캐시 (실측 후 perf 이슈 있을 때)
-- [ ] 닉네임 설정 화면
-- [ ] 색 팔레트 커스터마이즈
+- [x] PNG 내보내기 — `works/PngComposer` (화면용 `StrokeRenderer.drawStroke` 재사용). 앱 내부 `filesDir/works/` 저장(`WorkStore.save`, 최대 100개) + 외부 갤러리 `MediaStore.Images`(`Pictures/DrawingTogether`, `IS_PENDING` + `MediaScannerConnection`) 로 내보내기(`WorkStore.exportToGallery`). 미리보기 화면의 "갤러리로 보내기".
+- [x] 사용자 갤러리 진입 — 미리보기 "공유" (`Intent.ACTION_SEND` + FileProvider URI + `createChooser`).
+- [ ] 완료된 획 비트맵 캐시 — 여전히 보류. 에어브러시/번짐 도입으로 필요성 커짐 (아래 Phase 5.5 성능 노트).
+- [x] 닉네임 설정 화면 — 홈 화면 인라인 닉네임 + 편집 다이얼로그. Duo/Party 인스턴스 양쪽 `setNick`.
+- [x] 색 팔레트 커스터마이즈 — 7색 기본(검정/흰색/빨강/파랑/초록/노랑/갈색) + 슬롯별 ColorPickerSheet 편집 + 리셋(`UserPaletteRepo`, prefs 보관).
+
+## Phase 5.5 — 그리기 강화 & 반응형 UI (완료)
+> Phase 4/5 이후 사용자 피드백 기반 개선. 상세 아이디어는 [drawing-ideas.md](drawing-ideas.md).
+
+**그리기 강화 (`BrushType` + `StrokeRenderer` 확장 — 화면·PNG·멀티 동기화 자동 공유)**
+- [x] **안내선(가이드라인)** — 중앙 십자선 + 격자 6×6/18×18. 로컬 전용(동기화·저장 미포함). `DrawingViewModel.guideCross/guideGrid`, `DrawingCanvas.drawGuides`, `GuideDropdownButton`.
+- [x] **에어브러시(분사)** — `BrushType.Airbrush`. `drawAirbrush` 경로 보간 + 결정론 seed(`stroke.id`)로 점 분사 → 매 프레임·양 단말 동일. 분사점 미저장(StrokeId 만 와이어).
+- [x] **번짐(수채/스머지)** — `BrushType.Blur`. native `Paint` + `BlurMaskFilter` via `drawIntoCanvas{nativeCanvas}`. PNG 합성에서도 동작.
+- [ ] **스티커** — 보류. stroke 아닌 새 요소 타입이라 `DrawingEvent`/`Frame`/렌더/PNG/undo 전부 신규. 규모 큼.
+
+**반응형 가로 모드 + 회전**
+- [x] 홈/페어링(함께·모임) 화면 `verticalScroll` — 가로에서 버튼/요소가 화면 밖으로 밀려 선택 안 되던 문제. 발견 리스트는 `heightIn` + `Column forEach`.
+- [x] 그리기 화면 가로 레이아웃 — 세로: 캔버스(위)+도구바(아래). 가로: `Row[ 캔버스(좌) | 도구바(우 300dp 패널) ]`, 도구바 `fillHeight`+`SpaceEvenly` 로 여백 없이 분산. 모임 모드는 캔버스 영역 내부 가로 분기 유지.
+- [x] 회전 시 연결 유지 — `MainActivity` `configChanges`(orientation 등)로 Activity 재생성 방지 → `DrawingScreen.onDispose(disconnect)` 안 불려 연결 유지, Compose 가 레이아웃 자동 전환.
+- [x] 최근 작업 모달 커스텀 bottom 시트 — Material3 `ModalBottomSheet` 가 가로에서 우측 여백 남기는 문제(파라미터로 못 품) 때문에 Box 오버레이로 재구현. 가로 풀폭 + 드래그/백드롭/뒤로가기 닫기, 가로 5열·세로 3열, 회전 자동 재배치, hoisted `gridState` 로 스크롤 위치 보존.
+
+**브랜딩**
+- [x] 앱 아이콘 리디자인 — Candy Pop 코랄 배경 + 코랄/민트/라벤더 세 물감 방울 클러스터(adaptive + monochrome).
+- [x] 런처 이름 한글화 "드로잉 투게더" (앱 실행 중 화면은 영문 "Drawing Together" 유지).
 
 ## Phase 6 — 나중에 검토만
 지금 결정하지 않을 것들:
@@ -188,6 +207,9 @@
 - **Nearby Connections 백그라운드 동작**: Android 13+ 백그라운드 BT/Wi-Fi 스캔 제한. 화면 켜진 동안만 동작 가정.
 - **자동 재연결**: 의도적으로 미도입. 끊기면 사용자가 명시적으로 다시 연결.
 - **Play Services 의존**: 한국 시장 가정 — 화웨이/de-Google ROM은 지원 범위 밖.
+- **렌더 성능**: 에어브러시(매 프레임 분사 재계산) / 번짐(BlurMaskFilter) stroke 가 많이 쌓이면 프레임 드랍 가능 → "완료 stroke 비트맵 캐시"(Phase 5 보류) 의 필요성 커짐. 실측 후 도입.
+- **PING/PONG keepalive**: `Frame.Ping/Pong` 타입만 있고 주기 송신 미구현. 끊김은 Nearby `onDisconnected` 로 감지(현재 충분).
+- **수익화**: 횟수 제한 IAP 검토 → 보류. 상세는 [BILLING.md](BILLING.md).
 
 ## 빌드/실행 명령
 
