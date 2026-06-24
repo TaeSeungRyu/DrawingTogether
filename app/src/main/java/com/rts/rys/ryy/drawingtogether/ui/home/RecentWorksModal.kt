@@ -12,16 +12,20 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import kotlinx.coroutines.launch
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -34,8 +38,12 @@ fun RecentWorksModal(
     works: List<Work>,
     onWorkClick: (String) -> Unit,
     onDismiss: () -> Unit,
+    // 호스트(HomeScreen) 가 보존해서 전달. modal 재생성 사이클 (close → reopen) 에도
+    // 스크롤 위치 유지. default 는 새 state — 단독 사용 시도 가능.
+    gridState: LazyGridState = rememberLazyGridState(),
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -72,6 +80,7 @@ fun RecentWorksModal(
             } else {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(3),
+                    state = gridState,
                     contentPadding = PaddingValues(vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -86,7 +95,16 @@ fun RecentWorksModal(
                         ) {
                             WorkThumbnail(
                                 work = work,
-                                onClick = { onWorkClick(work.id) },
+                                // sheet 를 명시적으로 hide() 한 후 onWorkClick 호출 — sheet
+                                // animation 이 끝난 다음에 PreviewScreen 진입이라 jump 없음.
+                                // modalOpen 은 그대로 true 라 뒤로가기 시 HomeScreen 재진입
+                                // 후 RecentWorksModal 재생성·sheet 재expand 가 자동.
+                                onClick = {
+                                    scope.launch {
+                                        sheetState.hide()
+                                        onWorkClick(work.id)
+                                    }
+                                },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .aspectRatio(1f),

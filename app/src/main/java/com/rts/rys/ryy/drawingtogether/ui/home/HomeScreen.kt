@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -41,6 +42,10 @@ fun HomeScreen(
     val store = remember { WorkStore.get(context) }
     val works by store.works.collectAsState()
     var modalOpen by rememberSaveable { mutableStateOf(false) }
+    // modal 의 LazyGrid 스크롤 위치 — HomeScreen 에서 hoist. modal close → preview → 뒤로가기로
+    // modal 재오픈해도 그대로. rememberLazyGridState 가 내부적으로 rememberSaveable 사용해
+    // HomeScreen 의 NavBackStackEntry 에 보존.
+    val recentWorksGridState = rememberLazyGridState()
 
     // 홈 화면에서 뒤로가기: 첫 번째는 안내 토스트, 2초 안에 두 번째 누르면 종료.
     var lastBackPressMs by remember { mutableStateOf(0L) }
@@ -165,13 +170,13 @@ fun HomeScreen(
         if (modalOpen) {
             RecentWorksModal(
                 works = works,
-                onWorkClick = { id ->
-                    // modal 즉시 dismiss 트리거 — 안 그러면 ModalBottomSheet 의 slide-down 이
-                    // 끝날 때까지 PreviewScreen 이 뒤에 가려 보인다.
-                    modalOpen = false
-                    onWorkClick(id)
-                },
+                // modalOpen 은 그대로 두고 nav.navigate 만. PreviewScreen 진입 시 HomeScreen 이
+                // backstack 으로 가면서 RecentWorksModal 컴포저블이 자동 dispose 되어 sheet 가
+                // 사라지고, 뒤로가기로 돌아오면 modalOpen=true 상태가 rememberSaveable 에 보존돼
+                // 모달이 자동 재표시.
+                onWorkClick = onWorkClick,
                 onDismiss = { modalOpen = false },
+                gridState = recentWorksGridState,
             )
         }
     }
