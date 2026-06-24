@@ -8,6 +8,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -633,81 +634,90 @@ fun DrawingScreen(
             },
         )
 
-        // Phase 4-E: 모임 모드는 캔버스 영역을 자기 캔버스 + 미니 뷰로 분할.
-        // 그 외(싱글/함께)는 기존 단일 캔버스 letterbox.
-        if (mode == DrawMode.Party) {
-            val cfg = LocalConfiguration.current
-            val isLandscape = cfg.orientation == Configuration.ORIENTATION_LANDSCAPE
-            val peers by session.remotePeers.collectAsState()
-            PartyCanvasArea(
-                vm = vm,
-                peers = peers,
-                isLandscape = isLandscape,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-            )
-        } else {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center,
-            ) {
-                MyCanvasContent(vm = vm)
-            }
-        }
-
-        // 모임 모드 호스트만 "방 열기" 버튼 노출 — 광고를 다시 켜 새 조인자(또는 끊긴 조인자의
-        // 재참여) 를 받는다. localRole 은 transport.stop() 까지는 변경되지 않으니 화면 진입 시점에
-        // 한 번 평가하면 충분.
+        // Phase 4-E + 가로 모드: 캔버스 영역과 도구바를 람다로 추출해
+        //  - 세로: 캔버스(위) + 도구바(아래 전체폭)
+        //  - 가로: 캔버스(좌) + 도구바(우측 고정폭 패널, 세로 스크롤)
+        // 가로에서 큰 도구바가 캔버스를 다 먹던 문제 해결.
+        val cfg = LocalConfiguration.current
+        val isLandscape = cfg.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val peers by session.remotePeers.collectAsState()
         val isPartyHost = mode == DrawMode.Party &&
             session.transport.localRole == com.rts.rys.ryy.drawingtogether.transport.Role.Host
 
-        Toolbar(
-            tool = vm.tool,
-            canUndo = vm.canvas.canUndo,
-            onColor = vm::selectColor,
-            onEraser = vm::toggleEraser,
-            onBrush = vm::setBrush,
-            onShape = vm::setShape,
-            onStrokeWidth = vm::setStrokeWidth,
-            onUndo = vm::undoLastLocal,
-            onClear = vm::clearAll,
-            guideCross = vm.guideCross,
-            guideGrid = vm.guideGrid,
-            onToggleGuideCross = vm::toggleGuideCross,
-            onSelectGuideGrid = vm::selectGuideGrid,
-            // 동기화 버튼은 Connected 일 때만 노출. 모드별 다이얼로그 분기:
-            //  - Duo: 바로 컨펌 (1:1 이라 상대 1명 확정)
-            //  - Party: 피어 피커 (target 선택) → 컨펌
-            onSync = if (sessionState is SessionState.Connected) {
-                {
-                    syncStep = if (mode == DrawMode.Party) {
-                        SyncStep.PartyPicker
-                    } else {
-                        SyncStep.DuoConfirm
-                    }
+        val canvasArea: @Composable (Modifier) -> Unit = { m ->
+            if (mode == DrawMode.Party) {
+                PartyCanvasArea(
+                    vm = vm,
+                    peers = peers,
+                    isLandscape = isLandscape,
+                    modifier = m.background(MaterialTheme.colorScheme.surfaceVariant),
+                )
+            } else {
+                Box(
+                    modifier = m.background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    MyCanvasContent(vm = vm)
                 }
-            } else null,
-            onOpenRoom = if (isPartyHost) {
-                {
-                    scope.launch {
-                        runCatching { session.transport.startAdvertising() }
-                            .onSuccess {
-                                Toast.makeText(
-                                    context,
-                                    "방을 열었어요. 새 친구가 들어올 수 있어요.",
-                                    Toast.LENGTH_SHORT,
-                                ).show()
-                            }
+            }
+        }
+
+        val toolbar: @Composable (Modifier) -> Unit = { m ->
+            Toolbar(
+                tool = vm.tool,
+                canUndo = vm.canvas.canUndo,
+                onColor = vm::selectColor,
+                onEraser = vm::toggleEraser,
+                onBrush = vm::setBrush,
+                onShape = vm::setShape,
+                onStrokeWidth = vm::setStrokeWidth,
+                onUndo = vm::undoLastLocal,
+                onClear = vm::clearAll,
+                guideCross = vm.guideCross,
+                guideGrid = vm.guideGrid,
+                onToggleGuideCross = vm::toggleGuideCross,
+                onSelectGuideGrid = vm::selectGuideGrid,
+                // 동기화 버튼은 Connected 일 때만 노출. 모드별 다이얼로그 분기.
+                onSync = if (sessionState is SessionState.Connected) {
+                    {
+                        syncStep = if (mode == DrawMode.Party) SyncStep.PartyPicker
+                        else SyncStep.DuoConfirm
                     }
+                } else null,
+                onOpenRoom = if (isPartyHost) {
+                    {
+                        scope.launch {
+                            runCatching { session.transport.startAdvertising() }
+                                .onSuccess {
+                                    Toast.makeText(
+                                        context,
+                                        "방을 열었어요. 새 친구가 들어올 수 있어요.",
+                                        Toast.LENGTH_SHORT,
+                                    ).show()
+                                }
+                        }
+                    }
+                } else null,
+                modifier = m,
+            )
+        }
+
+        if (isLandscape) {
+            Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                canvasArea(Modifier.weight(1f).fillMaxHeight())
+                Box(
+                    modifier = Modifier
+                        .width(300.dp)
+                        .fillMaxHeight()
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    toolbar(Modifier.fillMaxWidth())
                 }
-            } else null,
-            modifier = Modifier.fillMaxWidth(),
-        )
+            }
+        } else {
+            canvasArea(Modifier.weight(1f).fillMaxWidth())
+            toolbar(Modifier.fillMaxWidth())
+        }
     }
         // 끊김 알림 / 재연결 액션을 위한 SnackBar.
         SnackbarHost(
