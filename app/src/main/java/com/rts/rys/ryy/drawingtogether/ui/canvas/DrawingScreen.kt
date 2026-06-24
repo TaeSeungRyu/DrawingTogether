@@ -75,7 +75,8 @@ import com.rts.rys.ryy.drawingtogether.works.WorkStore
 import kotlinx.coroutines.launch
 
 private const val ASPECT_TOAST_TEXT = "사진 비율로 화면을 맞췄어요"
-private const val SAVED_TOAST_TEXT = "저장됐어요. 갤러리로 내보내려면 \"최근 작업\" 에서 열어주세요."
+private const val SAVED_TOAST_TEXT =
+    "저장됐어요. 휴대폰 갤러리로 보내려면 \"최근 작업\" 에서 작품을 열고 \"갤러리로 보내기\" 를 눌러주세요."
 
 // Phase 4-G: 동기화 다이얼로그 단계.
 private sealed class SyncStep {
@@ -883,8 +884,8 @@ fun DrawingScreen(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = "💡 앱 안에 저장돼요. 갤러리로 내보내려면 \"최근 작업\" " +
-                            "에서 작품을 열어 \"저장\" 을 눌러주세요.",
+                        text = "💡 앱 안에 저장돼요. 휴대폰 갤러리로 보내려면 \"최근 작업\" " +
+                            "에서 작품을 열어 \"갤러리로 보내기\" 를 눌러주세요.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

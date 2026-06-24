@@ -84,7 +84,7 @@ fun PreviewScreen(
                             )
                             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                         }
-                    }) { Text("저장") }
+                    }) { Text("갤러리로 보내기") }
                     TextButton(onClick = {
                         val uri = store.shareUriFor(context, work)
                         val send = Intent(Intent.ACTION_SEND).apply {
