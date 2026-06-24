@@ -434,19 +434,21 @@ fun DrawingScreen(
             )
         }
     }
-    // 원격 stroke 통째 도착. sender 라우팅:
-    //  - sender == null (동기화 응답): 자기 메인 캔버스 덮어쓰기. 모임 모드면 사진까지 적용된
-    //    후에 broadcast 송신해야 하니 플래그만 켜고 실제 broadcast 는 incomingBackground 분기에서.
-    //  - sender != null (broadcast): 그 peer 의 peerCanvases 에 적용 — 다른 참가자가 동기화로
-    //    자기 캔버스 갱신했을 때, 우리 화면의 그 peer 미니뷰도 갱신.
+    // 원격 stroke 통째 도착. 모드별 라우팅:
+    //  - 함께 모드(Duo): sender 가 박혀 와도 무시. 1:1 공유 캔버스라 항상 자기 메인에 덮어쓰기.
+    //  - 모임 모드(Party): sender 라우팅
+    //      sender == null (동기화 응답) → 자기 메인 + 사진 적용 후 broadcast 송신 플래그
+    //      sender != null (broadcast) → peerCanvases[sender] 적용 (그 peer 미니뷰 동기화)
     LaunchedEffect(vm, session) {
         session.incomingSnapshot.collect { event ->
+            if (mode != DrawMode.Party) {
+                vm.applyRemoteSnapshot(event.strokes)
+                return@collect
+            }
             val sender = event.senderPeerId
             if (sender == null) {
                 vm.applyRemoteSnapshot(event.strokes)
-                if (mode == DrawMode.Party) {
-                    pendingPartySyncBroadcast = true
-                }
+                pendingPartySyncBroadcast = true
             } else {
                 val peerCanvas = vm.peerCanvases.getOrPut(sender) {
                     com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState()
