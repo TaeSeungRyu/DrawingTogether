@@ -10,13 +10,20 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -25,8 +32,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import com.rts.rys.ryy.drawingtogether.session.SessionManager
+import com.rts.rys.ryy.drawingtogether.transport.nearby.TransportMode
 import com.rts.rys.ryy.drawingtogether.ui.theme.PastelBlobBackground
 import com.rts.rys.ryy.drawingtogether.works.WorkStore
 
@@ -46,6 +58,12 @@ fun HomeScreen(
     // modal 재오픈해도 그대로. rememberLazyGridState 가 내부적으로 rememberSaveable 사용해
     // HomeScreen 의 NavBackStackEntry 에 보존.
     val recentWorksGridState = rememberLazyGridState()
+
+    // 닉네임 — Duo 인스턴스의 prefs 가 모든 모드 공유. 변경 시 Party 인스턴스에도 setNick
+    // 호출해 in-memory StateFlow 까지 동기화 (안 하면 Party 진입 시 이전 값 노출).
+    val duoSession = remember { SessionManager.get(context, TransportMode.Duo) }
+    val nick by duoSession.nick.collectAsState()
+    var nickDialogOpen by rememberSaveable { mutableStateOf(false) }
 
     // 홈 화면에서 뒤로가기: 첫 번째는 안내 토스트, 2초 안에 두 번째 누르면 종료.
     var lastBackPressMs by remember { mutableStateOf(0L) }
@@ -77,6 +95,17 @@ fun HomeScreen(
             text = "모드를 선택해 주세요",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = if (nick.isBlank()) "내 이름을 정해주세요 ✏️" else "내 이름: $nick ✏️",
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (nick.isBlank()) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .clickable { nickDialogOpen = true }
+                .padding(vertical = 4.dp, horizontal = 8.dp),
         )
 
         // 위 spacer가 버튼 그룹을 수직 중앙쪽으로 밀어냄. 아래 spacer와 비율이 같으면 정확한 중앙.
@@ -177,6 +206,46 @@ fun HomeScreen(
                 onWorkClick = onWorkClick,
                 onDismiss = { modalOpen = false },
                 gridState = recentWorksGridState,
+            )
+        }
+
+        if (nickDialogOpen) {
+            var input by rememberSaveable(nickDialogOpen) { mutableStateOf(nick) }
+            val focus = remember { FocusRequester() }
+            LaunchedEffect(Unit) { focus.requestFocus() }
+            val submit = submit@{
+                val trimmed = input.trim()
+                if (trimmed.isEmpty()) return@submit
+                // Duo + Party 인스턴스 양쪽 setNick — prefs 는 공유되지만 in-memory StateFlow
+                // 는 인스턴스별 분리. 다음 진입 시 stale 값 회피.
+                duoSession.setNick(trimmed)
+                SessionManager.get(context, TransportMode.Party).setNick(trimmed)
+                nickDialogOpen = false
+            }
+            AlertDialog(
+                onDismissRequest = { nickDialogOpen = false },
+                title = { Text("내 이름") },
+                text = {
+                    OutlinedTextField(
+                        value = input,
+                        onValueChange = { input = it.take(20) },
+                        singleLine = true,
+                        label = { Text("이름") },
+                        placeholder = { Text("예) ryu") },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { submit() }),
+                        modifier = Modifier.focusRequester(focus),
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = { submit() },
+                        enabled = input.trim().isNotEmpty(),
+                    ) { Text("저장") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { nickDialogOpen = false }) { Text("취소") }
+                },
             )
         }
     }
