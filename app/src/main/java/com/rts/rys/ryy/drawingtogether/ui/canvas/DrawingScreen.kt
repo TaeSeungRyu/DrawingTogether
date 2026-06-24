@@ -75,7 +75,7 @@ import com.rts.rys.ryy.drawingtogether.works.WorkStore
 import kotlinx.coroutines.launch
 
 private const val ASPECT_TOAST_TEXT = "사진 비율로 화면을 맞췄어요"
-private const val SAVED_TOAST_TEXT = "작품을 저장했어요"
+private const val SAVED_TOAST_TEXT = "저장됐어요. 갤러리로 내보내려면 \"최근 작업\" 에서 열어주세요."
 
 // Phase 4-G: 동기화 다이얼로그 단계.
 private sealed class SyncStep {
@@ -850,23 +850,32 @@ fun DrawingScreen(
                 val mergedBg = vm.canvas.background != null && includeBg
                 val bitmap = PngComposer.compose(vm.canvas, density, includeBg)
                 WorkStore.get(context).save(bitmap, mergedBg, raw)
-                Toast.makeText(context, SAVED_TOAST_TEXT, Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, SAVED_TOAST_TEXT, Toast.LENGTH_LONG).show()
             }
         }
         AlertDialog(
             onDismissRequest = { showSaveDialog = false },
             title = { Text("작품 저장") },
             text = {
-                OutlinedTextField(
-                    value = nameInput,
-                    onValueChange = { nameInput = it.take(40) },
-                    singleLine = true,
-                    label = { Text("이름") },
-                    placeholder = { Text("예) 곰돌이") },
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { submit() }),
-                    modifier = Modifier.focusRequester(focus),
-                )
+                Column {
+                    OutlinedTextField(
+                        value = nameInput,
+                        onValueChange = { nameInput = it.take(40) },
+                        singleLine = true,
+                        label = { Text("이름") },
+                        placeholder = { Text("예) 곰돌이") },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { submit() }),
+                        modifier = Modifier.focusRequester(focus),
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "💡 앱 안에 저장돼요. 갤러리로 내보내려면 \"최근 작업\" " +
+                            "에서 작품을 열어 \"저장\" 을 눌러주세요.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             },
             confirmButton = {
                 TextButton(

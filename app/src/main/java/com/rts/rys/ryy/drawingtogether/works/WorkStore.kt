@@ -44,8 +44,21 @@ class WorkStore private constructor(private val worksDir: File) {
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
         }
         metaFile(id).writeText(work.toMetaLine())
+        pruneToLimit()
         _works.value = loadAll()
         work
+    }
+
+    // "최근 작업" 은 MAX_WORKS 개로 한정. 초과 시 가장 오래된 항목부터 PNG + meta 같이 제거.
+    // 사용자가 갤러리로 내보낸 작품도 앱 내부에선 정리됨 — 외부 갤러리의 사본은 영향 없음.
+    private fun pruneToLimit() {
+        val all = loadAll()
+        if (all.size <= MAX_WORKS) return
+        val toDelete = all.drop(MAX_WORKS)  // loadAll 이 최신순 정렬이라 뒤쪽이 오래된 것.
+        toDelete.forEach { work ->
+            runCatching { pngFile(work.id).delete() }
+            runCatching { metaFile(work.id).delete() }
+        }
     }
 
     fun pngFile(id: String): File = File(worksDir, "$id.png")
@@ -127,6 +140,9 @@ class WorkStore private constructor(private val worksDir: File) {
     }
 
     companion object {
+        // "최근 작업" 보관 한도. 초과분은 오래된 것부터 자동 삭제 (pruneToLimit).
+        const val MAX_WORKS: Int = 100
+
         @Volatile private var instance: WorkStore? = null
 
         fun get(context: Context): WorkStore = instance ?: synchronized(this) {
