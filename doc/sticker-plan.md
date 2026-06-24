@@ -61,15 +61,21 @@
 - `ToolKind.Sticker` 모드 분기 (기존 stroke `awaitEachGesture` 와 별도):
   - 빈 곳 탭 → 그 위치에 `onPlaceSticker(key, cx, cy)` (기본 scale/rotation 0).
   - 배치된 스티커 탭(hit-test) → 선택 상태(`selectedStickerId`, 로컬 state).
-  - 선택된 스티커 본체 드래그 → 이동 `onTransformSticker` (코얼레싱).
+  - 선택된 스티커 본체 드래그 → 이동: 드래그 중 `onTransformStickerLocal`(로컬만),
+    `onDragEnd` 에 `onCommitStickerTransform`(전송).
   - 선택 시 **핸들 오버레이**: 바운딩 박스 + 우하단 핸들(드래그 = 중심 기준 거리→scale,
-    각도→rotation 동시) + 우상단 X(삭제 `onRemoveSticker`).
+    각도→rotation 동시; 동일하게 중엔 local, end 에 commit) + 우상단 X(삭제 `onRemoveSticker`).
 - hit-test: 스티커 바운딩(중심±scale 반경) 역회전 좌표로 판정.
 
 ### F. ViewModel (`ui/canvas/DrawingViewModel.kt`)
-- `placeSticker(key, cx, cy)` / `transformSticker(id, cx, cy, scale, rot)` /
-  `removeSticker(id)` — 각 `emit(DrawingEvent...)` (canvas.apply + outbound).
-- `transformSticker` 는 드래그 중 빈번 → `OutboundCoalescer` 류로 25ms 묶기(StrokeAppend 패턴).
+- `placeSticker(key, cx, cy)` / `removeSticker(id)` — `emit(DrawingEvent...)` (canvas.apply + outbound).
+- **변형은 commit-on-end**: 드래그/핀치 *중* 에는 로컬 캔버스만 갱신(자기 화면 실시간),
+  전송은 **제스처 종료 시 최종 상태 1회**.
+  - `transformStickerLocal(id, cx, cy, scale, rot)`: `canvas.apply(TransformSticker)` 만 — outbound 없음.
+  - `commitStickerTransform(id, cx, cy, scale, rot)`: `emit(TransformSticker)` — outbound 포함, 제스처 종료(`onDragEnd`)에서 1회.
+  - 이유: 스티커 변형은 *결과*만 보면 충분(stroke 그리기와 다름). 실시간 스트리밍 대비
+    트래픽 대폭 절감(모임 모드 호스트 relay 면 N배). `OutboundCoalescer` 불필요.
+  - 트레이드오프: 상대는 변형 *과정* 은 못 보고 최종 상태만(수용 가능).
 - `undoLastLocal()`: `canvas.lastUndoable()` 분기 — StrokeRef→`Undo`, StickerRef→`RemoveSticker` emit.
 
 ### G. 동기화 — Snapshot 확장 (`transport/codec/FrameCodec.kt` + `session/`)
@@ -87,8 +93,8 @@
 - `ShapeDropdownButton.kt` 의 `buildStarPath/buildHeartPath/buildRegularPolygonPath` — 벡터 일부 재사용.
 - `BrushSelectorSheet.kt` — 스티커 피커 시트 패턴.
 - `StrokeRenderer` 의 `drawStroke` 공유 패턴 — 화면/PNG/미니뷰 동일 렌더.
-- `OutboundCoalescer.kt` — transform 코얼레싱.
 - 정규화 좌표(0..1) — 기존 stroke 와 동일 좌표계.
+  (변형은 commit-on-end 라 `OutboundCoalescer` 불필요.)
 
 ## 위험 / 주의
 - **undo 스택 타입 교체**(StrokeId → UndoItem): `CanvasState`/`DrawingViewModel`/테스트
