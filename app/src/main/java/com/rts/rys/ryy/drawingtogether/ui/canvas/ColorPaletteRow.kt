@@ -26,22 +26,16 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
-// 자주 쓰는 색 프리셋. 흑/백을 앞에 두고 무지개 + 회/갈색.
-// 사용자가 ColorPickerSheet 로 각 슬롯 색을 갱신 가능 — UserPaletteRepo 가 prefs 보관.
+// 자주 쓰는 색 프리셋 7개 — 검정/흰색/빨강/파랑/초록/노랑/갈색. 그 외 색은 + (임시) 또는
+// ✏️ (슬롯 편집). UserPaletteRepo 가 사용자 정의 슬롯 색을 prefs 에 보관.
 val DefaultColorPalette: List<Int> = listOf(
     0xFF000000.toInt(), // black
     0xFFFFFFFF.toInt(), // white
     0xFFE53935.toInt(), // red
-    0xFFFB8C00.toInt(), // orange
-    0xFFFDD835.toInt(), // yellow
-    0xFF43A047.toInt(), // green
-    0xFF00897B.toInt(), // teal
     0xFF1E88E5.toInt(), // blue
-    0xFF5E35B1.toInt(), // deep purple
-    0xFF8E24AA.toInt(), // purple
-    0xFFEC407A.toInt(), // pink
+    0xFF43A047.toInt(), // green
+    0xFFFDD835.toInt(), // yellow
     0xFF6D4C41.toInt(), // brown
-    0xFF757575.toInt(), // gray
 )
 
 @Composable
@@ -59,11 +53,13 @@ fun ColorPaletteRow(
     onResetPalette: () -> Unit = {},
 ) {
     val scrollState = rememberLazyListState()
+    val fadeColor = MaterialTheme.colorScheme.surface
     LazyRow(
         state = scrollState,
         modifier = modifier.fadingEdgeHorizontal(
             leftFade = scrollState.canScrollBackward,
             rightFade = scrollState.canScrollForward,
+            fadeColor = fadeColor,
         ),
         contentPadding = PaddingValues(horizontal = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),

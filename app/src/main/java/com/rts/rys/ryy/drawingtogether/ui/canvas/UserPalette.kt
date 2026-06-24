@@ -33,7 +33,7 @@ class UserPaletteRepo private constructor(private val prefs: SharedPreferences) 
     }
 
     companion object {
-        const val PALETTE_SIZE: Int = 13  // DefaultColorPalette 크기
+        const val PALETTE_SIZE: Int = 7  // DefaultColorPalette 크기
         private const val KEY = "argb_list"
         private const val SEP = "/"
         private const val PREFS = "user_palette"

@@ -549,6 +549,7 @@ fun DrawingScreen(
                 // weight(1f) — Phase 2에서 이 Row 뒤에 peer indicator를 두면 indicator는
                 // 우측에 고정되고 액션 행만 좌측에서 스크롤된다. (doc/ui-layout.md §4)
                 val actionsScroll = rememberScrollState()
+                val actionsFadeColor = MaterialTheme.colorScheme.surface
                 Row(
                     modifier = Modifier
                         .weight(1f)
@@ -556,6 +557,7 @@ fun DrawingScreen(
                         .fadingEdgeHorizontal(
                             leftFade = actionsScroll.canScrollBackward,
                             rightFade = actionsScroll.canScrollForward,
+                            fadeColor = actionsFadeColor,
                         ),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
