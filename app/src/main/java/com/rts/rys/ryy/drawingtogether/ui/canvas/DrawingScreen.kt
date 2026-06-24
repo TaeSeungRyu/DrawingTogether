@@ -897,17 +897,17 @@ fun DrawingScreen(
     }
 }
 
-// Phase 4-E: 자기 캔버스 — 기본은 사진 있으면 사진 비율 letterbox, 없으면 fillMaxSize 흰 배경.
-// forceSquare=true (모임 모드) 면 사진 있어도 1:1 정사각형 letterbox — 모든 참가자가 같은
-// 비율의 캔버스에 그려야 stroke 의 normalized 좌표가 서로의 미니 뷰에서 동일 모양으로 보인다.
-// 사진은 1:1 letterbox 안에서 다시 Fit 으로 표시 (위/아래 또는 좌/우 여백 발생 가능).
+// 자기 캔버스 — 사진 있으면 사진 비율 letterbox, 없으면 fillMaxSize 흰 배경.
+// 모든 모드 동일 동작 — 모임 모드도 자기 캔버스는 자기 사진 비율로 표시.
+// (트레이드오프: 자기 캔버스 비율과 미니 뷰 슬롯 비율이 다르면 같은 stroke 가 모양이 약간
+// 다르게 보임. 사진 비율 letterbox 의 자연스러움을 우선.)
 @Composable
-private fun MyCanvasContent(vm: DrawingViewModel, forceSquare: Boolean = false) {
+private fun MyCanvasContent(vm: DrawingViewModel) {
     val bg = vm.canvas.background
-    val canvasModifier = when {
-        forceSquare -> Modifier.aspectRatio(1f).background(Color.White)
-        bg != null -> Modifier.aspectRatio(bg.aspectRatio).background(Color.White)
-        else -> Modifier.fillMaxSize().background(Color.White)
+    val canvasModifier = if (bg != null) {
+        Modifier.aspectRatio(bg.aspectRatio).background(Color.White)
+    } else {
+        Modifier.fillMaxSize().background(Color.White)
     }
     DrawingCanvas(
         state = vm.canvas,
@@ -939,7 +939,7 @@ private fun PartyCanvasArea(
                     .fillMaxHeight(),
                 contentAlignment = Alignment.Center,
             ) {
-                MyCanvasContent(vm = vm, forceSquare = true)
+                MyCanvasContent(vm = vm)
             }
             Column(
                 modifier = Modifier
@@ -963,7 +963,7 @@ private fun PartyCanvasArea(
                     .fillMaxWidth(),
                 contentAlignment = Alignment.Center,
             ) {
-                MyCanvasContent(vm = vm, forceSquare = true)
+                MyCanvasContent(vm = vm)
             }
             Row(
                 modifier = Modifier
