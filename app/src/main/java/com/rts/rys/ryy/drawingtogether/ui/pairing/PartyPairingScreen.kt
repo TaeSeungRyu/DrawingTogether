@@ -176,15 +176,11 @@ fun PartyPairingScreen(
                     connectedNicks = connectedPeers.map { it.nick },
                     canStart = connectedPeers.isNotEmpty(),
                     onStartClick = {
-                        // 새 조인자 더 안 받기 + 조인자들에게 PartyStart 신호 → 동기 진입.
+                        // 새 조인자 더 안 받기 + 기존 조인자들에게 PartyStart 신호 → 동기 진입.
+                        // broadcastPartyStart 가 partyStarted 플래그도 박아둠 — 그 후 "방 열기"
+                        // 로 들어오는 새 조인자도 자동으로 PartyStart unicast 받는다.
                         session.transport.stopAdvertising()
-                        scope.launch {
-                            runCatching {
-                                session.transport.send(
-                                    com.rts.rys.ryy.drawingtogether.transport.Frame.PartyStart
-                                )
-                            }
-                        }
+                        session.broadcastPartyStart()
                         onStart()
                     },
                 )

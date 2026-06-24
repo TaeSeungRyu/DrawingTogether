@@ -124,6 +124,11 @@ class SessionManager private constructor(
     private val _partyStart = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val partyStart: SharedFlow<Unit> = _partyStart.asSharedFlow()
 
+    // 호스트가 PartyStart 를 이미 송신했는지. true 라면 그 후 "방 열기" 로 새로 참여한 조인자
+    // 의 핸드셰이크 완료 시점에 그 조인자에게 PartyStart unicast 해 자동으로 Draw 진입시킨다.
+    // 안 그러면 새 조인자가 "호스트가 시작하기를 기다리는 중" 화면에서 영원히 대기.
+    private var partyStarted: Boolean = false
+
     // FILE 페이로드와 짝이 되는 메타는 PhotoMeta(사진) 또는 Snapshot(strokes) 두 종류.
     // 도착 순서가 달라질 수 있어서 양방향 버퍼.
     //   pendingPhotoMeta:    PhotoMeta 가 먼저 도착해 FILE 을 기다리는 상태
@@ -232,6 +237,17 @@ class SessionManager private constructor(
         if (_state.value !is SessionState.Connected) {
             _state.value = SessionState.Pairing
             transport.setLocalNick(_nick.value.ifBlank { "User" })
+        }
+    }
+
+    // 호스트가 PartyPairingScreen 의 "그리기 시작" 을 누른 시점에 호출. 기존 조인자들에게
+    // broadcast 송신 + partyStarted 플래그 박음. 그 후 "방 열기" 로 들어오는 새 조인자에게는
+    // maybeFinishHandshake 가 자동으로 unicast 한다.
+    fun broadcastPartyStart() {
+        if (mode != TransportMode.Party) return
+        partyStarted = true
+        scope.launch {
+            runCatching { transport.send(Frame.PartyStart) }
         }
     }
 
@@ -583,6 +599,13 @@ class SessionManager private constructor(
         }
         if (mode == TransportMode.Party && transport.localRole == Role.Host) {
             announcePeerJoined(newlyJoinedEndpoint = endpointId, newlyJoinedHello = finishedHello)
+            // 호스트가 이미 Draw 진입한 상태에서 새 조인자 합류 ("방 열기" 케이스) — 그 조인자
+            // 만 PartyStart 못 받아 대기 화면 멈춤. unicast 로 즉시 진입시킨다.
+            if (partyStarted) {
+                scope.launch {
+                    runCatching { transport.sendTo(endpointId, Frame.PartyStart) }
+                }
+            }
         }
     }
 
@@ -679,6 +702,7 @@ class SessionManager private constructor(
     private fun resetHandshake() {
         handshakes.clear()
         indirectPeers.clear()
+        partyStarted = false
         publishRemotePeers()
     }
 
