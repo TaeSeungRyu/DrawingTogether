@@ -272,10 +272,12 @@ fun DrawingScreen(
     var showSaveDialog by remember { mutableStateOf(false) }
     // Phase 4-G: 동기화 다이얼로그 단계 — Duo 는 컨펌 1단계, Party 는 피커 → 컨펌 2단계.
     var syncStep by remember { mutableStateOf<SyncStep>(SyncStep.None) }
-    // 모임 모드 동기화 응답 후 broadcast 대기 플래그. strokes 가 먼저 적용된 다음 사진이
-    // 도착해 vm.canvas.background 까지 갱신된 시점에 broadcast 송신 — 사진 적용 전에 송신하면
-    // 사진 없는 빈 캔버스가 다른 참가자의 미니뷰에 가버린다.
-    var pendingPartySyncBroadcast by remember { mutableStateOf(false) }
+    // 모임 모드 동기화 응답 후, 내 캔버스를 다른 참가자에게 broadcast 해 그들이 보는 내 미니뷰도
+    // 갱신한다. 응답은 strokes(Snapshot) + 배경(PhotoMeta 또는 PhotoRemove) 두 이벤트로 오는데
+    // 도착 순서가 엇갈릴 수 있으므로(특히 사진 없을 때 PhotoRemove 가 먼저 올 수 있음), 둘 다
+    // 도착한 시점에만 broadcast. 한쪽만 트리거로 쓰면 누락된다.
+    var syncGotStrokes by remember { mutableStateOf(false) }
+    var syncGotBackground by remember { mutableStateOf(false) }
     var nameInput by remember { mutableStateOf("") }
 
     // Phase 4-D: 모드별 SessionManager 인스턴스. Single 도 Duo 싱글톤을 쓰지만
@@ -417,20 +419,19 @@ fun DrawingScreen(
                     else vm.setBackground(null)
                 }
             }
-            // 모임 모드 동기화 응답 — strokes 적용 후 사진까지 적용된 시점에 자기 캔버스를
-            // broadcast 해 다른 참가자가 보는 내 미니뷰도 동기화. sender=null 은 동기화 응답
-            // (자기 메인 적용) 케이스라 broadcast 트리거 시점으로 적절.
-            if (mode == DrawMode.Party &&
-                change.senderPeerId == null &&
-                pendingPartySyncBroadcast
-            ) {
-                pendingPartySyncBroadcast = false
-                broadcastMyCanvasAsPeer(
-                    context = context,
-                    session = session,
-                    strokes = vm.canvas.strokes.toList(),
-                    background = vm.canvas.background,
-                )
+            // 모임 모드 동기화 응답의 배경 부분 도착. sender=null = 동기화 응답(자기 메인 적용).
+            if (mode == DrawMode.Party && change.senderPeerId == null) {
+                syncGotBackground = true
+                if (syncGotStrokes) {
+                    syncGotStrokes = false
+                    syncGotBackground = false
+                    broadcastMyCanvasAsPeer(
+                        context = context,
+                        session = session,
+                        strokes = vm.canvas.strokes.toList(),
+                        background = vm.canvas.background,
+                    )
+                }
             }
         }
     }
@@ -466,8 +467,19 @@ fun DrawingScreen(
             }
             val sender = event.senderPeerId
             if (sender == null) {
+                // 동기화 응답의 strokes 부분. 배경까지 도착하면 broadcast.
                 vm.applyRemoteSnapshot(event.strokes)
-                pendingPartySyncBroadcast = true
+                syncGotStrokes = true
+                if (syncGotBackground) {
+                    syncGotStrokes = false
+                    syncGotBackground = false
+                    broadcastMyCanvasAsPeer(
+                        context = context,
+                        session = session,
+                        strokes = vm.canvas.strokes.toList(),
+                        background = vm.canvas.background,
+                    )
+                }
             } else {
                 val peerCanvas = vm.peerCanvases.getOrPut(sender) {
                     com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState()
