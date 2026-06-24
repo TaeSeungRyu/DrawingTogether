@@ -1,3 +1,5 @@
 <resources>
-    <string name="app_name">DrawingTogether</string>
+    <!-- 런처에 표시되는 앱 이름. 앱 실행 중 화면 텍스트(스플래시/홈의 "Drawing Together")는
+         별도 하드코딩이라 영향받지 않는다. -->
+    <string name="app_name">드로잉 투게더</string>
 </resources>
