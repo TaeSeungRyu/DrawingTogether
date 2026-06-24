@@ -277,22 +277,29 @@ Column(Modifier.fillMaxSize()) {
 
 ### 멀티(1:1) 모드와의 차이
 
-| 항목 | 멀티 (1:1) | 다중 (1:N) |
+| 항목 | 함께 (1:1, Duo) | 모임 (1:N, Party) |
 |---|---|---|
 | Strategy | `P2P_POINT_TO_POINT` | `P2P_STAR` (호스트 + 조인자 최대 3) |
 | 캔버스 | 1개 (공유) | 1개 (내 것) + 미니 뷰 N 개 |
-| 자기 사진 배경 | 양방향 자동 broadcast | 자기만 보임, 자동 broadcast 안 함 |
-| 미니 뷰의 사진 배경 | (해당 없음, 1개 공유 캔버스) | 미표시 — stroke 만 |
+| 자기 사진 배경 | 양방향 자동 broadcast → 양쪽 메인 캔버스 동기화 | 자기 메인 + **다른 사람들이 보는 내 미니 뷰**에 표시. 상대 메인엔 영향 없음 |
+| 사진 제거 | 양쪽 동기화 | 자기 메인 + 다른 사람의 내 미니 뷰에서 사라짐 |
+| 배경 합치기 토글 | 양방향 broadcast | 자기만 (저장 옵션) |
+| 미니 뷰의 사진 배경 | (해당 없음, 1개 공유 캔버스) | 그 peer 의 사진 + stroke 둘 다 표시 |
+| 캔버스 비율 | 사진 있으면 사진 비율 letterbox | 자기 메인은 사진 비율 letterbox, 미니 뷰는 1:1 슬롯 |
 | Clear/Undo/지우개 | 모두 영향 (함께 그리기) | 내 캔버스만 |
-| "동기화" | 그 한 명에게 즉시 SnapshotReq (사진 포함) | 다이얼로그 → 누구 캔버스 가져올지 선택 → 컨펌 (사진 안내) → SnapshotReq (사진 포함) |
-| 끊김 1명 | 세션 종료 | 호스트 끊김 시만 종료, 조인자 끊김은 그 미니뷰만 사라짐 |
+| "동기화" | 즉시 컨펌 → SnapshotReq (사진 포함) | 다이얼로그 → 누구 캔버스 가져올지 선택 → 컨펌 (사진 안내) → 타겟 SnapshotReq (호스트 relay). 받은 뒤 자기 캔버스를 다시 broadcast 해 다른 사람의 내 미니 뷰도 갱신 |
+| 끊김 1명 | 세션 종료 | 조인자 끊김은 그 미니 뷰만 `EmptyMiniSlot` 으로. 호스트는 "방 열기" 로 재모집 가능. (호스트 끊김=전체 종료는 미구현 — 보류) |
+
+> 사진 정책 변경 이력: 초기 설계는 "자기 사진은 자기만" (미니 뷰 미표시) 이었으나, 사용자 피드백으로 "자기 사진을 다른 사람들이 보는 내 미니 뷰에도 표시" 로 반전됨. 상대 *메인* 캔버스엔 여전히 안 들어감 — 어디까지나 그 사람의 미니 뷰에만.
 
 ### 미니 뷰 구성
 
 - `DrawingCanvas` 와 동일 렌더 함수 재사용 (`StrokeRenderer.drawStroke`) — 화면 = 저장 일관성.
 - `pointerInput` 미부착 → 탭/드래그 모두 무시.
+- 그 peer 의 사진 배경 + stroke 둘 다 렌더 (배경은 `MiniCanvas` 가 직접 그림).
+- 슬롯 안에 1:1 정사각형 letterbox (`aspectRatio(1f)`) — 가로/세로 어느 슬롯 방향이든 일관.
 - 닉네임 라벨 상단 표시 (peer 식별).
-- 빈 슬롯은 `surfaceVariant` placeholder + "비어있음" 라벨.
+- 빈 슬롯은 `EmptyMiniSlot` — "비어있음" placeholder. 슬롯은 항상 3개 고정 (참가자 수와 무관).
 
 ### "동기화" 선택 다이얼로그
 
@@ -327,10 +334,11 @@ Column(Modifier.fillMaxSize()) {
 └──────────────────────────────────┘
 ```
 
-- 적용 시 선택한 피어에게 타겟 `SnapshotReq` (호스트 relay 거침)
-- 응답 도착 → 내 메인 캔버스 stroke 덮어쓰기
+- 적용 시 선택한 피어에게 타겟 `SnapshotReq(targetPeerId, requesterPeerId)` (호스트 relay 거침)
+- 응답(`Snapshot` + strokes FILE) 도착 → 내 메인 캔버스 stroke 덮어쓰기
 - 응답에 사진 포함되면 → `PhotoMeta` + FILE 페이로드 따라옴 → 내 캔버스 배경에 적용
-- 현재 1:1 sync-with-photo 코드 재사용 가능
+- **strokes + 사진 적용이 끝난 뒤** 내 캔버스를 `targetPeerId=""` 로 다시 broadcast → 호스트 relay → 다른 참가자가 보는 *내 미니 뷰*도 가져온 내용으로 갱신. (사진 적용 전에 broadcast 하면 빈 배경이 전송되므로 순서 중요.)
+- 함께(Duo) 모드의 sync-with-photo FILE 매칭 메커니즘 재사용
 
 ### 호스트/조인 비대칭 점
 
