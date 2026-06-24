@@ -59,6 +59,14 @@ enum class BrushType(
         alpha = 0.55f,
         widthScale = 1.0f,
     ),
+    Airbrush(
+        displayName = "에어브러시",
+        description = "흩뿌리는 스프레이",
+        capStyle = BrushCapStyle.Round,
+        // alpha = 점 농도(겹칠수록 진해짐), widthScale = 분사 반경 스케일.
+        alpha = 0.5f,
+        widthScale = 1.8f,
+    ),
 }
 
 enum class BrushCapStyle { Round, Square }

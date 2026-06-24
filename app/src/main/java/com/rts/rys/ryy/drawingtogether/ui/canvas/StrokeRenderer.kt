@@ -21,7 +21,9 @@ import com.rts.rys.ryy.drawingtogether.drawing.model.ToolSettings
 internal fun DrawScope.drawStroke(stroke: Stroke, canvasSize: IntSize, density: Float) {
     if (stroke.points.isEmpty() || canvasSize.width <= 0 || canvasSize.height <= 0) return
     when (stroke.tool.shape) {
-        ShapeMode.None -> drawFreehand(stroke, canvasSize, density)
+        ShapeMode.None ->
+            if (stroke.tool.brush == BrushType.Airbrush) drawAirbrush(stroke, canvasSize, density)
+            else drawFreehand(stroke, canvasSize, density)
         else -> drawShapeForm(stroke, canvasSize, density)
     }
 }
@@ -48,6 +50,52 @@ private fun DrawScope.drawFreehand(stroke: Stroke, canvasSize: IntSize, density:
             join = join,
         ),
     )
+}
+
+// 에어브러시 — 경로를 따라 점을 흩뿌린다. 결정론적: seed = stroke.id 라 매 프레임/양 단말
+// 동일하게 재현(난수가 흔들리지 않음). 분사점 좌표를 stroke 에 저장하지 않고 렌더 시 생성.
+private fun DrawScope.drawAirbrush(stroke: Stroke, canvasSize: IntSize, density: Float) {
+    val w = canvasSize.width.toFloat()
+    val h = canvasSize.height.toFloat()
+    val radius = strokeWidthPxFor(stroke.tool, density) / 2f
+    if (radius <= 0f) return
+    val color = colorFor(stroke.tool)
+    val dotRadius = (1.2f * density).coerceAtLeast(1f)
+    val spacing = (radius * 0.5f).coerceAtLeast(2f)
+    val perStamp = 8
+    val rng = kotlin.random.Random(stroke.id.value.hashCode())
+
+    // 한 stamp 위치에서 반경 안에 perStamp 개 점 분사.
+    fun spray(cx: Float, cy: Float) {
+        for (k in 0 until perStamp) {
+            val angle = rng.nextFloat() * 2f * Math.PI.toFloat()
+            // sqrt 로 반경 균일 분포 (중심 쏠림 방지).
+            val dist = kotlin.math.sqrt(rng.nextFloat()) * radius
+            val x = cx + dist * kotlin.math.cos(angle)
+            val y = cy + dist * kotlin.math.sin(angle)
+            drawCircle(color = color, radius = dotRadius, center = Offset(x, y))
+        }
+    }
+
+    val pts = stroke.points
+    if (pts.size == 1) {
+        spray(pts[0].x * w, pts[0].y * h)
+        return
+    }
+    // 인접 점 사이를 spacing 간격으로 보간하며 stamp.
+    for (i in 0 until pts.size - 1) {
+        val x1 = pts[i].x * w; val y1 = pts[i].y * h
+        val x2 = pts[i + 1].x * w; val y2 = pts[i + 1].y * h
+        val dx = x2 - x1; val dy = y2 - y1
+        val segLen = kotlin.math.sqrt(dx * dx + dy * dy)
+        val steps = (segLen / spacing).toInt().coerceAtLeast(1)
+        for (s in 0 until steps) {
+            val t = s.toFloat() / steps
+            spray(x1 + dx * t, y1 + dy * t)
+        }
+    }
+    // 마지막 점도 분사.
+    spray(pts.last().x * w, pts.last().y * h)
 }
 
 // 첫 점과 마지막 점을 바운딩 박스로 삼아 정해진 도형 하나를 외곽선으로 그린다.

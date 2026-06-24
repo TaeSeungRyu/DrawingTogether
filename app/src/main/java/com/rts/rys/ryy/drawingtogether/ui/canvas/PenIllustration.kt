@@ -26,7 +26,42 @@ fun PenIllustration(brush: BrushType, modifier: Modifier = Modifier) {
             BrushType.Marker -> drawMarker(w, h)
             BrushType.Highlighter -> drawHighlighter(w, h)
             BrushType.Crayon -> drawCrayon(w, h)
+            BrushType.Airbrush -> drawSprayCan(w, h)
         }
+    }
+}
+
+// 스프레이 캔 — 둥근 몸통 + 노즐 + 분사점.
+private fun DrawScope.drawSprayCan(w: Float, h: Float) {
+    val bodyTop = h * 0.30f
+    val bodyHeight = h * 0.42f
+    val bodyLeft = w * 0.10f
+    val bodyWidth = w * 0.42f
+    val cornerR = CornerRadius(bodyHeight * 0.25f)
+    drawRoundRect(
+        color = Color(0xFF26A69A),
+        topLeft = Offset(bodyLeft, bodyTop),
+        size = Size(bodyWidth, bodyHeight),
+        cornerRadius = cornerR,
+    )
+    // 노즐
+    drawRoundRect(
+        color = Color(0xFF455A64),
+        topLeft = Offset(bodyLeft + bodyWidth * 0.3f, bodyTop - h * 0.12f),
+        size = Size(bodyWidth * 0.4f, h * 0.14f),
+        cornerRadius = CornerRadius(h * 0.03f),
+    )
+    // 분사점 — 노즐 우측으로 흩뿌림
+    val sx = bodyLeft + bodyWidth + w * 0.04f
+    val rng = kotlin.random.Random(7)
+    repeat(14) {
+        val px = sx + rng.nextFloat() * w * 0.30f
+        val py = h * 0.5f + (rng.nextFloat() - 0.5f) * h * 0.5f
+        drawCircle(
+            color = Color(0xFF26A69A).copy(alpha = 0.6f),
+            radius = (h * 0.035f).coerceAtLeast(1.2f),
+            center = Offset(px, py),
+        )
     }
 }
 

@@ -20,12 +20,14 @@
 - **구현**: `DrawingViewModel.guideCross/guideGrid(GuideGrid)`, `DrawingCanvas.drawGuides`,
   `GuideDropdownButton`(도구바 2번째 행, 가로 스크롤+fade), 미니 뷰엔 미표시.
 
-### 2. 에어브러시 (분사)
-- **개념**: 점을 흩뿌리는 스프레이 브러시.
-- **동기화 함정**: 난수 분사를 양쪽이 따로 굴리면 화면 불일치. **분사된 점 좌표를
-  stroke points 에 실어 보내거나** seed 공유 필요.
-- **난이도**: 중간. `BrushType` 추가 + StrokeRenderer 분기. 동기화는 좌표를 점으로
-  박으면 기존 경로 재사용.
+### 2. 에어브러시 (분사) — ✅ 구현 완료
+- **개념**: 점을 흩뿌리는 스프레이 브러시. `BrushType.Airbrush`.
+- **동기화 해법**: 분사점을 stroke 에 저장하지 않고, 렌더 시 `Random(stroke.id 해시)`
+  로 결정론 생성 → 매 프레임·양 단말 동일. StrokeId 가 이미 와이어 전송돼 멀티에서도
+  일치.
+- **구현**: `StrokeRenderer.drawAirbrush`(경로 보간 + 극좌표 분사, sqrt 균일 분포),
+  `BrushPreview`/`PenIllustration` 분사·스프레이캔 분기. PNG·동기화 자동.
+- **남은 과제**: 분사 stroke 多 누적 시 매 프레임 재계산 비용 → 비트맵 캐시 검토.
 
 ### 3. 번지는 효과 (수채/스머지)
 - **개념**: 가장자리가 번지는 붓. `BlurMaskFilter` / alpha gradient.
