@@ -255,6 +255,10 @@ class SessionManager private constructor(
         scope.launch {
             if (_state.value is SessionState.Connected) {
                 runCatching { transport.send(Frame.Bye("user-quit")) }
+                // Bye 는 Nearby 가 fire-and-forget 으로 큐잉 — 바로 stop() 하면 전송 전에 끊겨
+                // 상대(특히 모임 조인자)가 "방장 이탈"을 늦게 감지. 짧게 대기해 전송 시간 확보.
+                // (못 받아도 상대의 onDisconnected 가 백업으로 끊김을 감지.)
+                kotlinx.coroutines.delay(150)
             }
             // transport.stop() 가 onDisconnected 콜백을 비동기로 발화시키고, 그 결과
             // handleTransportState 가 Connected→Failed("disconnected") 로 잠깐 뒤집을 수 있다.

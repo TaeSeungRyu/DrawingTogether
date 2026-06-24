@@ -73,6 +73,10 @@ fun AppNavGraph(modifier: Modifier = Modifier) {
             DrawingScreen(
                 mode = mode,
                 onBack = { nav.popBackStack() },
+                onExitToHome = {
+                    // 모임 호스트 이탈 등 — 홈까지 한 번에 복귀.
+                    nav.popBackStack(Routes.Home, inclusive = false)
+                },
                 onReconnect = {
                     // 재연결 흐름. Duo 면 자동 호스트 광고 시작 (autoHost=true) — 사용자가
                     // 페어링 화면에서 다시 한 번 호스트 버튼을 탭하지 않아도 된다.

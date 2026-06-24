@@ -261,6 +261,7 @@ fun DrawingScreen(
     mode: DrawMode = DrawMode.Single,
     onBack: () -> Unit,
     onReconnect: () -> Unit,
+    onExitToHome: () -> Unit = {},
     modifier: Modifier = Modifier,
     vm: DrawingViewModel = viewModel(),
 ) {
@@ -332,9 +333,26 @@ fun DrawingScreen(
     // 작업하다가 도구바 "방 열기" 로 새 조인자를 받는 흐름을 쓴다.
     LaunchedEffect(sessionState) {
         if (sessionState is SessionState.Failed) {
+            val role = session.transport.localRole
             val isPartyHost = mode == DrawMode.Party &&
-                session.transport.localRole == com.rts.rys.ryy.drawingtogether.transport.Role.Host
+                role == com.rts.rys.ryy.drawingtogether.transport.Role.Host
+            // 모임 호스트: 마지막 조인자가 나가도 알림 없이 방 유지("방 열기"로 재모집).
             if (isPartyHost) return@LaunchedEffect
+
+            // 모임 조인자: 유일한 연결(호스트)이 끊긴 것 = 모임 종료. 재연결 대신 홈 복귀.
+            val isPartyJoiner = mode == DrawMode.Party &&
+                role == com.rts.rys.ryy.drawingtogether.transport.Role.Joiner
+            if (isPartyJoiner) {
+                Toast.makeText(
+                    context,
+                    "방장이 나가 모임이 종료됐어요.",
+                    Toast.LENGTH_LONG,
+                ).show()
+                onExitToHome()
+                return@LaunchedEffect
+            }
+
+            // 함께 모드(1:1): 끊김 알림 + 재연결.
             val result = snackbarHostState.showSnackbar(
                 message = "상대와의 연결이 끊겼어요. 그림은 그대로예요.",
                 actionLabel = "재연결",
