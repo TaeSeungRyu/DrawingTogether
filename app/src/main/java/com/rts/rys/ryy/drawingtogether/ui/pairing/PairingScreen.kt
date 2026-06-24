@@ -11,9 +11,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
@@ -145,6 +146,7 @@ fun PairingScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp),
         ) {
             Spacer(modifier = Modifier.height(8.dp))
@@ -208,7 +210,13 @@ fun PairingScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            // verticalScroll 안이라 weight 대신 최소 높이. 발견 리스트는 소수라 LazyColumn 대신
+            // 일반 Column(중첩 스크롤 회피).
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 160.dp),
+            ) {
                 when {
                     !permissionsGranted -> PermissionNotice(
                         denied = permissionDenied,
@@ -216,8 +224,8 @@ fun PairingScreen(
                     )
                     isAdvertising -> AdvertisingHint()
                     discovered.isEmpty() -> EmptyDiscoveryHint(transportState)
-                    else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(discovered, key = { it.endpointId }) { peer ->
+                    else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        discovered.forEach { peer ->
                             DiscoveredCard(
                                 nick = peer.nick,
                                 onClick = {

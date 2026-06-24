@@ -12,9 +12,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
@@ -150,6 +151,7 @@ fun PartyPairingScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp),
         ) {
             Spacer(modifier = Modifier.height(8.dp))
@@ -352,7 +354,11 @@ private fun ColumnScope.HostBody(
     )
     Spacer(modifier = Modifier.height(8.dp))
 
-    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 160.dp),
+    ) {
         if (connectedNicks.isEmpty()) {
             Column(
                 modifier = Modifier.fillMaxSize(),
@@ -369,8 +375,8 @@ private fun ColumnScope.HostBody(
                 )
             }
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(connectedNicks) { nick ->
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                connectedNicks.forEach { nick ->
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(
@@ -424,7 +430,11 @@ private fun ColumnScope.JoinerBody(
     )
     Spacer(modifier = Modifier.height(8.dp))
 
-    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 160.dp),
+    ) {
         when {
             !permissionsGranted -> PermissionNotice(
                 denied = permissionDenied,
@@ -445,8 +455,8 @@ private fun ColumnScope.JoinerBody(
                 )
             }
             discoveredNicks.isEmpty() -> EmptyDiscoveryHint(transportState)
-            else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(discoveredNicks, key = { it.endpointId }) { peer ->
+            else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                discoveredNicks.forEach { peer ->
                     Card(
                         onClick = { onPickPeer(peer.endpointId) },
                         modifier = Modifier.fillMaxWidth(),

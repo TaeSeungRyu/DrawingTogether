@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
@@ -79,13 +81,16 @@ fun HomeScreen(
 
     Box(modifier = modifier.fillMaxSize()) {
         PastelBlobBackground()
+        // verticalScroll — 가로 모드처럼 높이가 부족하면 버튼들이 화면 밖으로 밀려 선택 안 되던
+        // 문제 해결. 세로에서도 자연스럽게 위쪽 정렬 + 필요 시 스크롤.
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Spacer(modifier = Modifier.height(64.dp))
+            Spacer(modifier = Modifier.height(48.dp))
         Text(
             text = "Drawing Together",
             style = MaterialTheme.typography.headlineMedium,
@@ -108,8 +113,7 @@ fun HomeScreen(
                 .padding(vertical = 4.dp, horizontal = 8.dp),
         )
 
-        // 위 spacer가 버튼 그룹을 수직 중앙쪽으로 밀어냄. 아래 spacer와 비율이 같으면 정확한 중앙.
-        Spacer(modifier = Modifier.weight(1f))
+        Spacer(modifier = Modifier.height(24.dp))
 
         // 싱글모드 — 코랄(primary). 가장 강한 CTA.
         Button(
@@ -193,7 +197,7 @@ fun HomeScreen(
                 )
             }
         }
-            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.height(32.dp))
         }
 
         if (modalOpen) {
