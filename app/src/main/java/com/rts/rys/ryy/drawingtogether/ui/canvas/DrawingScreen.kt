@@ -546,10 +546,15 @@ fun DrawingScreen(
                 // 좁은 폭(예: 갤럭시 S21) 에서 액션이 겹치면 가로 스크롤로 풀어준다.
                 // weight(1f) — Phase 2에서 이 Row 뒤에 peer indicator를 두면 indicator는
                 // 우측에 고정되고 액션 행만 좌측에서 스크롤된다. (doc/ui-layout.md §4)
+                val actionsScroll = rememberScrollState()
                 Row(
                     modifier = Modifier
                         .weight(1f)
-                        .horizontalScroll(rememberScrollState()),
+                        .horizontalScroll(actionsScroll)
+                        .fadingEdgeHorizontal(
+                            leftFade = actionsScroll.canScrollBackward,
+                            rightFade = actionsScroll.canScrollForward,
+                        ),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     MergeBackgroundToggle(

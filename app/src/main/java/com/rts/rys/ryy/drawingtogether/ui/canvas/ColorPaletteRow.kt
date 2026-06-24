@@ -8,10 +8,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -23,6 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
 // 자주 쓰는 색 프리셋. 흑/백을 앞에 두고 무지개 + 회/갈색.
+// 사용자가 ColorPickerSheet 로 각 슬롯 색을 갱신 가능 — UserPaletteRepo 가 prefs 보관.
 val DefaultColorPalette: List<Int> = listOf(
     0xFF000000.toInt(), // black
     0xFFFFFFFF.toInt(), // white
@@ -47,30 +52,50 @@ fun ColorPaletteRow(
     onCustom: () -> Unit,
     modifier: Modifier = Modifier,
     presets: List<Int> = DefaultColorPalette,
+    // 편집 모드 — 슬롯 탭 시 onColor 대신 onEditSlot 호출.
+    editing: Boolean = false,
+    onToggleEdit: () -> Unit = {},
+    onEditSlot: (index: Int, currentArgb: Int) -> Unit = { _, _ -> },
+    onResetPalette: () -> Unit = {},
 ) {
+    val scrollState = rememberLazyListState()
     LazyRow(
-        modifier = modifier,
+        state = scrollState,
+        modifier = modifier.fadingEdgeHorizontal(
+            leftFade = scrollState.canScrollBackward,
+            rightFade = scrollState.canScrollForward,
+        ),
         contentPadding = PaddingValues(horizontal = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        items(presets) { argb ->
-            val selected = isPenSelected && argb == currentColor
+        itemsIndexed(presets) { index, argb ->
+            val selected = !editing && isPenSelected && argb == currentColor
             Box(
                 modifier = Modifier
                     .size(36.dp)
                     .clip(CircleShape)
                     .background(Color(argb))
                     .border(
-                        width = if (selected) 3.dp else 1.dp,
-                        color = if (selected) MaterialTheme.colorScheme.primary else Color.LightGray,
+                        width = if (selected || editing) 3.dp else 1.dp,
+                        color = when {
+                            selected -> MaterialTheme.colorScheme.primary
+                            editing -> MaterialTheme.colorScheme.tertiary
+                            else -> Color.LightGray
+                        },
                         shape = CircleShape,
                     )
-                    .clickable { onColor(argb) },
+                    .clickable {
+                        if (editing) onEditSlot(index, argb) else onColor(argb)
+                    },
             )
         }
-        item {
-            CustomColorButton(onClick = onCustom)
+        if (!editing) {
+            item { CustomColorButton(onClick = onCustom) }
+        }
+        item { EditToggleButton(editing = editing, onClick = onToggleEdit) }
+        if (editing) {
+            item { ResetButton(onClick = onResetPalette) }
         }
     }
 }
@@ -102,6 +127,50 @@ private fun CustomColorButton(onClick: () -> Unit) {
             imageVector = Icons.Default.Add,
             contentDescription = "사용자 정의 색상",
             tint = Color.White,
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
+
+@Composable
+private fun EditToggleButton(editing: Boolean, onClick: () -> Unit) {
+    val container = if (editing) MaterialTheme.colorScheme.tertiary
+                    else MaterialTheme.colorScheme.surfaceVariant
+    val content = if (editing) MaterialTheme.colorScheme.onTertiary
+                  else MaterialTheme.colorScheme.onSurfaceVariant
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(CircleShape)
+            .background(container)
+            .border(1.dp, Color.LightGray, CircleShape)
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = if (editing) Icons.Default.Check else Icons.Default.Edit,
+            contentDescription = if (editing) "편집 완료" else "팔레트 편집",
+            tint = content,
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
+
+@Composable
+private fun ResetButton(onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.errorContainer)
+            .border(1.dp, Color.LightGray, CircleShape)
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = Icons.Default.Refresh,
+            contentDescription = "기본 팔레트로 되돌리기",
+            tint = MaterialTheme.colorScheme.onErrorContainer,
             modifier = Modifier.size(20.dp),
         )
     }

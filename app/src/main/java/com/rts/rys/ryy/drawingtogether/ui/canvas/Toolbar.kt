@@ -13,17 +13,26 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.rts.rys.ryy.drawingtogether.drawing.model.BrushType
 import com.rts.rys.ryy.drawingtogether.drawing.model.ShapeMode
 import com.rts.rys.ryy.drawingtogether.drawing.model.ToolKind
 import com.rts.rys.ryy.drawingtogether.drawing.model.ToolSettings
+
+// ColorPickerSheet 의 두 가지 진입 케이스 — 임시 색(+ 버튼) vs 팔레트 슬롯 편집.
+private sealed class PickerTarget {
+    data object None : PickerTarget()
+    data object Temp : PickerTarget()
+    data class Slot(val index: Int, val current: Int) : PickerTarget()
+}
 
 @Composable
 fun Toolbar(
@@ -42,7 +51,14 @@ fun Toolbar(
     // 모임 모드 호스트가 새 조인자를 받기 위해 광고를 다시 켤 때. 호스트일 때만 노출.
     onOpenRoom: (() -> Unit)? = null,
 ) {
-    var colorPickerOpen by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val paletteRepo = remember { UserPaletteRepo.get(context) }
+    val palette by paletteRepo.palette.collectAsState()
+
+    // ColorPickerSheet 는 두 가지 케이스에서 띄움 — 임시 색 (+ 버튼) 또는 슬롯 편집.
+    // 어느 케이스인지 onConfirm 분기에 사용.
+    var pickerTarget by remember { mutableStateOf<PickerTarget>(PickerTarget.None) }
+    var paletteEditing by remember { mutableStateOf(false) }
     var brushSheetOpen by remember { mutableStateOf(false) }
 
     Surface(modifier = modifier, tonalElevation = 2.dp) {
@@ -52,7 +68,14 @@ fun Toolbar(
                 currentColor = tool.colorArgb,
                 isPenSelected = tool.kind == ToolKind.Pen,
                 onColor = onColor,
-                onCustom = { colorPickerOpen = true },
+                onCustom = { pickerTarget = PickerTarget.Temp },
+                presets = palette,
+                editing = paletteEditing,
+                onToggleEdit = { paletteEditing = !paletteEditing },
+                onEditSlot = { index, current ->
+                    pickerTarget = PickerTarget.Slot(index, current)
+                },
+                onResetPalette = { paletteRepo.resetToDefault() },
                 modifier = Modifier.fillMaxWidth(),
             )
 
@@ -135,14 +158,24 @@ fun Toolbar(
         }
     }
 
-    if (colorPickerOpen) {
+    val target = pickerTarget
+    if (target != PickerTarget.None) {
+        val initial = when (target) {
+            is PickerTarget.Slot -> target.current
+            PickerTarget.Temp -> tool.colorArgb
+            PickerTarget.None -> tool.colorArgb
+        }
         ColorPickerSheet(
-            initialColor = tool.colorArgb,
+            initialColor = initial,
             onConfirm = { argb ->
-                onColor(argb)
-                colorPickerOpen = false
+                when (val t = target) {
+                    is PickerTarget.Slot -> paletteRepo.updateSlot(t.index, argb)
+                    PickerTarget.Temp -> onColor(argb)
+                    PickerTarget.None -> Unit
+                }
+                pickerTarget = PickerTarget.None
             },
-            onDismiss = { colorPickerOpen = false },
+            onDismiss = { pickerTarget = PickerTarget.None },
         )
     }
 
