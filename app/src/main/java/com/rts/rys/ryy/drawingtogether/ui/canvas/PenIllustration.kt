@@ -27,8 +27,25 @@ fun PenIllustration(brush: BrushType, modifier: Modifier = Modifier) {
             BrushType.Highlighter -> drawHighlighter(w, h)
             BrushType.Crayon -> drawCrayon(w, h)
             BrushType.Airbrush -> drawSprayCan(w, h)
+            BrushType.Blur -> drawWaterDrop(w, h)
         }
     }
+}
+
+// 번짐 — 물방울 + 번진 후광.
+private fun DrawScope.drawWaterDrop(w: Float, h: Float) {
+    val cx = w * 0.5f
+    val cy = h * 0.5f
+    val r = minOf(w, h) * 0.22f
+    // 번진 후광 (점점 옅게 겹친 원).
+    for (i in 3 downTo 1) {
+        drawCircle(
+            color = Color(0xFF4FC3F7).copy(alpha = 0.12f),
+            radius = r * (1f + i * 0.35f),
+            center = Offset(cx, cy),
+        )
+    }
+    drawCircle(color = Color(0xFF29B6F6), radius = r, center = Offset(cx, cy))
 }
 
 // 스프레이 캔 — 둥근 몸통 + 노즐 + 분사점.

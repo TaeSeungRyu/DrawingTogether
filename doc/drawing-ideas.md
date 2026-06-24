@@ -29,12 +29,13 @@
   `BrushPreview`/`PenIllustration` 분사·스프레이캔 분기. PNG·동기화 자동.
 - **남은 과제**: 분사 stroke 多 누적 시 매 프레임 재계산 비용 → 비트맵 캐시 검토.
 
-### 3. 번지는 효과 (수채/스머지)
-- **개념**: 가장자리가 번지는 붓. `BlurMaskFilter` / alpha gradient.
-- **동기화**: `BrushType` 추가라 자동.
-- **주의**: blur 렌더 비용 큼 → 빽빽한 캔버스에서 프레임 드랍. 완료 stroke 비트맵
-  캐시(roadmap Phase 5 보류 항목)가 더 절실해짐.
-- **난이도**: 중간.
+### 3. 번지는 효과 (수채/스머지) — ✅ 구현 완료
+- **개념**: 가장자리가 번지는 붓. `BrushType.Blur`.
+- **구현**: `StrokeRenderer.drawBlurred` — `buildFreehandPath().asAndroidPath()` +
+  native `Paint` 에 `BlurMaskFilter(NORMAL)`, `drawIntoCanvas { nativeCanvas.drawPath }`.
+  `PngComposer` 의 ImageBitmap canvas 에서도 동작 → 화면=저장. 동기화 자동.
+  `BrushPreview`/`PenIllustration`(물방울) 분기. 실기기에서 blur 정상 표시 확인됨.
+- **남은 과제**: blur 렌더 비용 큼 → stroke 多 누적 시 비트맵 캐시 검토.
 
 ### 4. 스티커
 - **개념**: 이미지/도형을 캔버스에 배치, 이동·크기·회전.

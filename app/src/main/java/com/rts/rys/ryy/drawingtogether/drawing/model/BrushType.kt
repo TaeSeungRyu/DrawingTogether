@@ -67,6 +67,13 @@ enum class BrushType(
         alpha = 0.5f,
         widthScale = 1.8f,
     ),
+    Blur(
+        displayName = "번짐",
+        description = "가장자리가 번지는 수채 느낌",
+        capStyle = BrushCapStyle.Round,
+        alpha = 0.7f,
+        widthScale = 1.3f,
+    ),
 }
 
 enum class BrushCapStyle { Round, Square }

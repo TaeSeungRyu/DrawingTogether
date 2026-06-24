@@ -8,7 +8,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.asAndroidPath
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import com.rts.rys.ryy.drawingtogether.drawing.model.BrushCapStyle
 import com.rts.rys.ryy.drawingtogether.drawing.model.BrushType
 
@@ -74,6 +78,25 @@ fun BrushPreview(
         }
 
         val widthPx = (h * 0.22f * brush.widthScale).coerceAtLeast(2f)
+
+        if (brush == BrushType.Blur) {
+            // 번짐 미리보기 — native Paint + BlurMaskFilter.
+            val paint = android.graphics.Paint().apply {
+                isAntiAlias = true
+                style = android.graphics.Paint.Style.STROKE
+                strokeWidth = widthPx
+                strokeCap = android.graphics.Paint.Cap.ROUND
+                strokeJoin = android.graphics.Paint.Join.ROUND
+                this.color = color.copy(alpha = brush.alpha).toArgb()
+                maskFilter = android.graphics.BlurMaskFilter(
+                    (widthPx * 0.5f).coerceAtLeast(1f),
+                    android.graphics.BlurMaskFilter.Blur.NORMAL,
+                )
+            }
+            drawIntoCanvas { it.nativeCanvas.drawPath(path.asAndroidPath(), paint) }
+            return@Canvas
+        }
+
         val cap = if (brush.capStyle == BrushCapStyle.Square) StrokeCap.Square else StrokeCap.Round
         val join = if (brush.capStyle == BrushCapStyle.Square) StrokeJoin.Miter else StrokeJoin.Round
 

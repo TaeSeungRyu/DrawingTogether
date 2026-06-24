@@ -6,8 +6,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.asAndroidPath
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke as DrawStroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.IntSize
 import com.rts.rys.ryy.drawingtogether.drawing.model.BrushCapStyle
 import com.rts.rys.ryy.drawingtogether.drawing.model.BrushType
@@ -21,25 +25,36 @@ import com.rts.rys.ryy.drawingtogether.drawing.model.ToolSettings
 internal fun DrawScope.drawStroke(stroke: Stroke, canvasSize: IntSize, density: Float) {
     if (stroke.points.isEmpty() || canvasSize.width <= 0 || canvasSize.height <= 0) return
     when (stroke.tool.shape) {
-        ShapeMode.None ->
-            if (stroke.tool.brush == BrushType.Airbrush) drawAirbrush(stroke, canvasSize, density)
-            else drawFreehand(stroke, canvasSize, density)
+        ShapeMode.None -> when (stroke.tool.brush) {
+            BrushType.Airbrush -> drawAirbrush(stroke, canvasSize, density)
+            BrushType.Blur -> drawBlurred(stroke, canvasSize, density)
+            else -> drawFreehand(stroke, canvasSize, density)
+        }
         else -> drawShapeForm(stroke, canvasSize, density)
     }
 }
 
-private fun DrawScope.drawFreehand(stroke: Stroke, canvasSize: IntSize, density: Float) {
+// 폴리라인 Path 빌드 — drawFreehand / drawBlurred 공유.
+// 점이 1개면 같은 좌표로 lineTo 해서 round cap 점(또는 blur 점)이 찍히게 한다.
+private fun buildFreehandPath(stroke: Stroke, canvasSize: IntSize): Path {
     val w = canvasSize.width.toFloat()
     val h = canvasSize.height.toFloat()
-
-    val path = Path()
-    val first = stroke.points.first()
-    path.moveTo(first.x * w, first.y * h)
-    for (i in 1 until stroke.points.size) {
-        val p = stroke.points[i]
-        path.lineTo(p.x * w, p.y * h)
+    return Path().apply {
+        val first = stroke.points.first()
+        moveTo(first.x * w, first.y * h)
+        if (stroke.points.size == 1) {
+            lineTo(first.x * w, first.y * h)
+        } else {
+            for (i in 1 until stroke.points.size) {
+                val p = stroke.points[i]
+                lineTo(p.x * w, p.y * h)
+            }
+        }
     }
+}
 
+private fun DrawScope.drawFreehand(stroke: Stroke, canvasSize: IntSize, density: Float) {
+    val path = buildFreehandPath(stroke, canvasSize)
     val (cap, join) = capJoinFor(stroke.tool.brush)
     drawPath(
         path = path,
@@ -50,6 +65,27 @@ private fun DrawScope.drawFreehand(stroke: Stroke, canvasSize: IntSize, density:
             join = join,
         ),
     )
+}
+
+// 번짐 — Android BlurMaskFilter 로 가장자리를 부드럽게. Compose drawScope 에서 native
+// canvas 접근(drawIntoCanvas + nativeCanvas). PngComposer 의 ImageBitmap canvas 에서도 동작.
+private fun DrawScope.drawBlurred(stroke: Stroke, canvasSize: IntSize, density: Float) {
+    val androidPath = buildFreehandPath(stroke, canvasSize).asAndroidPath()
+    val widthPx = strokeWidthPxFor(stroke.tool, density)
+    val blurRadius = (widthPx * 0.5f).coerceAtLeast(1f)
+    val paint = android.graphics.Paint().apply {
+        isAntiAlias = true
+        style = android.graphics.Paint.Style.STROKE
+        strokeWidth = widthPx
+        strokeCap = android.graphics.Paint.Cap.ROUND
+        strokeJoin = android.graphics.Paint.Join.ROUND
+        color = colorFor(stroke.tool).toArgb()
+        maskFilter = android.graphics.BlurMaskFilter(
+            blurRadius,
+            android.graphics.BlurMaskFilter.Blur.NORMAL,
+        )
+    }
+    drawIntoCanvas { it.nativeCanvas.drawPath(androidPath, paint) }
 }
 
 // 에어브러시 — 경로를 따라 점을 흩뿌린다. 결정론적: seed = stroke.id 라 매 프레임/양 단말
