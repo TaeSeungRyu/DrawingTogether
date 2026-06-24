@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 세 물감 방울(코랄/민트/라벤더)이 서로 겹쳐 모인 클러스터 — "여럿이 함께" + 물감=그리기.
-     Candy Pop 테마 3색 그대로. 작은 런처 아이콘에서도 또렷한 단순 형태.
-     겹침 순서(뒤→앞): 그림자 → 라벤더 → 민트 → 코랄, 각 방울에 흰 하이라이트.
+<!-- 세 물감 방울(코랄/민트/라벤더)이 삼각으로 겹쳐 모인 클러스터 — "여럿이 함께" + 물감=그리기.
+     Candy Pop 테마 3색. 중심 코랄(54,41) / 민트(42,62) / 라벤더(66,62), 반지름 16, 균등 겹침.
+     겹침 순서(뒤→앞): 그림자 → 라벤더 → 민트 → 코랄, 각 방울 흰 하이라이트.
      adaptive-icon safe zone (중심 ±33dp) 안에 배치. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
@@ -9,38 +9,38 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- 클러스터 그림자 (살짝 아래) -->
+    <!-- 클러스터 그림자 (+1,+2 offset) -->
     <path
         android:fillColor="#1A000000"
-        android:pathData="M40,42 a15,15 0 1,0 30,0 a15,15 0 1,0 -30,0 z" />
+        android:pathData="M39,43 a16,16 0 1,0 32,0 a16,16 0 1,0 -32,0 z" />
     <path
         android:fillColor="#1A000000"
-        android:pathData="M30,63 a15,15 0 1,0 30,0 a15,15 0 1,0 -30,0 z" />
+        android:pathData="M27,64 a16,16 0 1,0 32,0 a16,16 0 1,0 -32,0 z" />
     <path
         android:fillColor="#1A000000"
-        android:pathData="M50,63 a15,15 0 1,0 30,0 a15,15 0 1,0 -30,0 z" />
+        android:pathData="M51,64 a16,16 0 1,0 32,0 a16,16 0 1,0 -32,0 z" />
 
-    <!-- 라벤더 방울 (우하) -->
+    <!-- 라벤더 방울 (우하, 중심 66,62) -->
     <path
         android:fillColor="#C2B0FF"
-        android:pathData="M49,61 a15,15 0 1,0 30,0 a15,15 0 1,0 -30,0 z" />
+        android:pathData="M50,62 a16,16 0 1,0 32,0 a16,16 0 1,0 -32,0 z" />
     <path
         android:fillColor="#66FFFFFF"
-        android:pathData="M58,55 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0 z" />
+        android:pathData="M60,55 a4.5,4.5 0 1,0 9,0 a4.5,4.5 0 1,0 -9,0 z" />
 
-    <!-- 민트 방울 (좌하) -->
+    <!-- 민트 방울 (좌하, 중심 42,62) -->
     <path
         android:fillColor="#6FD0BC"
-        android:pathData="M29,61 a15,15 0 1,0 30,0 a15,15 0 1,0 -30,0 z" />
+        android:pathData="M26,62 a16,16 0 1,0 32,0 a16,16 0 1,0 -32,0 z" />
     <path
         android:fillColor="#66FFFFFF"
-        android:pathData="M38,55 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0 z" />
+        android:pathData="M36,55 a4.5,4.5 0 1,0 9,0 a4.5,4.5 0 1,0 -9,0 z" />
 
-    <!-- 코랄 방울 (위 중앙) -->
+    <!-- 코랄 방울 (위 중앙, 중심 54,41) -->
     <path
         android:fillColor="#FF8FA3"
-        android:pathData="M39,40 a15,15 0 1,0 30,0 a15,15 0 1,0 -30,0 z" />
+        android:pathData="M38,41 a16,16 0 1,0 32,0 a16,16 0 1,0 -32,0 z" />
     <path
         android:fillColor="#66FFFFFF"
-        android:pathData="M48,34 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0 z" />
+        android:pathData="M48,34 a4.5,4.5 0 1,0 9,0 a4.5,4.5 0 1,0 -9,0 z" />
 </vector>
