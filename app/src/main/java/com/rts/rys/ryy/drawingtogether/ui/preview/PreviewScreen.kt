@@ -57,7 +57,13 @@ fun PreviewScreen(
 
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
-            title = {},
+            title = {
+                Text(
+                    text = work?.name?.takeIf { it.isNotBlank() } ?: "저장된 작품",
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                )
+            },
             navigationIcon = {
                 IconButton(onClick = onBack) {
                     Icon(
