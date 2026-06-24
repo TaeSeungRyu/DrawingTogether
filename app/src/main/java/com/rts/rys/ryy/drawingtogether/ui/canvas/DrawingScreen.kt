@@ -8,7 +8,6 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -698,6 +697,7 @@ fun DrawingScreen(
                         }
                     }
                 } else null,
+                fillHeight = isLandscape,
                 modifier = m,
             )
         }
@@ -705,14 +705,9 @@ fun DrawingScreen(
         if (isLandscape) {
             Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 canvasArea(Modifier.weight(1f).fillMaxHeight())
-                Box(
-                    modifier = Modifier
-                        .width(300.dp)
-                        .fillMaxHeight()
-                        .verticalScroll(rememberScrollState()),
-                ) {
-                    toolbar(Modifier.fillMaxWidth())
-                }
+                // 도구바가 패널 높이를 꽉 채움(배경 여백 방지). 콘텐츠 넘침은 Toolbar 내부
+                // Column 의 verticalScroll 이 처리.
+                toolbar(Modifier.width(300.dp).fillMaxHeight())
             }
         } else {
             canvasArea(Modifier.weight(1f).fillMaxWidth())

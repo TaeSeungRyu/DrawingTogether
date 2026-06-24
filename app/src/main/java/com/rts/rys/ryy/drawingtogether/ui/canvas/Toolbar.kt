@@ -1,10 +1,12 @@
 package com.rts.rys.ryy.drawingtogether.ui.canvas
 
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -56,6 +58,9 @@ fun Toolbar(
     onSync: (() -> Unit)? = null,
     // 모임 모드 호스트가 새 조인자를 받기 위해 광고를 다시 켤 때. 호스트일 때만 노출.
     onOpenRoom: (() -> Unit)? = null,
+    // 가로 모드 우측 패널 — 세로 높이를 꽉 채우고 도구들을 균등 분산(SpaceEvenly).
+    // 세로 모드(false)는 콘텐츠 높이 wrap + 필요 시 스크롤.
+    fillHeight: Boolean = false,
 ) {
     val context = LocalContext.current
     val paletteRepo = remember { UserPaletteRepo.get(context) }
@@ -68,7 +73,17 @@ fun Toolbar(
     var brushSheetOpen by remember { mutableStateOf(false) }
 
     Surface(modifier = modifier, tonalElevation = 2.dp) {
-        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+        // 가로(fillHeight): 패널 높이 꽉 채우고 도구 균등 분산. 세로: wrap + 스크롤.
+        Column(
+            modifier = Modifier
+                .then(
+                    if (fillHeight) Modifier.fillMaxHeight()
+                    else Modifier.verticalScroll(rememberScrollState()),
+                )
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = if (fillHeight) Arrangement.SpaceEvenly
+            else Arrangement.spacedBy(10.dp),
+        ) {
 
             ColorPaletteRow(
                 currentColor = tool.colorArgb,
@@ -84,8 +99,6 @@ fun Toolbar(
                 onResetPalette = { paletteRepo.resetToDefault() },
                 modifier = Modifier.fillMaxWidth(),
             )
-
-            Spacer(modifier = Modifier.height(10.dp))
 
             val toolsScroll = rememberScrollState()
             val toolsFadeColor = MaterialTheme.colorScheme.surface
@@ -120,8 +133,6 @@ fun Toolbar(
                     onSelectGrid = onSelectGuideGrid,
                 )
             }
-
-            Spacer(modifier = Modifier.height(6.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
