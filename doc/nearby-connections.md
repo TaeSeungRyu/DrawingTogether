@@ -17,12 +17,12 @@
 
 ## 2. Strategy
 
-모드별로 다른 strategy 사용:
+모드별로 다른 strategy 사용 (`TransportMode` enum). **serviceId 도 모드별로 분리**해 두 모드가 서로 발견되지 않도록 격리:
 
-| 앱 모드 | Strategy | 위상 |
-|---|---|---|
-| 멀티 (1:1) — 현재 | `P2P_POINT_TO_POINT` | 1:1 양방향 |
-| 다중 (1:N, Phase 4 예정) | `P2P_STAR` | 호스트 1 + 조인자 최대 3 |
+| 앱 모드 | `TransportMode` | Strategy | serviceId | 위상 |
+|---|---|---|---|---|
+| 함께 (1:1) | `Duo` | `P2P_POINT_TO_POINT` | `...drawingtogether.duo` | 1:1 양방향 |
+| 모임 (1:N) | `Party` | `P2P_STAR` | `...drawingtogether.party` | 호스트 1 + 조인자 최대 3 |
 
 `P2P_STAR` 의 비대칭:
 - 광고자(호스트)는 여러 발견자(조인자) 와 연결 가능
@@ -91,10 +91,11 @@ ConnectionsClient.startAdvertising(
         └──── 이제 sendPayload / onPayloadReceived 양방향 ────┘
 ```
 
-- **serviceId**: 앱 전용 고정 문자열 (`com.rts.rys.ryy.drawingtogether`). 같은 ID끼리만 발견됨.
+- **serviceId**: 모드별 고정 문자열 (`...duo` / `...party`). 같은 ID끼리만 발견 → 함께/모임 모드 단말이 서로 안 잡힘.
 - **name**: 사용자 닉네임 — 발견 시 표시용.
-- **역할 비대칭이지만, 연결 후엔 대칭**: 호스트/조인 구분은 협상용. 드로잉 권한은 동등.
-- **재연결**: 자동 시도 안 함. 끊기면 사용자에게 알리고 명시적 재연결.
+- **함께(Duo)**: 한 쪽만 호스트로 광고, 다른 쪽 검색. 연결 후 대칭(공유 캔버스).
+- **모임(Party)**: 호스트는 첫 연결 후에도 광고 유지(최대 3명 더 수용), 도구바 "방 열기" 로 광고 재개 가능. `onConnectionInitiated` 에서 3명 초과면 자동 reject.
+- **재연결**: 자동 시도 안 함. 끊기면 알리고 명시적 재연결. (함께 모드 "재연결" 은 진입 후 100ms 뒤 자동 호스트 광고.)
 
 ## 5. Payload 타입
 
@@ -102,9 +103,11 @@ Nearby는 3가지 페이로드 타입 제공 — 우리는 둘만 사용:
 
 | 타입 | 최대 크기 | 우리 사용처 |
 |---|---|---|
-| `BYTES` | 32 KB | HELLO, EVENT, SNAPSHOT, BYE 등 모든 CBOR 메시지 |
+| `BYTES` | 32 KB | Hello, Event, Snapshot(메타), PhotoMeta, Bye 등 모든 CBOR Frame |
 | `STREAM` | 무제한 | 사용 안 함 |
-| `FILE` | 무제한 | 사진(JPEG) 전송 |
+| `FILE` | 무제한 | 사진(JPEG) + **스냅샷 stroke 목록(CBOR)** 전송 |
+
+> stroke 목록을 FILE 로 보내는 이유: 빽빽한 캔버스의 stroke 목록이 BYTES 32KB 한도를 넘으면 Nearby 가 조용히 실패하기 때문 (Phase 3.5-A). FILE 도착은 `onPayloadTransferUpdate` 의 `SUCCESS` 시점에 처리 — `onPayloadReceived` 시점엔 파일이 아직 안 채워져 부분 읽힘 발생.
 
 ### BYTES 전송 (CBOR 메시지)
 
@@ -149,16 +152,32 @@ client.sendPayload(endpointId, payload)
 ```kotlin
 interface Transport {
     val state: StateFlow<TransportState>
-    val incoming: SharedFlow<Frame>
-    suspend fun start(role: Role)              // Host or Joiner
-    suspend fun send(frame: Frame)             // BYTES
-    suspend fun sendFile(uri: Uri): Long       // FILE → returns payload id
+    val discovered: StateFlow<List<DiscoveredPeer>>
+    val pending: StateFlow<PendingConnection?>       // 인증 토큰 컨펌 대기
+    val connectedPeers: StateFlow<List<ConnectedPeer>>
+    val incoming: SharedFlow<InboundFrame>           // (endpointId, frame)
+    val incomingFiles: SharedFlow<IncomingFile>      // (endpointId, payloadId, uri)
+    val fileTransfers: SharedFlow<FileTransferEvent> // 진행률
+    val localRole: Role?                             // 호스트/조인자 — UI 분기용
+
+    fun setLocalNick(nick: String)
+    suspend fun startAdvertising()
+    suspend fun startDiscovery()
+    fun stopAdvertising()                            // 광고만 중단 (연결 유지) — "방 열기" 토글
+    suspend fun requestConnection(endpointId: String)
+    suspend fun acceptPending()
+    suspend fun rejectPending()
+    suspend fun send(frame: Frame)                   // 모든 연결 피어에 broadcast
+    suspend fun sendTo(endpointId: String, frame: Frame)   // unicast (relay/동기화)
+    suspend fun sendFile(uri: Uri): Long             // FILE broadcast
+    suspend fun sendFileTo(endpointId: String, uri: Uri): Long  // FILE unicast
     fun stop()
 }
 ```
 
-- 구현: `NearbyTransport` 한 개. Phase 2에서 작성.
-- 테스트: 페이크 `Transport`로 세션/프로토콜 로직 격리.
+- 구현: `NearbyTransport(context, mode)` — `TransportMode` 로 serviceId/Strategy 결정.
+- `send`/`sendFile` 은 `connectedPeers` 전체에 broadcast (1:1 에선 자동으로 1명). `sendTo`/`sendFileTo` 는 호스트 relay·타겟 동기화용 unicast.
+- 테스트: 페이크 `Transport`로 세션/프로토콜 로직 격리 가능.
 
 ## 9. 테스트
 

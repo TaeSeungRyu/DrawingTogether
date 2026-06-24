@@ -124,8 +124,8 @@ Canvas(
 | 경로 | 구현 |
 |---|---|
 | **사진 선택** | Android `PhotoPicker` API (`ActivityResultContracts.PickVisualMedia`) — 권한 불필요 |
-| **사진 촬영** | `CameraX` 또는 `ActionImageCapture` 인텐트 — 카메라 권한 필요 |
-| **원격 수신** (Phase 3) | Nearby Connections `Payload.Type.FILE` → 파일 경로 → 디코딩 |
+| **사진 촬영** | `ActivityResultContracts.TakePicture` (시스템 카메라 앱) — **CAMERA 권한 미선언**, 런타임 프롬프트 없음 |
+| **원격 수신** | Nearby Connections `Payload.Type.FILE` → `onPayloadTransferUpdate` SUCCESS 시점에 디코딩 |
 
 세 경로 모두 결과는 `BackgroundImage(bitmap, widthPx, heightPx, source)`를 만들어 `canvas.setBackground(image)` 호출.
 
@@ -135,7 +135,7 @@ Canvas(
 
 ## 6. 되돌리기
 
-- 자기(local author) 획만 되돌리기 가능. 상대 획은 못 건드림 → 분쟁 회피.
+- **함께 그리기 단일 모드 (현재)**: `Undo`/`Clear`/지우개가 `authorId` 로 거르지 않음 — 함께 모드에선 자기·상대 stroke 모두 되돌리기/삭제 가능(공유 캔버스, collaborative undo). 모임 모드는 자기 캔버스만 영향(미니 뷰는 read-only). (author-locked "따라 그리기" 옵션은 Phase 6 보류.)
 - `Undo` 이벤트는 `strokeId` 지정 방식. 시퀀스 기반 "마지막 N개"는 협업에서 의미 흔들리므로 피함.
 - 다시 실행(redo)은 미지원 (필요해지면 별도 스택).
 - 사진 자체는 되돌리기 대상 아님 — 별도 "사진 제거" 액션.
@@ -146,7 +146,7 @@ Canvas(
 - `strokeWidthDp`는 dp 단위로 송신. 수신 측에서 자기 `density`로 px 환산.
 - 색은 ARGB Int로 그대로 전송 (32-bit 고정 폭).
 
-## 8. PNG 내보내기 (Phase 5)
+## 8. PNG 내보내기 (구현 완료 — `works/PngComposer`)
 
 ```kotlin
 fun exportPng(state: CanvasState, density: Float): Bitmap {
@@ -162,6 +162,7 @@ fun exportPng(state: CanvasState, density: Float): Bitmap {
 }
 ```
 
-- 렌더링 코드는 화면용과 동일 — 외부 `Canvas` 인자만 받게 살짝 일반화.
-- `MediaStore.Images`로 저장 → 사용자 갤러리에 등장.
+- 렌더링은 화면용과 동일한 `StrokeRenderer.drawStroke` 재사용 (`CanvasDrawScope` + `ImageBitmap`). 완료된 stroke 만 합성 (진행 중/커서 제외).
+- 앱 내부 저장: `WorkStore.save` → `filesDir/works/<id>.png` + `.meta`. "최근 작업" 모달에 노출, 최대 100개.
+- 외부 갤러리: `WorkStore.exportToGallery` → `MediaStore.Images` (`Pictures/DrawingTogether`). `IS_PENDING` 패턴 + `MediaScannerConnection.scanFile` 로 갤러리 즉시 반영. 미리보기 화면의 "저장"/"공유" 액션에서 호출.
 - 진행 중 stroke는 export에 포함 안 됨 (사용자가 export 누르는 시점엔 들고 있던 손가락 떼는 것이 자연).
