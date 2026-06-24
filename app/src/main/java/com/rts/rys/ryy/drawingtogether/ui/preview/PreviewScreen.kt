@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -104,19 +105,19 @@ fun PreviewScreen(
             contentAlignment = Alignment.Center,
         ) {
             val current = bitmap
-            if (current != null) {
-                Image(
+            when {
+                current != null -> Image(
                     bitmap = current,
                     contentDescription = "저장된 작품",
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxSize(),
                 )
-            } else if (!file.exists()) {
-                Text(
+                !file.exists() -> Text(
                     text = "작품을 찾을 수 없어요",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                else -> CircularProgressIndicator()
             }
         }
     }

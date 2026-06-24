@@ -165,7 +165,12 @@ fun HomeScreen(
         if (modalOpen) {
             RecentWorksModal(
                 works = works,
-                onWorkClick = onWorkClick,
+                onWorkClick = { id ->
+                    // modal 즉시 dismiss 트리거 — 안 그러면 ModalBottomSheet 의 slide-down 이
+                    // 끝날 때까지 PreviewScreen 이 뒤에 가려 보인다.
+                    modalOpen = false
+                    onWorkClick(id)
+                },
                 onDismiss = { modalOpen = false },
             )
         }
