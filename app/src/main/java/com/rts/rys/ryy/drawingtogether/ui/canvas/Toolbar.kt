@@ -1,5 +1,6 @@
 package com.rts.rys.ryy.drawingtogether.ui.canvas
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -45,6 +47,10 @@ fun Toolbar(
     onStrokeWidth: (Float) -> Unit,
     onUndo: () -> Unit,
     onClear: () -> Unit,
+    guideCross: Boolean = false,
+    guideGrid: GuideGrid = GuideGrid.None,
+    onToggleGuideCross: () -> Unit = {},
+    onSelectGuideGrid: (GuideGrid) -> Unit = {},
     modifier: Modifier = Modifier,
     // null 이면 버튼 숨김 — 싱글 모드 또는 미연결 상태.
     onSync: (() -> Unit)? = null,
@@ -81,8 +87,17 @@ fun Toolbar(
 
             Spacer(modifier = Modifier.height(10.dp))
 
+            val toolsScroll = rememberScrollState()
+            val toolsFadeColor = MaterialTheme.colorScheme.surface
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(toolsScroll)
+                    .fadingEdgeHorizontal(
+                        leftFade = toolsScroll.canScrollBackward,
+                        rightFade = toolsScroll.canScrollForward,
+                        fadeColor = toolsFadeColor,
+                    ),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -97,6 +112,12 @@ fun Toolbar(
                 EraserToggle(
                     selected = tool.kind == ToolKind.Eraser,
                     onClick = onEraser,
+                )
+                GuideDropdownButton(
+                    cross = guideCross,
+                    grid = guideGrid,
+                    onToggleCross = onToggleGuideCross,
+                    onSelectGrid = onSelectGuideGrid,
                 )
             }
 

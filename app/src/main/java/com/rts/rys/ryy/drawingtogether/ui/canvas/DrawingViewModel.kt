@@ -33,6 +33,13 @@ enum class CanvasRouting {
     PerPeer,
 }
 
+// 격자 안내선 종류. cells = 한 변의 칸 수 (6×6, 18×18). None 은 격자 없음.
+enum class GuideGrid(val cells: Int, val label: String) {
+    None(0, "없음"),
+    Cells6(6, "격자 6×6"),
+    Cells18(18, "격자 18×18"),
+}
+
 class DrawingViewModel : ViewModel() {
     val canvas = CanvasState()
 
@@ -58,6 +65,18 @@ class DrawingViewModel : ViewModel() {
 
     var tool by mutableStateOf(ToolSettings.defaultPen())
         private set
+
+    // 안내선(가이드라인) — 로컬 화면 보조선. 동기화/저장에 미포함 (outbound 발화 없음).
+    var guideCross by mutableStateOf(false)
+        private set
+    var guideGrid by mutableStateOf(GuideGrid.None)
+        private set
+
+    fun toggleGuideCross() { guideCross = !guideCross }
+    // 같은 격자를 다시 누르면 끔, 다른 격자면 전환 (라디오처럼 택1).
+    fun selectGuideGrid(grid: GuideGrid) {
+        guideGrid = if (guideGrid == grid) GuideGrid.None else grid
+    }
 
     // 로컬에서 발생한 모든 DrawingEvent. DrawingScreen 이 collect 해서
     // 함께 모드 연결 중이면 Frame.Event 로 송신. 함께 모드 아니면 그냥 흘려보냄.

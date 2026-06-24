@@ -38,6 +38,8 @@ fun DrawingCanvas(
     onStrokeAppend: (StrokeId, List<DrawPoint>) -> Unit,
     onStrokeEnd: (StrokeId) -> Unit,
     modifier: Modifier = Modifier,
+    guideCross: Boolean = false,
+    guideGridCells: Int = 0,
 ) {
     val density = LocalDensity.current.density
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
@@ -98,10 +100,43 @@ fun DrawingCanvas(
         state.strokes.forEach { drawStroke(it, canvasSize, density) }
         // 3. 진행 중 stroke
         state.openStrokes.values.forEach { drawStroke(it, canvasSize, density) }
-        // 4. 커서 인디케이터
+        // 4. 안내선 (stroke 위, 커서 아래) — 로컬 보조선. 저장/동기화엔 미포함.
+        drawGuides(canvasSize, density, guideCross, guideGridCells)
+        // 5. 커서 인디케이터
         cursor?.let { pos ->
             drawBrushIndicator(center = pos, tool = tool, density = density)
         }
+    }
+}
+
+// 안내선 오버레이 — 격자(gridCells×gridCells 칸) + 중앙 십자선. 독립 토글.
+// gridCells = 한 변의 칸 수 (예: 6 → 6×6 칸, 내부 5선씩). 0 이면 격자 없음.
+// canvasSize 기준 절대 px 로 그림. 반투명 회색, 얇은 선.
+private fun DrawScope.drawGuides(
+    canvasSize: IntSize,
+    density: Float,
+    cross: Boolean,
+    gridCells: Int,
+) {
+    if (canvasSize.width <= 0 || canvasSize.height <= 0) return
+    val w = canvasSize.width.toFloat()
+    val h = canvasSize.height.toFloat()
+    val thin = 1f * density
+    val gridColor = Color.Gray.copy(alpha = 0.30f)
+    val crossColor = Color.Gray.copy(alpha = 0.55f)
+
+    if (gridCells > 1) {
+        // n×n 칸 → 내부 (n-1) 선씩.
+        for (i in 1 until gridCells) {
+            val x = w * i / gridCells
+            drawLine(gridColor, Offset(x, 0f), Offset(x, h), strokeWidth = thin)
+            val y = h * i / gridCells
+            drawLine(gridColor, Offset(0f, y), Offset(w, y), strokeWidth = thin)
+        }
+    }
+    if (cross) {
+        drawLine(crossColor, Offset(w / 2f, 0f), Offset(w / 2f, h), strokeWidth = thin)
+        drawLine(crossColor, Offset(0f, h / 2f), Offset(w, h / 2f), strokeWidth = thin)
     }
 }
 

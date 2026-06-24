@@ -675,6 +675,10 @@ fun DrawingScreen(
             onStrokeWidth = vm::setStrokeWidth,
             onUndo = vm::undoLastLocal,
             onClear = vm::clearAll,
+            guideCross = vm.guideCross,
+            guideGrid = vm.guideGrid,
+            onToggleGuideCross = vm::toggleGuideCross,
+            onSelectGuideGrid = vm::selectGuideGrid,
             // 동기화 버튼은 Connected 일 때만 노출. 모드별 다이얼로그 분기:
             //  - Duo: 바로 컨펌 (1:1 이라 상대 1명 확정)
             //  - Party: 피어 피커 (target 선택) → 컨펌
@@ -918,6 +922,8 @@ private fun MyCanvasContent(vm: DrawingViewModel) {
         onStrokeAppend = vm::strokeAppend,
         onStrokeEnd = vm::strokeEnd,
         modifier = canvasModifier,
+        guideCross = vm.guideCross,
+        guideGridCells = vm.guideGrid.cells,
     )
 }
 
