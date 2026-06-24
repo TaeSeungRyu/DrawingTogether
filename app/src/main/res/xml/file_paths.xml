@@ -4,4 +4,6 @@
     <cache-path name="camera_captures" path="captures/" />
     <!-- "동기화" 시 bitmap → JPEG 변환 임시 파일을 두는 캐시 영역. -->
     <cache-path name="snapshots" path="snapshots/" />
+    <!-- 저장된 작품 PNG 공유용. WorkStore.shareUriFor 가 FileProvider URI 생성. -->
+    <files-path name="works" path="works/" />
 </paths>
