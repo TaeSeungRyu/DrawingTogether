@@ -39,7 +39,7 @@
 
 ```
 ┌──────────────────────────────────────┐
-│ ←  📷사진  📸촬영  ⤴PNG       ✕제거 │ ← TopAppBar (56dp)
+│ ←   [📷사진][📸촬영][🗑제거][⤓저장]    │ ← TopAppBar (56dp) — 아이콘+작은 라벨
 ├──────────────────────────────────────┤
 │                                      │
 │                                      │
@@ -61,13 +61,20 @@
 
 ### TopAppBar 액션
 
-| 액션 | 동작 | Phase | 가시성 | 색 |
-|---|---|---|---|---|
-| ← | 홈으로 (백 스택 pop) | 1 | 항상 | 기본 |
-| 사진 | Android PhotoPicker — 갤러리 선택, 권한 불필요 | 1.5 | 항상 | primaryContainer |
-| 촬영 | `ACTION_IMAGE_CAPTURE` 인텐트(FileProvider URI), CAMERA 권한 미선언 | 1.5 | 항상 | tertiaryContainer |
-| 제거 | `canvas.setBackground(null)` | 1.5 | 사진 있을 때만 | errorContainer |
-| 저장 | `PngComposer.compose` → `WorkStore.save` → Toast | 1.6 | 항상 | secondaryContainer |
+액션은 **아이콘 + 작은 라벨** 버튼(`TopActionButton`). Material 확장 아이콘 의존성 없이
+직접 그린 글리프(`PhotoGlyph`/`CameraGlyph`/`TrashGlyph`/`SaveGlyph`, 하단 도구 줄과 같은 방식).
+좁은 폭 대비 가로 스크롤(+페이드) 유지.
+
+| 액션 | 글리프 | 동작 | Phase | 가시성 | 색 |
+|---|---|---|---|---|---|
+| ← | ArrowBack | 홈으로 (백 스택 pop) | 1 | 항상 | 기본 |
+| 사진 | 액자+해+산 | Android PhotoPicker — 갤러리 선택, 권한 불필요 | 1.5 | 항상 | primaryContainer |
+| 촬영 | 카메라 | `ACTION_IMAGE_CAPTURE` 인텐트(FileProvider URI), CAMERA 권한 미선언 | 1.5 | 항상 | tertiaryContainer |
+| 제거 | 휴지통 | `canvas.setBackground(null)` | 1.5 | 사진 있을 때만 | errorContainer |
+| 저장 | 다운로드 화살표 | `PngComposer.compose` → `WorkStore.save` → Toast | 1.6 | 항상 | secondaryContainer |
+
+> **배경 합치기 토글**은 상단 바에서 빼고 **저장 다이얼로그**로 이동(저장 시에만 의미). 항상
+> 노출되며 함께 모드(Duo) 연결 중이면 `Frame.MergeBackground` 로 동기화. 모임 모드는 자기만(브로드캐스트 X).
 
 ### 캔버스 영역
 
@@ -78,7 +85,7 @@
 
 ```
 ┌──────────────────────────────────────┐
-│ ←  📷사진  📸촬영  ⤴PNG  ✕제거        │ ← TopAppBar (indicator 없음)
+│ ←   [📷사진][📸촬영][🗑제거][⤓저장]    │ ← TopAppBar (indicator 없음)
 ├──────────────────────────────────────┤
 │                              [회색 내이름]│ ← 연결 시 캔버스 우측 상단 닉네임 칩
 │        [Canvas — 양쪽 동기화]          │
@@ -123,7 +130,7 @@ actions = {
 **참가자 3명 (가득 찬 세션)**
 ```
 ┌──────────────────────────────────────┐
-│ ← [배경합치기] [사진] [촬영] [저장]     │ TopAppBar
+│ ←   [📷사진][📸촬영][🗑제거][⤓저장]    │ TopAppBar (아이콘+라벨)
 ├──────────────────────────────────────┤
 │                          [회색 내이름] │ 연결 시 닉네임 칩
 │        [내 캔버스 — 메인]             │ 입력 활성
