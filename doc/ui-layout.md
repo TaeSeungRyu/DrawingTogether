@@ -91,27 +91,21 @@
 
 ### 액션 영역 레이아웃 (TopAppBar `actions`)
 
-좁은 폰(예: 갤럭시 S21, 360dp)에서 액션이 한 줄에 다 안 들어가는 문제는 **가로 스크롤 + peer indicator 고정** 으로 해결한다. 연결 상태는 항상 보여야 하므로 같은 스크롤 그룹에 두면 안 됨.
+좁은 폰(예: 갤럭시 S21, 360dp)에서 액션이 한 줄에 다 안 들어가는 문제는 **가로 스크롤** 로 해결한다.
 
 ```kotlin
 actions = {
     Row(modifier = Modifier.weight(1f).horizontalScroll(...)) {
         // 배경합치기 토글, 사진, 촬영, 제거, 저장
     }
-    PeerIndicator(...)   // Phase 2 — 항상 우측 고정
 }
 ```
 
-싱글 모드는 `PeerIndicator` 호출이 없어 weight(1f) Row가 액션 영역 전체를 차지. 함께 모드는 indicator가 우측 슬롯을 차지하고 액션 행이 좁아진 만큼 스크롤로 흡수.
+### 연결 상태 표시 — 캔버스 내 닉네임
 
-### Peer Indicator 상태
-
-| 상태 | 아이콘 | 의미 |
-|---|---|---|
-| Connected | 🟢 | 정상 동기화 중 |
-| Transferring | 🟡 | 사진 전송 진행 중 (진행률 같이 표시) |
-| Slow | 🟠 | PING 응답 지연 |
-| Disconnected | 🔴 | 끊김 — 재연결 다이얼로그 |
+상단 바의 peer indicator(상대 닉네임 + 🟢)는 제거됨. 대신 **연결되면 내 캔버스 우측 상단에
+내 닉네임을 회색 텍스트로** 표시한다(`MyCanvasContent` 의 `selfNick` 오버레이). `pointerInput`
+이 없어 그리기 터치에 영향 없음. 싱글 모드(미연결)는 표시하지 않는다.
 
 ## 5. 드로잉 화면 — 모임 모드 (Phase 4 예정)
 

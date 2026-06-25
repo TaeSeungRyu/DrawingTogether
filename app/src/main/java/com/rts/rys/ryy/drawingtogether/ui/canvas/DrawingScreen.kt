@@ -7,6 +7,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -293,6 +294,9 @@ fun DrawingScreen(
     }
     val session = remember(transportMode) { SessionManager.get(context, transportMode) }
     val sessionState by session.state.collectAsState()
+    // 연결되면 캔버스 우측 상단에 회색으로 표시할 내 닉네임. 미연결(싱글 등)이면 null.
+    val myNick by session.nick.collectAsState()
+    val canvasSelfNick = if (sessionState is SessionState.Connected) myNick.ifBlank { null } else null
 
     // Phase 4-B: 발신 DrawingEvent.authorId 를 실제 설치 UUID 로 박는다.
     // 1:1 함께 모드에서도 정확한 작성자 식별 — 싱글 모드는 Pairing 거치지 않고 진입이라
@@ -663,11 +667,6 @@ fun DrawingScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                 }
-                // Phase 2 — 함께 모드 연결 상태 표시. weight(1f) Row 다음이라 우측에 고정.
-                val s = sessionState
-                if (s is SessionState.Connected) {
-                    PeerIndicator(nick = s.remoteNick)
-                }
             },
         )
 
@@ -687,6 +686,7 @@ fun DrawingScreen(
                     vm = vm,
                     peers = peers,
                     isLandscape = isLandscape,
+                    selfNick = canvasSelfNick,
                     modifier = m.background(MaterialTheme.colorScheme.surfaceVariant),
                 )
             } else {
@@ -694,7 +694,7 @@ fun DrawingScreen(
                     modifier = m.background(MaterialTheme.colorScheme.surfaceVariant),
                     contentAlignment = Alignment.Center,
                 ) {
-                    MyCanvasContent(vm = vm)
+                    MyCanvasContent(vm = vm, selfNick = canvasSelfNick)
                 }
             }
         }
@@ -954,27 +954,49 @@ fun DrawingScreen(
 // (트레이드오프: 자기 캔버스 비율과 미니 뷰 슬롯 비율이 다르면 같은 stroke 가 모양이 약간
 // 다르게 보임. 사진 비율 letterbox 의 자연스러움을 우선.)
 @Composable
-private fun MyCanvasContent(vm: DrawingViewModel) {
+private fun MyCanvasContent(vm: DrawingViewModel, selfNick: String? = null) {
     val bg = vm.canvas.background
-    val canvasModifier = if (bg != null) {
-        Modifier.aspectRatio(bg.aspectRatio).background(Color.White)
+    val sizeModifier = if (bg != null) {
+        Modifier.aspectRatio(bg.aspectRatio)
     } else {
-        Modifier.fillMaxSize().background(Color.White)
+        Modifier.fillMaxSize()
     }
-    DrawingCanvas(
-        state = vm.canvas,
-        tool = vm.tool,
-        onStrokeStart = vm::strokeStart,
-        onStrokeAppend = vm::strokeAppend,
-        onStrokeEnd = vm::strokeEnd,
-        modifier = canvasModifier,
-        guideCross = vm.guideCross,
-        guideGridCells = vm.guideGrid.cells,
-        onPlaceSticker = vm::placeSticker,
-        onTransformStickerLocal = vm::transformStickerLocal,
-        onCommitStickerTransform = vm::commitStickerTransform,
-        onRemoveSticker = vm::removeSticker,
-    )
+    Box(modifier = sizeModifier.background(Color.White)) {
+        DrawingCanvas(
+            state = vm.canvas,
+            tool = vm.tool,
+            onStrokeStart = vm::strokeStart,
+            onStrokeAppend = vm::strokeAppend,
+            onStrokeEnd = vm::strokeEnd,
+            modifier = Modifier.fillMaxSize(),
+            guideCross = vm.guideCross,
+            guideGridCells = vm.guideGrid.cells,
+            onPlaceSticker = vm::placeSticker,
+            onTransformStickerLocal = vm::transformStickerLocal,
+            onCommitStickerTransform = vm::commitStickerTransform,
+            onRemoveSticker = vm::removeSticker,
+        )
+        // 내 닉네임 — 우측 상단 반투명 칩. 사진/그림 위에서도 읽히게 surface 배경 + 회색 글자.
+        // pointerInput 없으므로 그리기 터치는 아래 캔버스가 받음.
+        if (!selfNick.isNullOrBlank()) {
+            Text(
+                text = selfNick,
+                color = Color.Gray,
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
+                softWrap = false,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(horizontal = 8.dp, vertical = 6.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.65f),
+                        shape = RoundedCornerShape(percent = 50),
+                    )
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+            )
+        }
+    }
 }
 
 // Phase 4-E: 모임 모드 캔버스 영역. 자기 캔버스 + 피어 미니 뷰들.
@@ -987,6 +1009,7 @@ private fun PartyCanvasArea(
     vm: DrawingViewModel,
     peers: List<com.rts.rys.ryy.drawingtogether.session.RemotePeerInfo>,
     isLandscape: Boolean,
+    selfNick: String? = null,
     modifier: Modifier = Modifier,
 ) {
     if (isLandscape) {
@@ -997,7 +1020,7 @@ private fun PartyCanvasArea(
                     .fillMaxHeight(),
                 contentAlignment = Alignment.Center,
             ) {
-                MyCanvasContent(vm = vm)
+                MyCanvasContent(vm = vm, selfNick = selfNick)
             }
             Column(
                 modifier = Modifier
@@ -1021,7 +1044,7 @@ private fun PartyCanvasArea(
                     .fillMaxWidth(),
                 contentAlignment = Alignment.Center,
             ) {
-                MyCanvasContent(vm = vm)
+                MyCanvasContent(vm = vm, selfNick = selfNick)
             }
             Row(
                 modifier = Modifier
