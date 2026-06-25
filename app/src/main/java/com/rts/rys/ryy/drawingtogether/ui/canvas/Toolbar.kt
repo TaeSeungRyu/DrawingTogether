@@ -1,16 +1,16 @@
 package com.rts.rys.ryy.drawingtogether.ui.canvas
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
@@ -176,40 +176,52 @@ fun Toolbar(
                 )
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-            ) {
-                if (onSync != null) {
+            // 호스트는 동기화·방 열기·되돌리기·전체 지우기 4개라 좁은 폭에서 한 줄에 안 들어감.
+            // 줄바꿈은 도구바 높이를 키워 캔버스를 먹으므로, 한 줄 유지 + 가로 스크롤(+페이드).
+            // 다 들어오면 우측 정렬(Box CenterEnd), 넘치면 스크롤 → 캔버스 높이는 그대로.
+            val actionsScroll = rememberScrollState()
+            val actionsFadeColor = MaterialTheme.colorScheme.surface
+            Box(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .horizontalScroll(actionsScroll)
+                        .fadingEdgeHorizontal(
+                            leftFade = actionsScroll.canScrollBackward,
+                            rightFade = actionsScroll.canScrollForward,
+                            fadeColor = actionsFadeColor,
+                        ),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (onSync != null) {
+                        CuteToolButton(
+                            text = "동기화",
+                            onClick = onSync,
+                            container = MaterialTheme.colorScheme.tertiary,
+                            content = MaterialTheme.colorScheme.onTertiary,
+                        )
+                    }
+                    if (onOpenRoom != null) {
+                        CuteToolButton(
+                            text = "방 열기",
+                            onClick = onOpenRoom,
+                            container = MaterialTheme.colorScheme.secondaryContainer,
+                            content = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                    }
                     CuteToolButton(
-                        text = "동기화",
-                        onClick = onSync,
-                        container = MaterialTheme.colorScheme.tertiary,
-                        content = MaterialTheme.colorScheme.onTertiary,
+                        text = "되돌리기",
+                        onClick = onUndo,
+                        enabled = canUndo,
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                }
-                if (onOpenRoom != null) {
                     CuteToolButton(
-                        text = "방 열기",
-                        onClick = onOpenRoom,
-                        container = MaterialTheme.colorScheme.secondaryContainer,
-                        content = MaterialTheme.colorScheme.onSecondaryContainer,
+                        text = "전체 지우기",
+                        onClick = onClear,
+                        container = MaterialTheme.colorScheme.errorContainer,
+                        content = MaterialTheme.colorScheme.onErrorContainer,
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
                 }
-                CuteToolButton(
-                    text = "되돌리기",
-                    onClick = onUndo,
-                    enabled = canUndo,
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                CuteToolButton(
-                    text = "전체 지우기",
-                    onClick = onClear,
-                    container = MaterialTheme.colorScheme.errorContainer,
-                    content = MaterialTheme.colorScheme.onErrorContainer,
-                )
             }
         }
     }
