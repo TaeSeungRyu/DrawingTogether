@@ -5,7 +5,7 @@
 ```kotlin
 data class Point(val x: Float, val y: Float)              // 캔버스 정규화 좌표 (0..1)
 
-enum class ToolKind { Pen, Eraser }
+enum class ToolKind { Pen, Eraser, Sticker }   // Sticker = 스티커 배치/편집 모드
 enum class BrushCapStyle { Round, Square }
 
 enum class BrushType(
@@ -30,6 +30,7 @@ data class ToolSettings(
     val strokeWidthDp: Float,
     val brush: BrushType = BrushType.Pen,
     val shape: ShapeMode = ShapeMode.None,
+    val stickerKey: StickerKey? = null,   // ToolKind.Sticker 일 때 배치할 스티커
 )
 
 data class Stroke(
@@ -43,7 +44,26 @@ sealed interface DrawingEvent {
     val seq: Long                      // 작성자 로컬 단조 증가 시퀀스
     val authorId: PeerId
     // StrokeStart / StrokeAppend / StrokeEnd / Clear / Undo
+    // PlaceSticker / TransformSticker / RemoveSticker
 }
+
+// 스티커 — stroke 아닌 새 요소 타입. 픽셀이 아니라 {key + 변환} 메타로만 보관,
+// 렌더 시 StickerRenderer 가 key → 자체 벡터로 치환. 색은 key 마다 고정(Candy Pop 테마).
+enum class StickerKey(val displayName: String) {
+    Heart, Star, Smile, Flower, Cloud, Sun, Moon, Rainbow, Drop, Lightning, Diamond, Sparkle
+}
+
+data class Sticker(
+    val id: StickerId,
+    val authorId: PeerId,
+    val key: StickerKey,
+    val cx: Float, val cy: Float,      // 중심 정규화 좌표 (0..1)
+    val scale: Float,                  // 캔버스 짧은 변 대비 크기 비율
+    val rotationDeg: Float,            // 시계방향 회전
+)
+
+// 동기화 응답 시 stroke + 스티커를 한 묶음으로 캡슐화 (FILE 페이로드 CBOR).
+data class CanvasSnapshot(val strokes: List<Stroke>, val stickers: List<Sticker> = emptyList())
 
 // Phase 1.5+ — 사진 배경 (옵션)
 data class BackgroundImage(
@@ -65,20 +85,29 @@ data class BackgroundImage(
 ## 2. 상태 머신
 
 ```kotlin
+// stroke·스티커를 시간순 한 스택에 섞는 통합 undo 항목.
+sealed interface UndoItem {
+    data class StrokeRef(val id: StrokeId) : UndoItem
+    data class StickerRef(val id: StickerId) : UndoItem
+}
+
 class CanvasState {
     val strokes: SnapshotStateList<Stroke> = mutableStateListOf()
     val openStrokes: SnapshotStateMap<StrokeId, Stroke> = mutableStateMapOf()
-    private val undoStack: SnapshotStateList<StrokeId> = mutableStateListOf()  // 자기 author 한정
+    val stickers: SnapshotStateList<Sticker> = mutableStateListOf()
+    private val undoStack: SnapshotStateList<UndoItem> = mutableStateListOf()  // stroke+스티커 통합
 
     var background: BackgroundImage? by mutableStateOf(null)
         private set
 
-    fun apply(event: DrawingEvent) { /* StrokeStart/Append/End/Clear/Undo dispatch */ }
+    fun apply(event: DrawingEvent) { /* Stroke* / Clear / Undo / *Sticker dispatch */ }
+    fun applySnapshot(strokes: List<Stroke>, stickers: List<Sticker> = emptyList()) { /* 전체 교체 */ }
     fun setBackground(image: BackgroundImage?) { background = image }
 }
 ```
 
 - `apply`는 **순수에 가깝게**. 로컬 입력과 원격 인바운드 이벤트가 모두 여기로 들어옴 → 모드 분기 없음.
+- **스티커**: `PlaceSticker` → 추가 + undoStack push, `TransformSticker`(이동/크기/회전 공용) → 교체(undo 불변), `RemoveSticker` → 제거 + undo 항목 제거.
 - 사진은 `apply` 밖의 별도 setter — 사진은 이벤트가 아니라 상태이기 때문.
 - `mutableStateListOf` + `mutableStateMapOf`로 Compose가 변경된 부분만 다시 그리도록.
 
@@ -110,12 +139,16 @@ Canvas(
 1. background?.bitmap        (사진. ContentScale.Fit으로 캔버스에 맞춤)
 2. state.strokes             (완료된 획)
 3. state.openStrokes.values  (진행 중 획)
-4. brushIndicator            (커서 위치 펜 발자국)
+4. state.stickers            (스티커 — StickerRenderer.drawSticker)
+5. 안내선(가이드라인)         (격자/십자선 — 로컬 전용)
+6. 스티커 선택 핸들           (스티커 모드 + 선택됨 — 바운딩 박스 + 크기·회전/삭제 핸들)
+7. brushIndicator            (커서 위치 펜 발자국 — 그리기 모드)
 ```
 
 - **완료된 획 비트맵 캐시**는 Phase 5(다듬기)에서. 현재 트래픽 수준에선 Compose RenderNode 캐싱만으로 충분.
 - 도형 모드(`ShapeMode != None`)면 첫·마지막 점을 바운딩 박스로 도형 외곽선 하나, 그 외엔 폴리라인.
 - 브러시는 `BrushType`의 `capStyle`/`alpha`/`widthScale`을 cap/색알파/굵기에 곱해 적용.
+- 스티커는 `withTransform { translate(중심); rotate(deg) }` 안에서 key 별 벡터를 그림. `drawStroke` 와 마찬가지로 화면·PNG·미니뷰가 같은 `drawSticker` 함수 공유.
 
 ## 5. 사진 입력 (Phase 1.5)
 
@@ -136,6 +169,8 @@ Canvas(
 ## 6. 되돌리기
 
 - **함께 그리기 단일 모드 (현재)**: `Undo`/`Clear`/지우개가 `authorId` 로 거르지 않음 — 함께 모드에선 자기·상대 stroke 모두 되돌리기/삭제 가능(공유 캔버스, collaborative undo). 모임 모드는 자기 캔버스만 영향(미니 뷰는 read-only). (author-locked "따라 그리기" 옵션은 Phase 6 보류.)
+- **통합 undo**: undoStack 은 `UndoItem`(StrokeRef/StickerRef) 을 시간순으로 담아 "되돌리기" 버튼이 stroke·스티커 구분 없이 최근 *추가* 동작을 취소. StrokeRef → `Undo`, StickerRef → `RemoveSticker` emit.
+- **스티커 변형(이동/크기/회전)은 undo 대상 아님** — 라이브 편집(commit-on-end). 배치/삭제만 undo 스택에 반영. 삭제는 선택 시 X 핸들로도 가능.
 - `Undo` 이벤트는 `strokeId` 지정 방식. 시퀀스 기반 "마지막 N개"는 협업에서 의미 흔들리므로 피함.
 - 다시 실행(redo)은 미지원 (필요해지면 별도 스택).
 - 사진 자체는 되돌리기 대상 아님 — 별도 "사진 제거" 액션.
@@ -158,11 +193,13 @@ fun exportPng(state: CanvasState, density: Float): Bitmap {
     state.background?.bitmap?.let { canvas.drawImage(it, ...) } ?: canvas.drawColor(WHITE)
     // 2. 완료된 stroke들을 같은 drawStroke() 로직으로 합성
     state.strokes.forEach { drawStroke(it, ..., canvas) }
+    // 3. 스티커를 stroke 위에 합성 (같은 drawSticker() 로직)
+    state.stickers.forEach { drawSticker(it, ..., canvas) }
     return bitmap
 }
 ```
 
-- 렌더링은 화면용과 동일한 `StrokeRenderer.drawStroke` 재사용 (`CanvasDrawScope` + `ImageBitmap`). 완료된 stroke 만 합성 (진행 중/커서 제외).
+- 렌더링은 화면용과 동일한 `StrokeRenderer.drawStroke` + `StickerRenderer.drawSticker` 재사용 (`CanvasDrawScope` + `ImageBitmap`). 완료된 stroke + 스티커를 합성 (진행 중/커서/선택 핸들 제외).
 - 앱 내부 저장: `WorkStore.save` → `filesDir/works/<id>.png` + `.meta`. "최근 작업" 모달에 노출, 최대 100개.
 - 외부 갤러리: `WorkStore.exportToGallery` → `MediaStore.Images` (`Pictures/DrawingTogether`). `IS_PENDING` 패턴 + `MediaScannerConnection.scanFile` 로 갤러리 즉시 반영. 미리보기 화면의 "저장"/"공유" 액션에서 호출.
 - 진행 중 stroke는 export에 포함 안 됨 (사용자가 export 누르는 시점엔 들고 있던 손가락 떼는 것이 자연).

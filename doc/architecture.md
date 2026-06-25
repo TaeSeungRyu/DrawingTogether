@@ -31,12 +31,12 @@ com.rts.rys.ryy.drawingtogether
 │   ├── splash/          앱 진입 시 잠깐 보이는 스플래시
 │   ├── home/            모드 선택 (싱글/함께/모임) + 최근 작업 모달 + 닉네임 설정
 │   ├── pairing/         PairingScreen(1:1) + PartyPairingScreen(1:N)
-│   ├── canvas/          드로잉 화면 (DrawingScreen/VM, DrawingCanvas, MiniCanvas, Toolbar, StrokeRenderer, 색 팔레트/피커)
+│   ├── canvas/          드로잉 화면 (DrawingScreen/VM, DrawingCanvas, MiniCanvas, Toolbar, StrokeRenderer, StickerRenderer/StickerPickerSheet, 색 팔레트/피커)
 │   ├── preview/         저장된 작품 풀사이즈 보기 + 갤러리 저장/공유
 │   └── theme/           Candy Pop 팔레트 + 테마
 ├── drawing/             드로잉 도메인 — UI/네트워크 무관
-│   ├── model/           Stroke, Point, ToolSettings, DrawingEvent, BackgroundImage, PeerId/StrokeId
-│   └── engine/          CanvasState — apply(event) 리듀서 + 되돌리기 스택 + 배경 슬롯
+│   ├── model/           Stroke, Point, ToolSettings, DrawingEvent, BackgroundImage, PeerId/StrokeId, Sticker/StickerKey/StickerId, CanvasSnapshot
+│   └── engine/          CanvasState — apply(event) 리듀서 + 통합 undo 스택(UndoItem) + 스티커 + 배경 슬롯
 ├── photo/               사진 입력
 │   ├── PhotoLoader      Uri → BackgroundImage (다운샘플 + EXIF 회전)
 │   └── CameraCaptureFile  FileProvider 기반 촬영 임시 URI (TakePicture)

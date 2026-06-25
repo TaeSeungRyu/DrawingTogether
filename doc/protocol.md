@@ -6,7 +6,7 @@
 - 피어들 사이에 드로잉 이벤트를 낮은 지연으로 전달 (1:1 함께 모드 + 1:N 모임 모드).
 - 세션에 사진 배경이 있는 경우, 사진 한 장도 전송.
 - 메시지 버전이 진화 가능.
-- "동기화" 요청 시 현재 캔버스(스트로크 + 사진) 상태를 통째로 복원.
+- "동기화" 요청 시 현재 캔버스(스트로크 + 스티커 + 사진) 상태를 통째로 복원.
 
 **비목표 (현재 버전)**
 - 자동 늦참가/재연결 동기화 — 의도적으로 미도입. 사용자가 "동기화" 버튼으로 명시 요청.
@@ -26,18 +26,18 @@ Nearby의 `Payload`가 이미 메시지 단위 → **우리 쪽 프레이밍 불
 | 메시지 종류 | Nearby Payload 타입 |
 |---|---|
 | Hello/HelloAck, Event, Snapshot(메타), PhotoMeta, PhotoRemove, MergeBackground, SnapshotReq, PeerJoined/PeerLeft, PartyStart, Ping/Pong, Bye | `BYTES` (CBOR) |
-| 사진 본체 (JPEG 바이트), 스냅샷 stroke 목록 (CBOR 바이트) | `FILE` |
+| 사진 본체 (JPEG 바이트), 스냅샷 캔버스(stroke + 스티커, `CanvasSnapshot` CBOR 바이트) | `FILE` |
 
-> 스냅샷의 stroke 목록은 BYTES 32KB 한도를 넘기 쉬워(빽빽한 캔버스 80KB~500KB) **FILE 페이로드**로 송신한다 (Phase 3.5-A). `Frame.Snapshot` 은 메타(payloadId)만 BYTES 로.
+> 스냅샷의 캔버스 콘텐츠(stroke + 스티커)는 BYTES 32KB 한도를 넘기 쉬워(빽빽한 캔버스 80KB~500KB) **FILE 페이로드**(`CanvasSnapshot` CBOR)로 송신한다 (Phase 3.5-A). `Frame.Snapshot` 은 메타(payloadId)만 BYTES 로.
 
 ## 3. 메시지 타입 — 실제 `Frame.kt` (BYTES 채널)
 
 ```
 Hello            연결 직후 송신. proto/peerId/nick 교환. (다중 모드는 신규 피어에게 unicast)
 HelloAck         Hello 수신 응답.
-Event            단일 DrawingEvent (StrokeStart/Append/End/Clear/Undo). authorId 동반.
+Event            단일 DrawingEvent (StrokeStart/Append/End/Clear/Undo, PlaceSticker/TransformSticker/RemoveSticker). authorId 동반.
 SnapshotReq      캔버스 상태 요청. targetPeerId(빈="" broadcast) + requesterPeerId.
-Snapshot         SnapshotReq 응답 메타. strokesPayloadId(FILE 매칭) + hasPhoto + targetPeerId.
+Snapshot         SnapshotReq 응답 메타. strokesPayloadId(FILE=CanvasSnapshot 매칭) + hasPhoto + targetPeerId.
 PhotoMeta        이어질 FILE(사진)의 payloadId/byteSize/width/height/mime + targetPeerId.
 PhotoRemove      배경 제거. targetPeerId.
 MergeBackground  "저장 시 배경 합치기" 토글 (enabled). 모임 모드는 broadcast 안 함.
@@ -109,8 +109,9 @@ sealed class Frame {
 }
 ```
 
-`FrameCodec` 은 `Cbor { ignoreUnknownKeys = true }` 로 인코딩/디코딩. stroke 목록은 별도
-`encodeStrokes`/`decodeStrokes` 로 FILE 페이로드 콘텐츠를 만든다 (한도 무제한).
+`FrameCodec` 은 `Cbor { ignoreUnknownKeys = true }` 로 인코딩/디코딩. 동기화 캔버스(stroke +
+스티커)는 별도 `encodeCanvas`/`decodeCanvas`(`CanvasSnapshot`) 로 FILE 페이로드 콘텐츠를 만든다
+(한도 무제한). `encodeStrokes`/`decodeStrokes` 도 남아있으나 동기화 경로는 `CanvasSnapshot` 사용.
 
 ## 5. 핸드셰이크
 
@@ -149,14 +150,14 @@ A → B: FILE payload (payloadId=12345)            ← Nearby가 자동 chunking
 
 ```
 B → A: SnapshotReq { targetPeerId="A", requesterPeerId="B" }   (모임 모드; Duo 는 빈 문자열)
-A → B: FILE (stroke 목록 CBOR)                                  ← 32KB 한도 회피 (3.5-A)
+A → B: FILE (CanvasSnapshot CBOR — stroke + 스티커)             ← 32KB 한도 회피 (3.5-A)
 A → B: Snapshot { strokesPayloadId=N, hasPhoto=true, targetPeerId="B" }
 A → B: PhotoMeta { ..., targetPeerId="B" } + FILE   (hasPhoto=true 인 경우)
    또는 A → B: PhotoRemove { targetPeerId="B" }      (사진 없으면 — 상대 배경도 비움)
 ```
 
-- stroke 목록은 BYTES 가 아니라 **FILE 페이로드**(CBOR `encodeStrokes`). `Snapshot.strokesPayloadId` 로 매칭.
-- 수신측은 받은 strokes 로 메인 캔버스를 **덮어씀**(`applySnapshot`).
+- 캔버스 콘텐츠는 BYTES 가 아니라 **FILE 페이로드**(CBOR `encodeCanvas` → `CanvasSnapshot{strokes, stickers}`). `Snapshot.strokesPayloadId` 로 매칭.
+- 수신측은 받은 strokes + 스티커로 메인 캔버스를 **덮어씀**(`applySnapshot(strokes, stickers)`).
 - **모임 모드 cascade**: A 가 B 의 캔버스를 가져와 자기 메인에 적용한 뒤, 자기 캔버스를 `targetPeerId=""` 로 다시 broadcast → 다른 참가자가 보는 *A 의 미니 뷰*도 갱신. 사진 적용이 끝난 후 broadcast 해야 빈 배경이 안 나간다.
 
 ## 8. 순서/충돌
@@ -165,6 +166,7 @@ A → B: PhotoMeta { ..., targetPeerId="B" } + FILE   (hasPhoto=true 인 경우)
 - 각 stroke 는 고유 `StrokeId` 로 식별 — 겹쳐 그려도 둘 다 살아남음.
 - **멀티(1:1) "함께 그리기" 모드 (현재 동작)**: `Clear` 와 `Undo` 는 양쪽 모두에 적용, `authorId` 로 거르지 않음. 한쪽이 "전체 지우기" 하면 양쪽 캔버스 모두 빈다. 지우개도 자기/상대 stroke 가리지 않고 삭제 가능.
 - 인바운드 EVENT 의 `authorId`: 함께(1:1)에선 라우팅 불필요(공유 캔버스). 모임(1:N)에선 발신자 식별에 사용.
+- **스티커 이벤트**: `PlaceSticker`/`RemoveSticker` 는 즉시 전파. `TransformSticker`(이동/크기/회전) 는 **commit-on-end** — 드래그/핸들 조작 *중* 엔 로컬만 갱신, 제스처 종료 시 최종 상태 1회만 전송(트래픽 절감, 모임 모드 relay 시 N배 효과). 상대는 변형 과정이 아닌 결과만 봄.
 
 ### 다중(1:N) 모임 모드 — 구현 완료
 

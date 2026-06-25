@@ -179,7 +179,7 @@
 - [x] **안내선(가이드라인)** — 중앙 십자선 + 격자 6×6/18×18. 로컬 전용(동기화·저장 미포함). `DrawingViewModel.guideCross/guideGrid`, `DrawingCanvas.drawGuides`, `GuideDropdownButton`.
 - [x] **에어브러시(분사)** — `BrushType.Airbrush`. `drawAirbrush` 경로 보간 + 결정론 seed(`stroke.id`)로 점 분사 → 매 프레임·양 단말 동일. 분사점 미저장(StrokeId 만 와이어).
 - [x] **번짐(수채/스머지)** — `BrushType.Blur`. native `Paint` + `BlurMaskFilter` via `drawIntoCanvas{nativeCanvas}`. PNG 합성에서도 동작.
-- [ ] **스티커** — 보류. stroke 아닌 새 요소 타입이라 `DrawingEvent`/`Frame`/렌더/PNG/undo 전부 신규. 규모 큼.
+- [x] **스티커** — 자체 벡터 12종 배치/이동/크기·회전/삭제 + 통합 undo. stroke 아닌 새 요소 타입 (`Sticker`/`StickerKey`/`StickerId`, `DrawingEvent` 3종 Place/Transform/Remove, `CanvasState._stickers` + `UndoItem` 통합 undo, `StickerRenderer.drawSticker` 화면·PNG·미니뷰 공유, Snapshot `CanvasSnapshot`(strokes+stickers) 확장). 변형은 commit-on-end. 상세: [sticker-plan.md](sticker-plan.md).
 
 **반응형 가로 모드 + 회전**
 - [x] 홈/페어링(함께·모임) 화면 `verticalScroll` — 가로에서 버튼/요소가 화면 밖으로 밀려 선택 안 되던 문제. 발견 리스트는 `heightIn` + `Column forEach`.
