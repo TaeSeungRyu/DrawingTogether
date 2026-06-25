@@ -172,6 +172,137 @@ fun GuideGlyph(modifier: Modifier = Modifier, tint: Color = LocalContentColor.cu
     }
 }
 
+// 상단 바 액션 버튼 — 아이콘 + 작은 라벨, 색상 컨테이너. 사진/촬영/제거/저장에 사용.
+// TopAppBar(56dp) 안에 들어가도록 48dp 높이.
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TopActionButton(
+    label: String,
+    onClick: () -> Unit,
+    container: Color,
+    content: Color,
+    modifier: Modifier = Modifier,
+    icon: @Composable () -> Unit,
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        color = container,
+        contentColor = content,
+        modifier = modifier.height(48.dp),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxHeight()
+                .padding(horizontal = 10.dp, vertical = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Box(modifier = Modifier.size(20.dp), contentAlignment = Alignment.Center) { icon() }
+            Spacer(modifier = Modifier.height(1.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                softWrap = false,
+            )
+        }
+    }
+}
+
+// 사진(갤러리) 글리프 — 액자 + 해 + 산.
+@Composable
+fun PhotoGlyph(modifier: Modifier = Modifier, tint: Color = LocalContentColor.current) {
+    Canvas(modifier = modifier) {
+        val w = size.width; val h = size.height
+        if (w <= 0f || h <= 0f) return@Canvas
+        val s = minOf(w, h)
+        val sw = s * 0.08f
+        val l = w * 0.14f; val t = h * 0.16f; val r = w * 0.86f; val b = h * 0.84f
+        drawRoundRect(
+            color = tint,
+            topLeft = Offset(l, t),
+            size = Size(r - l, b - t),
+            cornerRadius = CornerRadius(s * 0.12f, s * 0.12f),
+            style = Stroke(width = sw),
+        )
+        drawCircle(tint, radius = s * 0.09f, center = Offset(l + (r - l) * 0.30f, t + (b - t) * 0.30f), style = Stroke(sw * 0.8f))
+        // 산 (삼각형 외곽선).
+        val peak = Offset((l + r) / 2f, t + (b - t) * 0.42f)
+        val baseL = Offset(l + (r - l) * 0.12f, b - sw)
+        val baseR = Offset(r - (r - l) * 0.12f, b - sw)
+        drawLine(tint, baseL, peak, sw, cap = StrokeCap.Round)
+        drawLine(tint, peak, baseR, sw, cap = StrokeCap.Round)
+    }
+}
+
+// 촬영(카메라) 글리프 — 뷰파인더 돌출 + 본체 + 렌즈.
+@Composable
+fun CameraGlyph(modifier: Modifier = Modifier, tint: Color = LocalContentColor.current) {
+    Canvas(modifier = modifier) {
+        val w = size.width; val h = size.height
+        if (w <= 0f || h <= 0f) return@Canvas
+        val s = minOf(w, h)
+        val sw = s * 0.08f
+        val bumpW = w * 0.24f; val bumpH = h * 0.12f
+        drawRoundRect(
+            color = tint,
+            topLeft = Offset(w * 0.22f, h * 0.14f),
+            size = Size(bumpW, bumpH),
+            cornerRadius = CornerRadius(sw, sw),
+            style = Stroke(width = sw * 0.8f),
+        )
+        val bodyT = h * 0.24f
+        drawRoundRect(
+            color = tint,
+            topLeft = Offset(w * 0.12f, bodyT),
+            size = Size(w * 0.76f, h * 0.84f - bodyT),
+            cornerRadius = CornerRadius(s * 0.10f, s * 0.10f),
+            style = Stroke(width = sw),
+        )
+        drawCircle(tint, radius = s * 0.16f, center = Offset(w / 2f, (bodyT + h * 0.84f) / 2f), style = Stroke(sw))
+    }
+}
+
+// 제거(휴지통) 글리프.
+@Composable
+fun TrashGlyph(modifier: Modifier = Modifier, tint: Color = LocalContentColor.current) {
+    Canvas(modifier = modifier) {
+        val w = size.width; val h = size.height
+        if (w <= 0f || h <= 0f) return@Canvas
+        val sw = minOf(w, h) * 0.08f
+        val lidY = h * 0.28f
+        drawLine(tint, Offset(w * 0.18f, lidY), Offset(w * 0.82f, lidY), sw, cap = StrokeCap.Round)
+        // 손잡이.
+        drawLine(tint, Offset(w * 0.42f, lidY), Offset(w * 0.42f, lidY - h * 0.08f), sw, cap = StrokeCap.Round)
+        drawLine(tint, Offset(w * 0.58f, lidY), Offset(w * 0.58f, lidY - h * 0.08f), sw, cap = StrokeCap.Round)
+        drawLine(tint, Offset(w * 0.42f, lidY - h * 0.08f), Offset(w * 0.58f, lidY - h * 0.08f), sw, cap = StrokeCap.Round)
+        // 몸통 (사다리꼴).
+        val bodyTop = lidY + h * 0.06f; val b = h * 0.82f
+        drawLine(tint, Offset(w * 0.26f, bodyTop), Offset(w * 0.30f, b), sw, cap = StrokeCap.Round)
+        drawLine(tint, Offset(w * 0.74f, bodyTop), Offset(w * 0.70f, b), sw, cap = StrokeCap.Round)
+        drawLine(tint, Offset(w * 0.30f, b), Offset(w * 0.70f, b), sw, cap = StrokeCap.Round)
+        // 내부 세로선.
+        drawLine(tint, Offset(w * 0.42f, bodyTop + h * 0.05f), Offset(w * 0.42f, b - h * 0.05f), sw * 0.7f, cap = StrokeCap.Round)
+        drawLine(tint, Offset(w * 0.58f, bodyTop + h * 0.05f), Offset(w * 0.58f, b - h * 0.05f), sw * 0.7f, cap = StrokeCap.Round)
+    }
+}
+
+// 저장 글리프 — 트레이로 내려받는 화살표.
+@Composable
+fun SaveGlyph(modifier: Modifier = Modifier, tint: Color = LocalContentColor.current) {
+    Canvas(modifier = modifier) {
+        val w = size.width; val h = size.height
+        if (w <= 0f || h <= 0f) return@Canvas
+        val sw = minOf(w, h) * 0.09f
+        val cx = w / 2f
+        drawLine(tint, Offset(cx, h * 0.16f), Offset(cx, h * 0.58f), sw, cap = StrokeCap.Round)
+        drawLine(tint, Offset(cx - w * 0.16f, h * 0.42f), Offset(cx, h * 0.60f), sw, cap = StrokeCap.Round)
+        drawLine(tint, Offset(cx + w * 0.16f, h * 0.42f), Offset(cx, h * 0.60f), sw, cap = StrokeCap.Round)
+        drawLine(tint, Offset(w * 0.22f, h * 0.82f), Offset(w * 0.78f, h * 0.82f), sw, cap = StrokeCap.Round)
+    }
+}
+
 // 저장 시 사진 배경을 PNG에 합칠지 켜고 끄는 토글. 사진 추가 전에도 켤 수 있도록 항상 노출.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

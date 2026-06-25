@@ -9,6 +9,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -297,6 +298,16 @@ fun DrawingScreen(
     // 연결되면 캔버스 우측 상단에 회색으로 표시할 내 닉네임. 미연결(싱글 등)이면 null.
     val myNick by session.nick.collectAsState()
     val canvasSelfNick = if (sessionState is SessionState.Connected) myNick.ifBlank { null } else null
+
+    // "저장 시 배경 합치기" 토글 변경 — 저장 다이얼로그에서 호출. 함께 모드(Duo) 연결 중이면 동기화.
+    val onMergeChange: (Boolean) -> Unit = { value ->
+        vm.setMergeBackgroundOnSave(value)
+        if (mode != DrawMode.Party && session.state.value is SessionState.Connected) {
+            scope.launch {
+                runCatching { session.transport.send(Frame.MergeBackground(value)) }
+            }
+        }
+    }
 
     // Phase 4-B: 발신 DrawingEvent.authorId 를 실제 설치 UUID 로 박는다.
     // 1:1 함께 모드에서도 정확한 작성자 식별 — 싱글 모드는 Pairing 거치지 않고 진입이라
@@ -603,23 +614,11 @@ fun DrawingScreen(
                             fadeColor = actionsFadeColor,
                         ),
                     verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    MergeBackgroundToggle(
-                        checked = vm.canvas.mergeBackgroundOnSave,
-                        onCheckedChange = { value ->
-                            vm.setMergeBackgroundOnSave(value)
-                            // 모임 모드는 자기 토글만 적용, broadcast 안 함 (자기 사진 정책).
-                            if (mode != DrawMode.Party &&
-                                session.state.value is SessionState.Connected) {
-                                scope.launch {
-                                    runCatching { session.transport.send(Frame.MergeBackground(value)) }
-                                }
-                            }
-                        },
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    CuteToolButton(
-                        text = "사진",
+                    // 배경 합치기 토글은 상단에서 빼서 저장 다이얼로그로 이동(저장 시에만 의미).
+                    TopActionButton(
+                        label = "사진",
                         onClick = {
                             pickPhoto.launch(
                                 PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
@@ -627,10 +626,9 @@ fun DrawingScreen(
                         },
                         container = MaterialTheme.colorScheme.primaryContainer,
                         content = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    CuteToolButton(
-                        text = "촬영",
+                    ) { PhotoGlyph(modifier = Modifier.fillMaxSize()) }
+                    TopActionButton(
+                        label = "촬영",
                         onClick = {
                             val uri = CameraCaptureFile.create(context)
                             pendingCameraUri = uri
@@ -638,11 +636,10 @@ fun DrawingScreen(
                         },
                         container = MaterialTheme.colorScheme.tertiaryContainer,
                         content = MaterialTheme.colorScheme.onTertiaryContainer,
-                    )
+                    ) { CameraGlyph(modifier = Modifier.fillMaxSize()) }
                     if (vm.canvas.background != null) {
-                        Spacer(modifier = Modifier.width(6.dp))
-                        CuteToolButton(
-                            text = "제거",
+                        TopActionButton(
+                            label = "제거",
                             onClick = {
                                 vm.setBackground(null)
                                 if (session.state.value is SessionState.Connected) {
@@ -653,19 +650,17 @@ fun DrawingScreen(
                             },
                             container = MaterialTheme.colorScheme.errorContainer,
                             content = MaterialTheme.colorScheme.onErrorContainer,
-                        )
+                        ) { TrashGlyph(modifier = Modifier.fillMaxSize()) }
                     }
-                    Spacer(modifier = Modifier.width(6.dp))
-                    CuteToolButton(
-                        text = "저장",
+                    TopActionButton(
+                        label = "저장",
                         onClick = {
                             nameInput = ""
                             showSaveDialog = true
                         },
                         container = MaterialTheme.colorScheme.secondaryContainer,
                         content = MaterialTheme.colorScheme.onSecondaryContainer,
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    ) { SaveGlyph(modifier = Modifier.fillMaxSize()) }
                 }
             },
         )
@@ -926,6 +921,12 @@ fun DrawingScreen(
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                         keyboardActions = KeyboardActions(onDone = { submit() }),
                         modifier = Modifier.focusRequester(focus),
+                    )
+                    // 배경 합치기 토글 — 기존 상단 바에서 이동. 항상 노출(사진 없을 땐 저장에 영향 없음).
+                    Spacer(modifier = Modifier.height(12.dp))
+                    MergeBackgroundToggle(
+                        checked = vm.canvas.mergeBackgroundOnSave,
+                        onCheckedChange = onMergeChange,
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
