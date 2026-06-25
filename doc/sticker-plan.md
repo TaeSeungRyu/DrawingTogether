@@ -1,7 +1,8 @@
 # 스티커 기능 계획 — 자체 벡터 세트 + 이동/크기/회전/삭제 + 통합 undo
 
-> 상태: **계획만 수립, 미구현.** 그리기 강화 백로그([drawing-ideas.md](drawing-ideas.md))의
-> 마지막·최대 항목. 진행 시 이 문서를 단계 가이드로 사용.
+> 상태: **✅ 구현 완료** (A~H 전 단계). 아래 계획대로 진행됨. 벡터 세트는 12종으로 확정.
+> 단위 테스트: `CanvasStateTest`(Place/Transform/Remove + 통합 undo), `FrameCodecTest`
+> (`CanvasSnapshot` 라운드트립). 멀티(함께/모임) 실시간 전파·동기화는 실기기 2대 검증 필요.
 
 ## 배경 / 설계 원칙
 

@@ -28,6 +28,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.rts.rys.ryy.drawingtogether.drawing.model.BrushType
 import com.rts.rys.ryy.drawingtogether.drawing.model.ShapeMode
+import com.rts.rys.ryy.drawingtogether.drawing.model.StickerKey
 import com.rts.rys.ryy.drawingtogether.drawing.model.ToolKind
 import com.rts.rys.ryy.drawingtogether.drawing.model.ToolSettings
 
@@ -46,6 +47,7 @@ fun Toolbar(
     onEraser: () -> Unit,
     onBrush: (BrushType) -> Unit,
     onShape: (ShapeMode) -> Unit,
+    onSticker: (StickerKey) -> Unit,
     onStrokeWidth: (Float) -> Unit,
     onUndo: () -> Unit,
     onClear: () -> Unit,
@@ -71,6 +73,7 @@ fun Toolbar(
     var pickerTarget by remember { mutableStateOf<PickerTarget>(PickerTarget.None) }
     var paletteEditing by remember { mutableStateOf(false) }
     var brushSheetOpen by remember { mutableStateOf(false) }
+    var stickerSheetOpen by remember { mutableStateOf(false) }
 
     Surface(modifier = modifier, tonalElevation = 2.dp) {
         // 가로(fillHeight): 패널 높이 꽉 채우고 도구 균등 분산. 세로: wrap + 스크롤.
@@ -121,6 +124,11 @@ fun Toolbar(
                 ShapeDropdownButton(
                     shape = tool.shape,
                     onShape = onShape,
+                )
+                StickerTriggerButton(
+                    selected = tool.kind == ToolKind.Sticker,
+                    currentKey = tool.stickerKey,
+                    onClick = { stickerSheetOpen = true },
                 )
                 EraserToggle(
                     selected = tool.kind == ToolKind.Eraser,
@@ -216,6 +224,14 @@ fun Toolbar(
             currentBrush = tool.brush,
             onSelect = onBrush,
             onDismiss = { brushSheetOpen = false },
+        )
+    }
+
+    if (stickerSheetOpen) {
+        StickerPickerSheet(
+            currentKey = tool.stickerKey,
+            onSelect = onSticker,
+            onDismiss = { stickerSheetOpen = false },
         )
     }
 }

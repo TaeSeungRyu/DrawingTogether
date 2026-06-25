@@ -7,12 +7,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.lifecycle.ViewModel
 import com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState
+import com.rts.rys.ryy.drawingtogether.drawing.engine.UndoItem
 import com.rts.rys.ryy.drawingtogether.drawing.model.BackgroundImage
 import com.rts.rys.ryy.drawingtogether.drawing.model.BrushType
 import com.rts.rys.ryy.drawingtogether.drawing.model.DrawingEvent
 import com.rts.rys.ryy.drawingtogether.drawing.model.PeerId
 import com.rts.rys.ryy.drawingtogether.drawing.model.Point
 import com.rts.rys.ryy.drawingtogether.drawing.model.ShapeMode
+import com.rts.rys.ryy.drawingtogether.drawing.model.Sticker
+import com.rts.rys.ryy.drawingtogether.drawing.model.StickerId
+import com.rts.rys.ryy.drawingtogether.drawing.model.StickerKey
 import com.rts.rys.ryy.drawingtogether.drawing.model.Stroke
 import com.rts.rys.ryy.drawingtogether.drawing.model.StrokeId
 import com.rts.rys.ryy.drawingtogether.drawing.model.ToolKind
@@ -32,6 +36,9 @@ enum class CanvasRouting {
     Shared,
     PerPeer,
 }
+
+// 새 스티커 기본 크기 — 캔버스 짧은 변의 18%.
+private const val DEFAULT_STICKER_SCALE = 0.18f
 
 // 격자 안내선 종류. cells = 한 변의 칸 수 (6×6, 18×18). None 은 격자 없음.
 enum class GuideGrid(val cells: Int, val label: String) {
@@ -97,13 +104,18 @@ class DrawingViewModel : ViewModel() {
         }
     }
 
-    // "동기화" — 상대 캔버스 snapshot 으로 내 stroke 을 전부 교체. 사진 배경은 별도 경로.
-    fun applyRemoteSnapshot(strokes: List<Stroke>) {
-        canvas.applySnapshot(strokes)
+    // "동기화" — 상대 캔버스 snapshot 으로 내 stroke + 스티커를 전부 교체. 사진 배경은 별도 경로.
+    fun applyRemoteSnapshot(strokes: List<Stroke>, stickers: List<Sticker> = emptyList()) {
+        canvas.applySnapshot(strokes, stickers)
     }
 
     fun selectColor(argb: Int) {
         tool = tool.copy(kind = ToolKind.Pen, colorArgb = argb)
+    }
+
+    // 스티커 선택 — ToolKind.Sticker + stickerKey 설정. 색은 스티커가 자체 보유하므로 무관.
+    fun selectSticker(key: StickerKey) {
+        tool = tool.copy(kind = ToolKind.Sticker, stickerKey = key)
     }
 
     // 지우개 버튼은 토글 — 지우개 상태에서 다시 누르면 펜으로 돌아온다.
@@ -116,12 +128,13 @@ class DrawingViewModel : ViewModel() {
         tool = tool.copy(strokeWidthDp = dp)
     }
 
+    // 붓/도형 선택은 그리기 의도 — 스티커 모드였다면 Pen 으로 빠져나온다.
     fun setBrush(brush: BrushType) {
-        tool = tool.copy(brush = brush)
+        tool = tool.copy(kind = ToolKind.Pen, brush = brush)
     }
 
     fun setShape(shape: ShapeMode) {
-        tool = tool.copy(shape = shape)
+        tool = tool.copy(kind = ToolKind.Pen, shape = shape)
     }
 
     fun strokeStart(strokeId: StrokeId, point: Point) {
@@ -208,8 +221,37 @@ class DrawingViewModel : ViewModel() {
     }
 
     fun undoLastLocal() {
-        val id = canvas.lastFinishedStrokeId() ?: return
-        emit(DrawingEvent.Undo(nextSeq(), author, id))
+        when (val item = canvas.lastUndoable() ?: return) {
+            is UndoItem.StrokeRef -> emit(DrawingEvent.Undo(nextSeq(), author, item.id))
+            is UndoItem.StickerRef -> emit(DrawingEvent.RemoveSticker(nextSeq(), author, item.id))
+        }
+    }
+
+    // 스티커 배치 — 탭 위치에 현재 선택된 stickerKey 로 새 스티커 생성. 키가 없으면 무시.
+    fun placeSticker(cx: Float, cy: Float): StickerId? {
+        val key = tool.stickerKey ?: return null
+        val id = StickerId.random()
+        emit(
+            DrawingEvent.PlaceSticker(
+                nextSeq(), author, id, key,
+                cx = cx, cy = cy, scale = DEFAULT_STICKER_SCALE, rotationDeg = 0f,
+            )
+        )
+        return id
+    }
+
+    // 변형 중(드래그/핀치) — 로컬 캔버스만 갱신, outbound 없음. 자기 화면 실시간 반영용.
+    fun transformStickerLocal(id: StickerId, cx: Float, cy: Float, scale: Float, rot: Float) {
+        canvas.apply(DrawingEvent.TransformSticker(nextSeq(), author, id, cx, cy, scale, rot))
+    }
+
+    // 변형 종료 — 최종 상태 1회 전송 (commit-on-end). canvas.apply + outbound.
+    fun commitStickerTransform(id: StickerId, cx: Float, cy: Float, scale: Float, rot: Float) {
+        emit(DrawingEvent.TransformSticker(nextSeq(), author, id, cx, cy, scale, rot))
+    }
+
+    fun removeSticker(id: StickerId) {
+        emit(DrawingEvent.RemoveSticker(nextSeq(), author, id))
     }
 
     fun clearAll() {

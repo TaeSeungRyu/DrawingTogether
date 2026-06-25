@@ -3,7 +3,7 @@ package com.rts.rys.ryy.drawingtogether.drawing.model
 import kotlinx.serialization.Serializable
 
 @Serializable
-enum class ToolKind { Pen, Eraser }
+enum class ToolKind { Pen, Eraser, Sticker }
 
 @Serializable
 data class ToolSettings(
@@ -12,6 +12,8 @@ data class ToolSettings(
     val strokeWidthDp: Float,
     val brush: BrushType = BrushType.Pen,
     val shape: ShapeMode = ShapeMode.None,
+    // ToolKind.Sticker 일 때 배치할 스티커 종류. 그 외 모드에선 무시.
+    val stickerKey: StickerKey? = null,
 ) {
     companion object {
         fun defaultPen(): ToolSettings = ToolSettings(

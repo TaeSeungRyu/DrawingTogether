@@ -139,17 +139,20 @@ private suspend fun bitmapToCacheUri(
     )
 }
 
-// "동기화" 응답용 — strokes 를 CBOR 로 직렬화해 cache/snapshots/ 에 저장하고 URI 반환.
-// BYTES 페이로드 32KB 한도를 회피하기 위해 FILE 페이로드로 송신 (Phase 3.5-A).
-private suspend fun strokesToCacheUri(
+// "동기화" 응답용 — strokes + 스티커를 CanvasSnapshot 으로 묶어 CBOR 직렬화 후
+// cache/snapshots/ 에 저장하고 URI 반환. BYTES 페이로드 32KB 한도를 회피하기 위해 FILE 로 송신.
+private suspend fun canvasToCacheUri(
     context: android.content.Context,
     strokes: List<com.rts.rys.ryy.drawingtogether.drawing.model.Stroke>,
+    stickers: List<com.rts.rys.ryy.drawingtogether.drawing.model.Sticker>,
 ): android.net.Uri = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
     val dir = java.io.File(context.cacheDir, "snapshots").apply { mkdirs() }
-    val file = java.io.File(dir, "strokes_${System.currentTimeMillis()}.cbor")
+    val file = java.io.File(dir, "canvas_${System.currentTimeMillis()}.cbor")
     file.outputStream().use { out ->
         out.write(
-            com.rts.rys.ryy.drawingtogether.transport.codec.FrameCodec.encodeStrokes(strokes)
+            com.rts.rys.ryy.drawingtogether.transport.codec.FrameCodec.encodeCanvas(
+                com.rts.rys.ryy.drawingtogether.drawing.model.CanvasSnapshot(strokes, stickers)
+            )
         )
     }
     androidx.core.content.FileProvider.getUriForFile(
@@ -167,11 +170,12 @@ private suspend fun broadcastMyCanvasAsPeer(
     context: android.content.Context,
     session: SessionManager,
     strokes: List<com.rts.rys.ryy.drawingtogether.drawing.model.Stroke>,
+    stickers: List<com.rts.rys.ryy.drawingtogether.drawing.model.Sticker>,
     background: BackgroundImage?,
 ) {
     if (session.state.value !is SessionState.Connected) return
     runCatching {
-        val strokesUri = strokesToCacheUri(context, strokes)
+        val strokesUri = canvasToCacheUri(context, strokes, stickers)
         val strokesPayloadId = session.transport.sendFile(strokesUri)
         session.transport.send(
             Frame.Snapshot(
@@ -219,12 +223,13 @@ private suspend fun respondToSnapshotRequest(
     session: SessionManager,
     targetPeerId: String,
     strokes: List<com.rts.rys.ryy.drawingtogether.drawing.model.Stroke>,
+    stickers: List<com.rts.rys.ryy.drawingtogether.drawing.model.Sticker>,
     background: BackgroundImage?,
 ) {
     if (session.state.value !is SessionState.Connected) return
     runCatching {
-        // 1) strokes → FILE + Snapshot 메타
-        val strokesUri = strokesToCacheUri(context, strokes)
+        // 1) strokes + 스티커 → FILE + Snapshot 메타
+        val strokesUri = canvasToCacheUri(context, strokes, stickers)
         val strokesPayloadId = session.transport.sendFile(strokesUri)
         session.transport.send(
             Frame.Snapshot(
@@ -429,6 +434,7 @@ fun DrawingScreen(
                         context = context,
                         session = session,
                         strokes = vm.canvas.strokes.toList(),
+                        stickers = vm.canvas.stickers.toList(),
                         background = vm.canvas.background,
                     )
                 }
@@ -450,6 +456,7 @@ fun DrawingScreen(
                 session = session,
                 targetPeerId = request.requesterPeerId.value,
                 strokes = vm.canvas.strokes.toList(),
+                stickers = vm.canvas.stickers.toList(),
                 background = vm.canvas.background,
             )
         }
@@ -462,13 +469,13 @@ fun DrawingScreen(
     LaunchedEffect(vm, session) {
         session.incomingSnapshot.collect { event ->
             if (mode != DrawMode.Party) {
-                vm.applyRemoteSnapshot(event.strokes)
+                vm.applyRemoteSnapshot(event.strokes, event.stickers)
                 return@collect
             }
             val sender = event.senderPeerId
             if (sender == null) {
                 // 동기화 응답의 strokes 부분. 배경까지 도착하면 broadcast.
-                vm.applyRemoteSnapshot(event.strokes)
+                vm.applyRemoteSnapshot(event.strokes, event.stickers)
                 syncGotStrokes = true
                 if (syncGotBackground) {
                     syncGotStrokes = false
@@ -477,6 +484,7 @@ fun DrawingScreen(
                         context = context,
                         session = session,
                         strokes = vm.canvas.strokes.toList(),
+                        stickers = vm.canvas.stickers.toList(),
                         background = vm.canvas.background,
                     )
                 }
@@ -484,7 +492,7 @@ fun DrawingScreen(
                 val peerCanvas = vm.peerCanvases.getOrPut(sender) {
                     com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState()
                 }
-                peerCanvas.applySnapshot(event.strokes)
+                peerCanvas.applySnapshot(event.strokes, event.stickers)
             }
         }
     }
@@ -699,6 +707,7 @@ fun DrawingScreen(
                 onEraser = vm::toggleEraser,
                 onBrush = vm::setBrush,
                 onShape = vm::setShape,
+                onSticker = vm::selectSticker,
                 onStrokeWidth = vm::setStrokeWidth,
                 onUndo = vm::undoLastLocal,
                 onClear = vm::clearAll,
@@ -960,6 +969,10 @@ private fun MyCanvasContent(vm: DrawingViewModel) {
         modifier = canvasModifier,
         guideCross = vm.guideCross,
         guideGridCells = vm.guideGrid.cells,
+        onPlaceSticker = vm::placeSticker,
+        onTransformStickerLocal = vm::transformStickerLocal,
+        onCommitStickerTransform = vm::commitStickerTransform,
+        onRemoveSticker = vm::removeSticker,
     )
 }
 

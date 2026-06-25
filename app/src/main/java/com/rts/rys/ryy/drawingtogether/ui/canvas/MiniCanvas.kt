@@ -90,10 +90,12 @@ fun MiniCanvas(
                     }
                     state.strokes.forEach { drawStroke(it, canvasSize, density) }
                     state.openStrokes.values.forEach { drawStroke(it, canvasSize, density) }
+                    state.stickers.forEach { drawSticker(it, canvasSize) }
                 }
                 if (state.background == null &&
                     state.strokes.isEmpty() &&
-                    state.openStrokes.isEmpty()
+                    state.openStrokes.isEmpty() &&
+                    state.stickers.isEmpty()
                 ) {
                     Text(
                         text = "아직 그리지 않음",

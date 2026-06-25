@@ -3,6 +3,8 @@ package com.rts.rys.ryy.drawingtogether.drawing.engine
 import com.rts.rys.ryy.drawingtogether.drawing.model.DrawingEvent
 import com.rts.rys.ryy.drawingtogether.drawing.model.PeerId
 import com.rts.rys.ryy.drawingtogether.drawing.model.Point
+import com.rts.rys.ryy.drawingtogether.drawing.model.StickerId
+import com.rts.rys.ryy.drawingtogether.drawing.model.StickerKey
 import com.rts.rys.ryy.drawingtogether.drawing.model.StrokeId
 import com.rts.rys.ryy.drawingtogether.drawing.model.ToolKind
 import com.rts.rys.ryy.drawingtogether.drawing.model.ToolSettings
@@ -67,7 +69,7 @@ class CanvasStateTest {
 
         // 두 stroke 모두 시간순으로 undoStack 에 들어가 마지막은 remote 의 R.
         assertTrue(state.canUndo)
-        assertEquals(r, state.lastFinishedStrokeId())
+        assertEquals(UndoItem.StrokeRef(r), state.lastUndoable())
     }
 
     @Test
@@ -85,7 +87,7 @@ class CanvasStateTest {
 
         assertEquals(1, state.strokes.size)
         assertEquals(a, state.strokes[0].id)
-        assertEquals(a, state.lastFinishedStrokeId())
+        assertEquals(UndoItem.StrokeRef(a), state.lastUndoable())
     }
 
     @Test
@@ -140,5 +142,79 @@ class CanvasStateTest {
 
         assertEquals(1, state.strokes.size)
         assertTrue(state.canUndo)
+    }
+
+    private fun place(id: StickerId, cx: Float = 0.5f, cy: Float = 0.5f) =
+        DrawingEvent.PlaceSticker(next(), local, id, StickerKey.Heart, cx, cy, 0.2f, 0f)
+
+    @Test
+    fun `PlaceSticker adds sticker and pushes onto undo stack`() {
+        val state = CanvasState()
+        val s = StickerId("st1")
+
+        state.apply(place(s))
+
+        assertEquals(1, state.stickers.size)
+        assertEquals(s, state.stickers[0].id)
+        assertEquals(UndoItem.StickerRef(s), state.lastUndoable())
+    }
+
+    @Test
+    fun `TransformSticker updates transform without touching undo stack`() {
+        val state = CanvasState()
+        val s = StickerId("st1")
+        state.apply(place(s, 0.2f, 0.2f))
+
+        state.apply(DrawingEvent.TransformSticker(next(), local, s, 0.8f, 0.7f, 0.4f, 45f))
+
+        val updated = state.stickers.single()
+        assertEquals(0.8f, updated.cx)
+        assertEquals(0.7f, updated.cy)
+        assertEquals(0.4f, updated.scale)
+        assertEquals(45f, updated.rotationDeg)
+        // 변형은 라이브 편집 — undo 스택은 그대로 1개(배치).
+        assertEquals(UndoItem.StickerRef(s), state.lastUndoable())
+    }
+
+    @Test
+    fun `RemoveSticker drops sticker and undo ref`() {
+        val state = CanvasState()
+        val s = StickerId("st1")
+        state.apply(place(s))
+
+        state.apply(DrawingEvent.RemoveSticker(next(), local, s))
+
+        assertTrue(state.stickers.isEmpty())
+        assertFalse(state.canUndo)
+    }
+
+    @Test
+    fun `unified undo mixes strokes and stickers in chronological order`() {
+        val state = CanvasState()
+        val stroke = StrokeId("L")
+        val sticker = StickerId("st1")
+        state.apply(DrawingEvent.StrokeStart(next(), local, stroke, pen, Point(0f, 0f)))
+        state.apply(DrawingEvent.StrokeEnd(next(), local, stroke))
+        state.apply(place(sticker))
+
+        // 마지막 추가는 스티커.
+        assertEquals(UndoItem.StickerRef(sticker), state.lastUndoable())
+        // 그 다음은 stroke.
+        state.apply(DrawingEvent.RemoveSticker(next(), local, sticker))
+        assertEquals(UndoItem.StrokeRef(stroke), state.lastUndoable())
+    }
+
+    @Test
+    fun `Clear wipes stickers too`() {
+        val state = CanvasState()
+        state.apply(place(StickerId("st1")))
+        state.apply(DrawingEvent.StrokeStart(next(), local, StrokeId("s"), pen, Point(0f, 0f)))
+        state.apply(DrawingEvent.StrokeEnd(next(), local, StrokeId("s")))
+
+        state.apply(DrawingEvent.Clear(next(), local))
+
+        assertTrue(state.stickers.isEmpty())
+        assertTrue(state.strokes.isEmpty())
+        assertFalse(state.canUndo)
     }
 }

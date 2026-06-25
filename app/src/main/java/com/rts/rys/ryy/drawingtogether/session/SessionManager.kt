@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import android.net.Uri
 import com.rts.rys.ryy.drawingtogether.drawing.model.DrawingEvent
 import com.rts.rys.ryy.drawingtogether.drawing.model.PeerId
+import com.rts.rys.ryy.drawingtogether.drawing.model.Sticker
 import com.rts.rys.ryy.drawingtogether.drawing.model.Stroke
 import com.rts.rys.ryy.drawingtogether.transport.ConnectedPeer
 import com.rts.rys.ryy.drawingtogether.transport.FileTransferEvent
@@ -73,6 +74,7 @@ data class RemotePeerInfo(
 data class IncomingSnapshotEvent(
     val senderPeerId: PeerId?,
     val strokes: List<Stroke>,
+    val stickers: List<Sticker> = emptyList(),
 )
 
 // 프로세스 전역 싱글톤. WorkStore와 동일한 패턴.
@@ -575,7 +577,7 @@ class SessionManager private constructor(
         }
     }
 
-    // Snapshot FILE 페이로드 (CBOR-encoded List<Stroke>) 를 읽어 incomingSnapshot 으로 발행.
+    // Snapshot FILE 페이로드 (CBOR-encoded CanvasSnapshot) 를 읽어 incomingSnapshot 으로 발행.
     // senderPeerId = null: 동기화 응답. !=null: broadcast (peer 미니뷰 동기화).
     private fun handleSnapshotFile(uri: Uri, senderPeerId: PeerId?) {
         scope.launch {
@@ -583,8 +585,10 @@ class SessionManager private constructor(
                 val bytes = withContext(Dispatchers.IO) {
                     appContext.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                 } ?: return@launch
-                val strokes = FrameCodec.decodeStrokes(bytes)
-                _incomingSnapshot.tryEmit(IncomingSnapshotEvent(senderPeerId, strokes))
+                val snapshot = FrameCodec.decodeCanvas(bytes)
+                _incomingSnapshot.tryEmit(
+                    IncomingSnapshotEvent(senderPeerId, snapshot.strokes, snapshot.stickers)
+                )
             }
         }
     }

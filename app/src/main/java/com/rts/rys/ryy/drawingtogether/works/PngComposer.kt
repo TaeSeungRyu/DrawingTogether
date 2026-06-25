@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState
+import com.rts.rys.ryy.drawingtogether.ui.canvas.drawSticker
 import com.rts.rys.ryy.drawingtogether.ui.canvas.drawStroke
 
 // CanvasState를 단일 비트맵으로 합성. 화면에 보이는 것과 같은 stroke 렌더링 함수를 재사용해
@@ -54,6 +55,10 @@ object PngComposer {
             // 완료된 stroke만.
             state.strokes.forEach { stroke ->
                 drawStroke(stroke, sizeInt, density)
+            }
+            // 스티커는 stroke 위에 합성 (배치 순서대로).
+            state.stickers.forEach { sticker ->
+                drawSticker(sticker, sizeInt)
             }
         }
 

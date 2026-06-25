@@ -1,10 +1,14 @@
 package com.rts.rys.ryy.drawingtogether.transport.codec
 
 import com.rts.rys.ryy.drawingtogether.drawing.model.BrushType
+import com.rts.rys.ryy.drawingtogether.drawing.model.CanvasSnapshot
 import com.rts.rys.ryy.drawingtogether.drawing.model.DrawingEvent
 import com.rts.rys.ryy.drawingtogether.drawing.model.PeerId
 import com.rts.rys.ryy.drawingtogether.drawing.model.Point
 import com.rts.rys.ryy.drawingtogether.drawing.model.ShapeMode
+import com.rts.rys.ryy.drawingtogether.drawing.model.Sticker
+import com.rts.rys.ryy.drawingtogether.drawing.model.StickerId
+import com.rts.rys.ryy.drawingtogether.drawing.model.StickerKey
 import com.rts.rys.ryy.drawingtogether.drawing.model.Stroke
 import com.rts.rys.ryy.drawingtogether.drawing.model.StrokeId
 import com.rts.rys.ryy.drawingtogether.drawing.model.ToolKind
@@ -183,5 +187,45 @@ class FrameCodecTest {
         val bytes = FrameCodec.encodeStrokes(emptyList())
         val back = FrameCodec.decodeStrokes(bytes)
         assertEquals(emptyList<Stroke>(), back)
+    }
+
+    @Test
+    fun canvasSnapshotRoundtripViaFileCodec() {
+        val tool = ToolSettings(
+            kind = ToolKind.Pen,
+            colorArgb = 0xFFE53935.toInt(),
+            strokeWidthDp = 6f,
+            brush = BrushType.Marker,
+            shape = ShapeMode.None,
+        )
+        val snapshot = CanvasSnapshot(
+            strokes = listOf(
+                Stroke(
+                    id = StrokeId("s1"),
+                    authorId = PeerId.Local,
+                    tool = tool,
+                    points = listOf(Point(0.1f, 0.2f), Point(0.3f, 0.4f)),
+                ),
+            ),
+            stickers = listOf(
+                Sticker(
+                    id = StickerId("st1"),
+                    authorId = PeerId("peer-b"),
+                    key = StickerKey.Star,
+                    cx = 0.5f,
+                    cy = 0.6f,
+                    scale = 0.2f,
+                    rotationDeg = 30f,
+                ),
+            ),
+        )
+        val bytes = FrameCodec.encodeCanvas(snapshot)
+        assertEquals(snapshot, FrameCodec.decodeCanvas(bytes))
+    }
+
+    @Test
+    fun emptyCanvasSnapshotRoundtrip() {
+        val snapshot = CanvasSnapshot(strokes = emptyList(), stickers = emptyList())
+        assertEquals(snapshot, FrameCodec.decodeCanvas(FrameCodec.encodeCanvas(snapshot)))
     }
 }

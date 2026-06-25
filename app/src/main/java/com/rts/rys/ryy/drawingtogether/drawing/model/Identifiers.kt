@@ -13,6 +13,14 @@ value class StrokeId(val value: String) {
 
 @JvmInline
 @Serializable
+value class StickerId(val value: String) {
+    companion object {
+        fun random(): StickerId = StickerId(UUID.randomUUID().toString())
+    }
+}
+
+@JvmInline
+@Serializable
 value class PeerId(val value: String) {
     companion object {
         // Phase 1: 로컬 단일 작성자 플레이스홀더. Phase 2에서 설치당 UUID(SessionManager.peerId) 로 교체 예정.

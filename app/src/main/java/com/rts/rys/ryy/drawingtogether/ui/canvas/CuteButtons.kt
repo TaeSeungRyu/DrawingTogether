@@ -134,6 +134,50 @@ fun MergeBackgroundToggle(
     }
 }
 
+// 도구바에서 스티커 도구를 여는 트리거. 탭하면 StickerPickerSheet가 열림.
+// selected(스티커 모드)면 secondaryContainer + 외곽선, 현재 선택된 스티커 미리보기 표시.
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun StickerTriggerButton(
+    selected: Boolean,
+    currentKey: com.rts.rys.ryy.drawingtogether.drawing.model.StickerKey?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val container = if (selected)
+        MaterialTheme.colorScheme.secondaryContainer
+    else
+        MaterialTheme.colorScheme.surfaceVariant
+    val border = if (selected)
+        BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+    else
+        null
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(percent = 50),
+        color = container,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        border = border,
+        modifier = modifier.height(40.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp).fillMaxHeight(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            val previewKey = currentKey
+                ?: com.rts.rys.ryy.drawingtogether.drawing.model.StickerKey.Heart
+            StickerPreview(key = previewKey, modifier = Modifier.height(22.dp).width(22.dp))
+            Text(text = "스티커", style = MaterialTheme.typography.labelLarge)
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowDown,
+                contentDescription = "스티커 선택",
+                modifier = Modifier.height(18.dp),
+            )
+        }
+    }
+}
+
 // 도구바에서 현재 붓 보여주는 트리거. 탭하면 BrushSelectorSheet가 열림.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

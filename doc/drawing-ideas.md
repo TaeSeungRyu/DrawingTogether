@@ -37,11 +37,16 @@
   `BrushPreview`/`PenIllustration`(물방울) 분기. 실기기에서 blur 정상 표시 확인됨.
 - **남은 과제**: blur 렌더 비용 큼 → stroke 多 누적 시 비트맵 캐시 검토.
 
-### 4. 스티커 — 📋 계획 수립 (미구현)
-- **개념**: 자체 벡터 세트 스티커를 캔버스에 배치, 이동·크기·회전·삭제. undo 통합.
-- **동기화**: stroke 아닌 **새 요소 타입** → `DrawingEvent`·`Frame`·`CanvasState`·
-  렌더러·PNG 합성·undo 새 경로 전부 필요. "기호(key)로 관리 + 렌더 시 치환".
-- **난이도**: 높음. 8단계(A~H) 분할.
+### 4. 스티커 — ✅ 구현 완료
+- **개념**: 자체 벡터 세트 12종(하트/별/스마일/꽃/구름/해/달/무지개/물방울/번개/보석/반짝이)을
+  캔버스에 배치, 이동·크기·회전·삭제. undo 통합.
+- **동기화**: stroke 아닌 새 요소 타입 — `Sticker`/`StickerKey`/`StickerId` 모델, `DrawingEvent`
+  3종(`PlaceSticker`/`TransformSticker`/`RemoveSticker`), `CanvasState._stickers` + `UndoItem`
+  통합 undo, `StickerRenderer.drawSticker`(화면·PNG·미니뷰 공유), Snapshot 은 `CanvasSnapshot`
+  (strokes+stickers)으로 확장. "기호(key)로 관리 + 렌더 시 치환".
+- **변형**: commit-on-end — 드래그/핸들 *중* 엔 로컬만, 제스처 종료 시 최종 1회 전송.
+- **편집 UX**: 스티커 모드(`ToolKind.Sticker`)에서 빈 곳 탭=배치, 본체 탭=선택+드래그 이동,
+  우하단 핸들=크기·회전 동시, 우상단 ×=삭제. 핸들 hit-test 는 역회전 좌표로 판정.
 - **상세 계획**: [sticker-plan.md](sticker-plan.md).
 
 ### 5. 브러시 변형 3종 (네온/점선/무지개) — 백로그
@@ -93,6 +98,6 @@
 
 ## 권장 진행 순서
 
-안내선(빠른 win) → 에어브러시 → 번짐 → 스티커. (1~4 완료/계획)
+안내선(빠른 win) → 에어브러시 → 번짐 → 스티커. (1~4 완료)
 이후 백로그: 브러시 변형 3종(가장 가벼움) → 스포이드(실용) → 대칭(재미).
 앞쪽은 기존 brush/오버레이 틀 재사용으로 가볍고, 스티커·레이어는 규모가 커서 뒤.

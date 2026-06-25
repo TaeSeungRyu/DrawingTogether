@@ -1,5 +1,6 @@
 package com.rts.rys.ryy.drawingtogether.transport.codec
 
+import com.rts.rys.ryy.drawingtogether.drawing.model.CanvasSnapshot
 import com.rts.rys.ryy.drawingtogether.drawing.model.Stroke
 import com.rts.rys.ryy.drawingtogether.transport.Frame
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -27,4 +28,9 @@ object FrameCodec {
     fun encodeStrokes(strokes: List<Stroke>): ByteArray = cbor.encodeToByteArray(strokes)
 
     fun decodeStrokes(bytes: ByteArray): List<Stroke> = cbor.decodeFromByteArray(bytes)
+
+    // Snapshot 캔버스 통째 (strokes + 스티커) — FILE 페이로드 콘텐츠. 스티커 도입 후 동기화 경로.
+    fun encodeCanvas(snapshot: CanvasSnapshot): ByteArray = cbor.encodeToByteArray(snapshot)
+
+    fun decodeCanvas(bytes: ByteArray): CanvasSnapshot = cbor.decodeFromByteArray(bytes)
 }
