@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -191,37 +193,19 @@ fun ShapeDropdownButton(
 ) {
     var expanded by remember { mutableStateOf(false) }
     val active = shape != ShapeMode.None
-    val container = if (active)
-        MaterialTheme.colorScheme.secondaryContainer
-    else
-        MaterialTheme.colorScheme.surfaceVariant
-    val border = if (active)
-        BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
-    else
-        null
 
     Box(modifier = modifier) {
-        Surface(
+        ToolIconButton(
+            label = "도형",
+            selected = active,
             onClick = { expanded = true },
-            shape = RoundedCornerShape(percent = 50),
-            color = container,
-            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            border = border,
-            modifier = Modifier.height(40.dp),
+            modifier = Modifier.fillMaxWidth(),
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 12.dp).fillMaxHeight(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                ShapeIcon(shape = shape, modifier = Modifier.size(18.dp))
-                Text(text = shape.displayName, style = MaterialTheme.typography.labelLarge)
-                Icon(
-                    imageVector = Icons.Default.KeyboardArrowDown,
-                    contentDescription = "모양 선택",
-                    modifier = Modifier.size(18.dp),
-                )
-            }
+            // 활성 시 현재 도형, 비활성 시 대표 도형(사각형)으로 "도형" 의미 표시.
+            ShapeIcon(
+                shape = if (active) shape else ShapeMode.Rect,
+                modifier = Modifier.fillMaxSize(),
+            )
         }
         DropdownMenu(
             expanded = expanded,

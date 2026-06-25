@@ -708,6 +708,7 @@ fun DrawingScreen(
                 onBrush = vm::setBrush,
                 onShape = vm::setShape,
                 onSticker = vm::selectSticker,
+                onPen = vm::selectPenFreehand,
                 onStrokeWidth = vm::setStrokeWidth,
                 onUndo = vm::undoLastLocal,
                 onClear = vm::clearAll,

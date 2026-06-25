@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -42,36 +44,15 @@ fun GuideDropdownButton(
 ) {
     var expanded by remember { mutableStateOf(false) }
     val active = cross || grid != GuideGrid.None
-    val container = if (active)
-        MaterialTheme.colorScheme.secondaryContainer
-    else
-        MaterialTheme.colorScheme.surfaceVariant
-    val border = if (active)
-        BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
-    else
-        null
 
     Box(modifier = modifier) {
-        Surface(
+        ToolIconButton(
+            label = "안내선",
+            selected = active,
             onClick = { expanded = true },
-            shape = RoundedCornerShape(percent = 50),
-            color = container,
-            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            border = border,
-            modifier = Modifier.height(40.dp),
+            modifier = Modifier.fillMaxWidth(),
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 12.dp).fillMaxHeight(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Text(text = "안내선", style = MaterialTheme.typography.labelLarge)
-                Icon(
-                    imageVector = Icons.Default.KeyboardArrowDown,
-                    contentDescription = "안내선 선택",
-                    modifier = Modifier.size(18.dp),
-                )
-            }
+            GuideGlyph(modifier = Modifier.fillMaxSize())
         }
         DropdownMenu(
             expanded = expanded,

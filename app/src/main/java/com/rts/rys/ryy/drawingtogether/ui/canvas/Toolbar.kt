@@ -1,12 +1,12 @@
 package com.rts.rys.ryy.drawingtogether.ui.canvas
 
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -48,6 +48,7 @@ fun Toolbar(
     onBrush: (BrushType) -> Unit,
     onShape: (ShapeMode) -> Unit,
     onSticker: (StickerKey) -> Unit,
+    onPen: () -> Unit,
     onStrokeWidth: (Float) -> Unit,
     onUndo: () -> Unit,
     onClear: () -> Unit,
@@ -103,42 +104,57 @@ fun Toolbar(
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            val toolsScroll = rememberScrollState()
-            val toolsFadeColor = MaterialTheme.colorScheme.surface
+            // 도구 줄 — 라벨 달린 아이콘 5개를 균등(weight) 배치. 가로 스크롤 없이 한 줄 고정.
+            // 펜(자유)/도형/스티커는 서로 배타적, 안내선은 독립 오버레이 토글.
+            val penFreehand = tool.kind == ToolKind.Pen && tool.shape == ShapeMode.None
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(toolsScroll)
-                    .fadingEdgeHorizontal(
-                        leftFade = toolsScroll.canScrollBackward,
-                        rightFade = toolsScroll.canScrollForward,
-                        fadeColor = toolsFadeColor,
-                    ),
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                BrushTriggerButton(
-                    brush = tool.brush,
-                    onClick = { brushSheetOpen = true },
-                )
+                // 붓: 선택 안 됐으면 펜 자유 모드로, 이미 선택돼 있으면 붓 종류 시트 열기.
+                ToolIconButton(
+                    label = "붓",
+                    selected = penFreehand,
+                    onClick = { if (penFreehand) brushSheetOpen = true else onPen() },
+                    modifier = Modifier.weight(1f),
+                ) {
+                    BrushPreview(
+                        brush = tool.brush,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth().height(20.dp),
+                    )
+                }
                 ShapeDropdownButton(
                     shape = tool.shape,
                     onShape = onShape,
+                    modifier = Modifier.weight(1f),
                 )
-                StickerTriggerButton(
+                ToolIconButton(
+                    label = "스티커",
                     selected = tool.kind == ToolKind.Sticker,
-                    currentKey = tool.stickerKey,
                     onClick = { stickerSheetOpen = true },
-                )
-                EraserToggle(
+                    modifier = Modifier.weight(1f),
+                ) {
+                    StickerPreview(
+                        key = tool.stickerKey ?: StickerKey.Heart,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                ToolIconButton(
+                    label = "지우개",
                     selected = tool.kind == ToolKind.Eraser,
                     onClick = onEraser,
-                )
+                    modifier = Modifier.weight(1f),
+                ) {
+                    EraserGlyph(modifier = Modifier.fillMaxSize())
+                }
                 GuideDropdownButton(
                     cross = guideCross,
                     grid = guideGrid,
                     onToggleCross = onToggleGuideCross,
                     onSelectGrid = onSelectGuideGrid,
+                    modifier = Modifier.weight(1f),
                 )
             }
 

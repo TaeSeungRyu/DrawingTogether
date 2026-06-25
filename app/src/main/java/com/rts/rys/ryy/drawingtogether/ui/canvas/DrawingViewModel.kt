@@ -118,6 +118,11 @@ class DrawingViewModel : ViewModel() {
         tool = tool.copy(kind = ToolKind.Sticker, stickerKey = key)
     }
 
+    // 펜 자유 곡선 모드로 전환 — 도형/스티커/지우개에서 빠져나옴. 붓 종류·색은 유지.
+    fun selectPenFreehand() {
+        tool = tool.copy(kind = ToolKind.Pen, shape = ShapeMode.None)
+    }
+
     // 지우개 버튼은 토글 — 지우개 상태에서 다시 누르면 펜으로 돌아온다.
     fun toggleEraser() {
         val nextKind = if (tool.kind == ToolKind.Eraser) ToolKind.Pen else ToolKind.Eraser

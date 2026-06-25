@@ -1,28 +1,33 @@
 package com.rts.rys.ryy.drawingtogether.ui.canvas
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.unit.dp
-import com.rts.rys.ryy.drawingtogether.drawing.model.BrushType
 
 // 알약(pill) 모양 토널 액션 버튼. 시스템 TextButton보다 부드럽고 친근한 느낌.
 @OptIn(ExperimentalMaterial3Api::class)
@@ -59,35 +64,110 @@ fun CuteToolButton(
     }
 }
 
-// 지우개 토글 — selected일 때 tertiary 컨테이너 + 외곽선.
+// 도구 줄의 표준 아이콘 버튼 — 아이콘 + 작은 라벨, selected 일 때 강조(채움+외곽선).
+// 도형/안내선 드롭다운 트리거와 펜/스티커/지우개 버튼이 모두 이 형태로 통일된다.
+// 도구 줄에서 Modifier.weight(1f) 로 균등 배치 → 가로 스크롤 없이 한 줄에 전부.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EraserToggle(
+fun ToolIconButton(
+    label: String,
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    icon: @Composable () -> Unit,
 ) {
     val container = if (selected)
-        MaterialTheme.colorScheme.tertiaryContainer
+        MaterialTheme.colorScheme.secondaryContainer
     else
         MaterialTheme.colorScheme.surfaceVariant
     val border = if (selected)
-        BorderStroke(2.dp, MaterialTheme.colorScheme.tertiary)
+        BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
     else
         null
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(percent = 50),
+        shape = RoundedCornerShape(14.dp),
         color = container,
         contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
         border = border,
-        modifier = modifier.height(40.dp),
+        modifier = modifier.height(54.dp),
     ) {
-        Box(
-            modifier = Modifier.padding(horizontal = 16.dp).fillMaxHeight(),
-            contentAlignment = Alignment.Center,
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight()
+                .padding(horizontal = 2.dp, vertical = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
         ) {
-            Text(text = "지우개", style = MaterialTheme.typography.labelLarge)
+            Box(modifier = Modifier.size(26.dp), contentAlignment = Alignment.Center) { icon() }
+            Spacer(modifier = Modifier.height(3.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                softWrap = false,
+            )
+        }
+    }
+}
+
+// 지우개 글리프 — 살짝 기운 둥근 사각형 + 고무/홀더 경계선.
+@Composable
+fun EraserGlyph(modifier: Modifier = Modifier, tint: Color = LocalContentColor.current) {
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+        if (w <= 0f || h <= 0f) return@Canvas
+        rotate(degrees = -20f) {
+            val bw = w * 0.70f
+            val bh = h * 0.46f
+            val left = (w - bw) / 2f
+            val top = (h - bh) / 2f
+            val r = bh * 0.30f
+            drawRoundRect(
+                color = tint.copy(alpha = 0.92f),
+                topLeft = Offset(left, top),
+                size = Size(bw, bh),
+                cornerRadius = CornerRadius(r, r),
+            )
+            // 고무/플라스틱 홀더 경계선.
+            val divY = top + bh * 0.55f
+            drawLine(
+                color = Color.White.copy(alpha = 0.8f),
+                start = Offset(left, divY),
+                end = Offset(left + bw, divY),
+                strokeWidth = h * 0.04f,
+            )
+        }
+    }
+}
+
+// 안내선 글리프 — 3×3 격자.
+@Composable
+fun GuideGlyph(modifier: Modifier = Modifier, tint: Color = LocalContentColor.current) {
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+        if (w <= 0f || h <= 0f) return@Canvas
+        val pad = w * 0.12f
+        val left = pad
+        val top = pad
+        val right = w - pad
+        val bottom = h - pad
+        val thin = w * 0.045f
+        val color = tint.copy(alpha = 0.85f)
+        drawRect(
+            color = color,
+            topLeft = Offset(left, top),
+            size = Size(right - left, bottom - top),
+            style = Stroke(width = thin),
+        )
+        for (i in 1..2) {
+            val x = left + (right - left) * i / 3f
+            drawLine(color, Offset(x, top), Offset(x, bottom), strokeWidth = thin, cap = StrokeCap.Round)
+            val y = top + (bottom - top) * i / 3f
+            drawLine(color, Offset(left, y), Offset(right, y), strokeWidth = thin, cap = StrokeCap.Round)
         }
     }
 }
@@ -134,81 +214,3 @@ fun MergeBackgroundToggle(
     }
 }
 
-// 도구바에서 스티커 도구를 여는 트리거. 탭하면 StickerPickerSheet가 열림.
-// selected(스티커 모드)면 secondaryContainer + 외곽선, 현재 선택된 스티커 미리보기 표시.
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun StickerTriggerButton(
-    selected: Boolean,
-    currentKey: com.rts.rys.ryy.drawingtogether.drawing.model.StickerKey?,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val container = if (selected)
-        MaterialTheme.colorScheme.secondaryContainer
-    else
-        MaterialTheme.colorScheme.surfaceVariant
-    val border = if (selected)
-        BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
-    else
-        null
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(percent = 50),
-        color = container,
-        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-        border = border,
-        modifier = modifier.height(40.dp),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp).fillMaxHeight(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            val previewKey = currentKey
-                ?: com.rts.rys.ryy.drawingtogether.drawing.model.StickerKey.Heart
-            StickerPreview(key = previewKey, modifier = Modifier.height(22.dp).width(22.dp))
-            Text(text = "스티커", style = MaterialTheme.typography.labelLarge)
-            Icon(
-                imageVector = Icons.Default.KeyboardArrowDown,
-                contentDescription = "스티커 선택",
-                modifier = Modifier.height(18.dp),
-            )
-        }
-    }
-}
-
-// 도구바에서 현재 붓 보여주는 트리거. 탭하면 BrushSelectorSheet가 열림.
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun BrushTriggerButton(
-    brush: BrushType,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(percent = 50),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        modifier = modifier.height(40.dp),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp).fillMaxHeight(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            BrushPreview(
-                brush = brush,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.width(40.dp).height(22.dp),
-            )
-            Text(text = brush.displayName, style = MaterialTheme.typography.labelLarge)
-            Spacer(modifier = Modifier.width(2.dp))
-            Icon(
-                imageVector = Icons.Default.KeyboardArrowDown,
-                contentDescription = "붓 선택",
-                modifier = Modifier.height(18.dp),
-            )
-        }
-    }
-}
