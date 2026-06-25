@@ -77,8 +77,9 @@ import com.rts.rys.ryy.drawingtogether.works.WorkStore
 import kotlinx.coroutines.launch
 
 private const val ASPECT_TOAST_TEXT = "사진 비율로 화면을 맞췄어요"
-private const val SAVED_TOAST_TEXT =
-    "저장됐어요. 휴대폰 갤러리로 보내려면 \"최근 작업\" 에서 작품을 열고 \"갤러리로 보내기\" 를 눌러주세요."
+// 저장 후 안내 — 길어서 토스트로는 잘림. Snackbar(여러 줄 + 닫기)로 표시.
+private const val SAVED_MESSAGE =
+    "저장됐어요. 휴대폰 갤러리로 보내려면 \"최근 작업\"에서 작품을 열고 \"갤러리로 보내기\"를 눌러주세요."
 
 // Phase 4-G: 동기화 다이얼로그 단계.
 private sealed class SyncStep {
@@ -904,7 +905,11 @@ fun DrawingScreen(
                 val mergedBg = vm.canvas.background != null && includeBg
                 val bitmap = PngComposer.compose(vm.canvas, density, includeBg)
                 WorkStore.get(context).save(bitmap, mergedBg, raw)
-                Toast.makeText(context, SAVED_TOAST_TEXT, Toast.LENGTH_LONG).show()
+                snackbarHostState.showSnackbar(
+                    message = SAVED_MESSAGE,
+                    withDismissAction = true,
+                    duration = SnackbarDuration.Long,
+                )
             }
         }
         AlertDialog(
@@ -922,11 +927,12 @@ fun DrawingScreen(
                         keyboardActions = KeyboardActions(onDone = { submit() }),
                         modifier = Modifier.focusRequester(focus),
                     )
-                    // 배경 합치기 토글 — 기존 상단 바에서 이동. 항상 노출(사진 없을 땐 저장에 영향 없음).
+                    // 사진 배경 포함 토글 — 사진이 있을 때만 활성. 없으면 흐리게 disabled.
                     Spacer(modifier = Modifier.height(12.dp))
                     MergeBackgroundToggle(
                         checked = vm.canvas.mergeBackgroundOnSave,
                         onCheckedChange = onMergeChange,
+                        enabled = vm.canvas.background != null,
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(

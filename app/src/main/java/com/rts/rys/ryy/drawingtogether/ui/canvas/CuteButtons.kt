@@ -303,28 +303,33 @@ fun SaveGlyph(modifier: Modifier = Modifier, tint: Color = LocalContentColor.cur
     }
 }
 
-// 저장 시 사진 배경을 PNG에 합칠지 켜고 끄는 토글. 사진 추가 전에도 켤 수 있도록 항상 노출.
+// 저장 시 사진 배경을 결과 PNG에 포함할지 켜고 끄는 토글.
+// enabled=false(사진 없음)면 흐리게 + 클릭 불가 — 사진이 있어야 의미 있는 옵션이라.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MergeBackgroundToggle(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
-    val container = if (checked)
+    val baseContainer = if (checked)
         MaterialTheme.colorScheme.primaryContainer
     else
         MaterialTheme.colorScheme.surfaceVariant
-    val contentColor = if (checked)
+    val baseContent = if (checked)
         MaterialTheme.colorScheme.onPrimaryContainer
     else
         MaterialTheme.colorScheme.onSurfaceVariant
-    val border = if (checked)
+    val container = if (enabled) baseContainer else baseContainer.copy(alpha = 0.4f)
+    val contentColor = if (enabled) baseContent else baseContent.copy(alpha = 0.4f)
+    val border = if (checked && enabled)
         BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
     else
         null
     Surface(
         onClick = { onCheckedChange(!checked) },
+        enabled = enabled,
         shape = RoundedCornerShape(percent = 50),
         color = container,
         contentColor = contentColor,
@@ -336,7 +341,7 @@ fun MergeBackgroundToggle(
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                text = if (checked) "배경 합치기 ON" else "배경 합치기 OFF",
+                text = if (checked) "사진 배경 포함 ON" else "사진 배경 포함 OFF",
                 style = MaterialTheme.typography.labelLarge,
                 maxLines = 1,
                 softWrap = false,

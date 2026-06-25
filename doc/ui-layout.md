@@ -73,8 +73,9 @@
 | 제거 | 휴지통 | `canvas.setBackground(null)` | 1.5 | 사진 있을 때만 | errorContainer |
 | 저장 | 다운로드 화살표 | `PngComposer.compose` → `WorkStore.save` → Toast | 1.6 | 항상 | secondaryContainer |
 
-> **배경 합치기 토글**은 상단 바에서 빼고 **저장 다이얼로그**로 이동(저장 시에만 의미). 항상
-> 노출되며 함께 모드(Duo) 연결 중이면 `Frame.MergeBackground` 로 동기화. 모임 모드는 자기만(브로드캐스트 X).
+> **"사진 배경 포함" 토글**(구 "배경 합치기")은 상단 바에서 빼고 **저장 다이얼로그**로 이동(저장
+> 시에만 의미). **사진 배경이 있을 때만 활성**, 없으면 흐리게 disabled. 함께 모드(Duo) 연결 중이면
+> `Frame.MergeBackground` 로 동기화. 모임 모드는 자기만(브로드캐스트 X).
 
 ### 캔버스 영역
 
