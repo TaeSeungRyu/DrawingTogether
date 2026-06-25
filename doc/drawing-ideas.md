@@ -1,7 +1,7 @@
 # 그리기 모드 강화 아이디어
 
 > 그리기 경험을 풍부하게 만들기 위한 기능 후보 목록. 사용자 제안 + 구현 관점 평가.
-> 상태: 안내선부터 착수 예정, 나머지는 백로그.
+> 상태: 1~4(안내선·에어브러시·번짐·스티커) 완료. 나머지는 백로그.
 
 ## 평가 기준 (이 앱 특유)
 
@@ -12,44 +12,26 @@
   그리면 "보이는 것 = 저장되는 것" + 멀티 동기화가 자동.
 - **정규화 좌표**: 모든 점은 0..1. 렌더 시 `canvasSize` 곱함.
 
-## 후보
+## 완료된 항목
 
-### 1. 상하 안내선 (가이드라인) — ✅ 구현 완료
-- **개념**: 캔버스 위 보조선. 중앙 십자선 + 격자(6×6 / 18×18 택1).
-- **동기화**: 없음 — 로컬 `mutableStateOf`. PNG 저장에도 미포함.
-- **구현**: `DrawingViewModel.guideCross/guideGrid(GuideGrid)`, `DrawingCanvas.drawGuides`,
-  `GuideDropdownButton`(도구바 2번째 행, 가로 스크롤+fade), 미니 뷰엔 미표시.
+구현 세부는 코드와 [roadmap.md](roadmap.md) Phase 5.5 참고. 여기선 요약만.
 
-### 2. 에어브러시 (분사) — ✅ 구현 완료
-- **개념**: 점을 흩뿌리는 스프레이 브러시. `BrushType.Airbrush`.
-- **동기화 해법**: 분사점을 stroke 에 저장하지 않고, 렌더 시 `Random(stroke.id 해시)`
-  로 결정론 생성 → 매 프레임·양 단말 동일. StrokeId 가 이미 와이어 전송돼 멀티에서도
-  일치.
-- **구현**: `StrokeRenderer.drawAirbrush`(경로 보간 + 극좌표 분사, sqrt 균일 분포),
-  `BrushPreview`/`PenIllustration` 분사·스프레이캔 분기. PNG·동기화 자동.
-- **남은 과제**: 분사 stroke 多 누적 시 매 프레임 재계산 비용 → 비트맵 캐시 검토.
+1. **안내선(가이드라인)** — 중앙 십자선 + 격자(6×6 / 18×18 택1). 로컬 전용(동기화·저장
+   미포함). `DrawingViewModel.guideCross/guideGrid`, `DrawingCanvas.drawGuides`, 도구바 안내선 아이콘.
+2. **에어브러시(분사)** — `BrushType.Airbrush`. 분사점을 stroke 에 저장하지 않고 렌더 시
+   결정론 seed(`stroke.id` 해시)로 생성 → 매 프레임·양 단말 동일. `StrokeRenderer.drawAirbrush`.
+3. **번짐(수채/스머지)** — `BrushType.Blur`. native `Paint` + `BlurMaskFilter` via
+   `drawIntoCanvas { nativeCanvas.drawPath }`. PNG 합성에서도 동작. `StrokeRenderer.drawBlurred`.
+4. **스티커** — 자체 벡터 12종(하트/별/스마일/꽃/구름/해/달/무지개/물방울/번개/보석/반짝이)
+   배치·이동·크기·회전·삭제 + stroke/스티커 통합 undo(`UndoItem`). 메타(`key`+변환)만 보관·전송,
+   렌더 시 벡터로 치환. 변형은 commit-on-end. 상세: [sticker-plan.md](sticker-plan.md).
 
-### 3. 번지는 효과 (수채/스머지) — ✅ 구현 완료
-- **개념**: 가장자리가 번지는 붓. `BrushType.Blur`.
-- **구현**: `StrokeRenderer.drawBlurred` — `buildFreehandPath().asAndroidPath()` +
-  native `Paint` 에 `BlurMaskFilter(NORMAL)`, `drawIntoCanvas { nativeCanvas.drawPath }`.
-  `PngComposer` 의 ImageBitmap canvas 에서도 동작 → 화면=저장. 동기화 자동.
-  `BrushPreview`/`PenIllustration`(물방울) 분기. 실기기에서 blur 정상 표시 확인됨.
-- **남은 과제**: blur 렌더 비용 큼 → stroke 多 누적 시 비트맵 캐시 검토.
+> **성능 메모**: 에어브러시·번짐은 stroke 가 많이 쌓이면 매 프레임 재계산/blur 비용이 큼 →
+> "완료 stroke 비트맵 캐시"(아래 백로그 §구조적) 필요성이 커짐. 실측 후 도입.
 
-### 4. 스티커 — ✅ 구현 완료
-- **개념**: 자체 벡터 세트 12종(하트/별/스마일/꽃/구름/해/달/무지개/물방울/번개/보석/반짝이)을
-  캔버스에 배치, 이동·크기·회전·삭제. undo 통합.
-- **동기화**: stroke 아닌 새 요소 타입 — `Sticker`/`StickerKey`/`StickerId` 모델, `DrawingEvent`
-  3종(`PlaceSticker`/`TransformSticker`/`RemoveSticker`), `CanvasState._stickers` + `UndoItem`
-  통합 undo, `StickerRenderer.drawSticker`(화면·PNG·미니뷰 공유), Snapshot 은 `CanvasSnapshot`
-  (strokes+stickers)으로 확장. "기호(key)로 관리 + 렌더 시 치환".
-- **변형**: commit-on-end — 드래그/핸들 *중* 엔 로컬만, 제스처 종료 시 최종 1회 전송.
-- **편집 UX**: 스티커 모드(`ToolKind.Sticker`)에서 빈 곳 탭=배치, 본체 탭=선택+드래그 이동,
-  우하단 핸들=크기·회전 동시, 우상단 ×=삭제. 핸들 hit-test 는 역회전 좌표로 판정.
-- **상세 계획**: [sticker-plan.md](sticker-plan.md).
+## 백로그 (미착수)
 
-### 5. 브러시 변형 3종 (네온/점선/무지개) — 백로그
+### 브러시 변형 3종 (네온/점선/무지개)
 기존 `BrushType` enum + `StrokeRenderer` 분기 추가만으로 화면·PNG·멀티 동기화 자동 공유.
 가장 가벼운 묶음.
 - **네온/glow**: 발광 효과. `BlurMaskFilter`(번짐) + 밝은 색 겹침 응용 — 거의 공짜.
@@ -59,21 +41,21 @@
   좌표→색 매핑. 어린이 인기.
 - **난이도**: 낮음. 3종 묶어 한 번에 권장.
 
-### 6. 스포이드 (색 추출) — 백로그
+### 스포이드 (색 추출)
 - **개념**: 캔버스/사진 배경에서 색을 집어 현재 펜 색으로. **사진 위 그리기 앱이라 특히
   실용적.**
 - **구현**: 탭 지점의 픽셀 색 읽기(렌더된 비트맵 또는 배경 bitmap 샘플). `ToolKind.Eyedropper`
   또는 색 팔레트의 스포이드 버튼. 동기화 무관(로컬 색 선택일 뿐).
 - **난이도**: 낮~중. 캔버스 픽셀 캡처(`Picture`/`drawToBitmap`) 또는 배경 직접 샘플.
 
-### 7. 대칭(미러) 그리기 — 백로그
+### 대칭(미러) 그리기
 - **개념**: 좌우/상하(또는 N분할 만다라) 대칭으로 stroke 자동 복제. 안내선(중앙 십자선)과
   시너지, 어린이/낙서 재미.
 - **구현**: 입력 stroke 의 미러 좌표 stroke 를 같이 생성·emit → 동기화·undo·저장 자동
   (정규화 좌표 반사). 대칭 축 토글 UI.
 - **난이도**: 중간. 입력 시 미러 이벤트 동반 생성이 핵심.
 
-### 8. 음향 드로잉 / 비주얼라이저 — 실험 후보 (불확실)
+### 음향 드로잉 / 비주얼라이저 — 실험 후보 (불확실)
 - **개념**: 마이크/음악의 진폭·주파수(FFT)·박자를 받아 stroke 를 자동 생성. 음에 맞춰
   "자연스럽게" 그려지는 재미 요소. 함께 모드면 생성 stroke 가 `DrawingEvent` 로 양쪽 동기화.
 - **결과물 성격**: 본질적으로 **추상 비주얼라이저/패턴**. 날것 매핑이면 파형 선 하나,
@@ -90,14 +72,15 @@
     제약. 가장 흔한 함정은 기술이 아니라 정책 문서 누락.
 - **권장**: "마이크 진폭 → 파형 선 하나" 작은 프로토타입으로 느낌부터 확인 후 판단.
 
-### 9. 구조적 (크다 — 나중 검토)
-- **redo**: 현재 undo 만. undo 스택 구조 손봐야 — 스티커 통합 작업과 함께 하면 효율적.
+### 구조적 (크다 — 나중 검토)
+- **완료 stroke 비트맵 캐시**: 에어브러시·번짐 누적 시 프레임 드랍 대비 성능 작업. 위 성능 메모 참고.
+- **redo**: 현재 undo 만. undo 스택은 스티커 도입 때 `UndoItem` 으로 일반화됨 — redo 추가 시 그 위에 얹기.
 - **도형 채우기 토글**: 현재 도형은 외곽선만 → 채움 옵션(`ToolSettings` fill 플래그).
 - **배경색 선택**: 흰 배경 대신 파스텔. 간단하지만 캔버스 배경 상태 추가.
 - **레이어 / 텍스트 넣기**: 큰 작업, 보류급.
 
 ## 권장 진행 순서
 
-안내선(빠른 win) → 에어브러시 → 번짐 → 스티커. (1~4 완료)
-이후 백로그: 브러시 변형 3종(가장 가벼움) → 스포이드(실용) → 대칭(재미).
-앞쪽은 기존 brush/오버레이 틀 재사용으로 가볍고, 스티커·레이어는 규모가 커서 뒤.
+(완료) 안내선 → 에어브러시 → 번짐 → 스티커.
+(다음) 브러시 변형 3종(가장 가벼움) → 스포이드(실용) → 대칭(재미). 그 후 구조적/음향.
+앞쪽은 기존 brush/오버레이 틀 재사용으로 가볍고, 레이어·음향은 규모가 커서 뒤.

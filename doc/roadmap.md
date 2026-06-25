@@ -187,6 +187,11 @@
 - [x] 회전 시 연결 유지 — `MainActivity` `configChanges`(orientation 등)로 Activity 재생성 방지 → `DrawingScreen.onDispose(disconnect)` 안 불려 연결 유지, Compose 가 레이아웃 자동 전환.
 - [x] 최근 작업 모달 커스텀 bottom 시트 — Material3 `ModalBottomSheet` 가 가로에서 우측 여백 남기는 문제(파라미터로 못 품) 때문에 Box 오버레이로 재구현. 가로 풀폭 + 드래그/백드롭/뒤로가기 닫기, 가로 5열·세로 3열, 회전 자동 재배치, hoisted `gridState` 로 스크롤 위치 보존.
 
+**도구바/연결 표시 다듬기 (스티커 이후)**
+- [x] 도구 줄을 라벨 달린 아이콘 5개(붓/도형/스티커/지우개/안내선) `weight` 균등 배치로 — 가로 스크롤 제거, 항상 전부 노출. 세부는 기존 시트/드롭다운 재사용. `ToolIconButton` + `EraserGlyph`/`GuideGlyph`.
+- [x] 하단 액션 줄(동기화·방 열기·되돌리기·전체 지우기)을 `Box(CenterEnd)+horizontalScroll` 로 — 다 들어오면 우측 정렬, 넘치면 가로 스크롤. 줄바꿈으로 캔버스 높이 먹던 문제 해결.
+- [x] 연결 상태 표시를 상단 peer indicator → **캔버스 우측 상단 내 닉네임 반투명 칩**으로 변경(`MyCanvasContent.selfNick`). `pointerInput` 없어 그리기 무영향. `PeerIndicator.kt` 제거.
+
 **브랜딩**
 - [x] 앱 아이콘 리디자인 — Candy Pop 코랄 배경 + 코랄/민트/라벤더 세 물감 방울 클러스터(adaptive + monochrome).
 - [x] 런처 이름 한글화 "드로잉 투게더" (앱 실행 중 화면은 영문 "Drawing Together" 유지).

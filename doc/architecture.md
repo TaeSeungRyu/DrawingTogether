@@ -113,7 +113,7 @@ ui ──► session ──► drawing
 
 ## 관련 문서
 
-- [ui-layout.md](ui-layout.md) — 화면별 목업, TopAppBar/도구바 배치, peer indicator
+- [ui-layout.md](ui-layout.md) — 화면별 목업, TopAppBar/도구바 배치, 캔버스 닉네임 칩
 - [nearby-connections.md](nearby-connections.md) — 전송 계층
 - [drawing-engine.md](drawing-engine.md) — 캔버스/사진/렌더링
 - [protocol.md](protocol.md) — 이벤트·사진 직렬화 포맷
