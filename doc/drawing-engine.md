@@ -25,7 +25,7 @@ enum class BrushType(
 
 enum class ShapeMode(val displayName: String) {
     None, Circle, Rect, Triangle, Pentagon, Hexagon, Star, Heart
-    // None = 자유 폴리라인. 그 외 = 첫·마지막 점을 바운딩 박스로 도형 외곽선 1개.
+    // None = 자유 곡선(중간점 베지어). 그 외 = 첫·마지막 점을 바운딩 박스로 도형 외곽선 1개.
 }
 
 data class ToolSettings(
