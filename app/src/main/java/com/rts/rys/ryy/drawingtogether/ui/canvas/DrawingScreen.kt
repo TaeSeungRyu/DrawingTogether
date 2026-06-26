@@ -701,7 +701,10 @@ fun DrawingScreen(
             Toolbar(
                 tool = vm.tool,
                 canUndo = vm.canvas.canUndo,
-                onColor = vm::selectColor,
+                onColor = { argb ->
+                    UserPaletteRepo.get(context).addRecent(argb)
+                    vm.selectColor(argb)
+                },
                 onEraser = vm::toggleEraser,
                 onEyedropper = vm::toggleEyedropper,
                 onBrush = vm::setBrush,
@@ -969,6 +972,7 @@ fun DrawingScreen(
 private fun MyCanvasContent(vm: DrawingViewModel, selfNick: String? = null) {
     val bg = vm.canvas.background
     val density = LocalDensity.current.density
+    val context = LocalContext.current
     val sizeModifier = if (bg != null) {
         Modifier.aspectRatio(bg.aspectRatio)
     } else {
@@ -986,7 +990,9 @@ private fun MyCanvasContent(vm: DrawingViewModel, selfNick: String? = null) {
             guideGridCells = vm.guideGrid.cells,
             smoothingAlpha = vm.smoothing.alpha,
             onPickColor = { nx, ny ->
-                vm.selectColor(CanvasColorSampler.sampleColor(vm.canvas, density, nx, ny))
+                val argb = CanvasColorSampler.sampleColor(vm.canvas, density, nx, ny)
+                UserPaletteRepo.get(context).addRecent(argb)
+                vm.selectColor(argb)
             },
             onPlaceSticker = vm::placeSticker,
             onTransformStickerLocal = vm::transformStickerLocal,

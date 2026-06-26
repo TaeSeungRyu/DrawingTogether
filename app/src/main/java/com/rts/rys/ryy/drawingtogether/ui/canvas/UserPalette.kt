@@ -14,6 +14,18 @@ class UserPaletteRepo private constructor(private val prefs: SharedPreferences) 
     private val _palette = MutableStateFlow(load())
     val palette: StateFlow<List<Int>> = _palette.asStateFlow()
 
+    // 최근 사용 색 — 최신이 앞. 중복 제거, 최대 RECENT_MAX 개. 색을 쓸 때마다 addRecent 호출.
+    private val _recent = MutableStateFlow(loadRecent())
+    val recent: StateFlow<List<Int>> = _recent.asStateFlow()
+
+    fun addRecent(argb: Int) {
+        val opaque = 0xFF000000.toInt() or (argb and 0x00FFFFFF)
+        val updated = (listOf(opaque) + _recent.value.filter { it != opaque }).take(RECENT_MAX)
+        if (updated == _recent.value) return
+        _recent.value = updated
+        prefs.edit().putString(KEY_RECENT, updated.joinToString(SEP) { it.toString() }).apply()
+    }
+
     fun updateSlot(index: Int, argb: Int) {
         if (index !in 0 until PALETTE_SIZE) return
         val updated = _palette.value.toMutableList().apply { set(index, argb) }
@@ -32,9 +44,16 @@ class UserPaletteRepo private constructor(private val prefs: SharedPreferences) 
         return if (parsed.size == PALETTE_SIZE) parsed else DefaultColorPalette
     }
 
+    private fun loadRecent(): List<Int> {
+        val raw = prefs.getString(KEY_RECENT, null) ?: return emptyList()
+        return raw.split(SEP).mapNotNull { it.toIntOrNull() }.take(RECENT_MAX)
+    }
+
     companion object {
         const val PALETTE_SIZE: Int = 7  // DefaultColorPalette 크기
+        const val RECENT_MAX: Int = 8
         private const val KEY = "argb_list"
+        private const val KEY_RECENT = "recent_list"
         private const val SEP = "/"
         private const val PREFS = "user_palette"
 

@@ -7,8 +7,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -51,6 +53,7 @@ fun ColorPaletteRow(
     modifier: Modifier = Modifier,
     eyedropperActive: Boolean = false,
     onEyedropper: () -> Unit = {},
+    recents: List<Int> = emptyList(),
     presets: List<Int> = DefaultColorPalette,
     // 편집 모드 — 슬롯 탭 시 onColor 대신 onEditSlot 호출.
     editing: Boolean = false,
@@ -92,6 +95,19 @@ fun ColorPaletteRow(
                     },
             )
         }
+        // 최근 사용 색 — 프리셋에 이미 있는 색은 중복이라 제외. 편집 모드에선 숨김.
+        val recentFiltered = recents.filter { it !in presets }
+        if (!editing && recentFiltered.isNotEmpty()) {
+            item { PaletteDivider() }
+            items(recentFiltered) { argb ->
+                val selected = isPenSelected && argb == currentColor
+                ColorDot(
+                    argb = argb,
+                    selected = selected,
+                    onClick = { onColor(argb) },
+                )
+            }
+        }
         if (!editing) {
             item { CustomColorButton(onClick = onCustom) }
             item { EyedropperButton(active = eyedropperActive, onClick = onEyedropper) }
@@ -101,6 +117,34 @@ fun ColorPaletteRow(
             item { ResetButton(onClick = onResetPalette) }
         }
     }
+}
+
+// 최근 색 스와치 — 프리셋과 같은 원형이지만 편집 불가(탭하면 그 색 선택).
+@Composable
+private fun ColorDot(argb: Int, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(CircleShape)
+            .background(Color(argb))
+            .border(
+                width = if (selected) 3.dp else 1.dp,
+                color = if (selected) MaterialTheme.colorScheme.primary else Color.LightGray,
+                shape = CircleShape,
+            )
+            .clickable { onClick() },
+    )
+}
+
+// 프리셋과 최근 색을 가르는 얇은 세로 구분선.
+@Composable
+private fun PaletteDivider() {
+    Box(
+        modifier = Modifier
+            .padding(horizontal = 2.dp)
+            .size(width = 1.dp, height = 24.dp)
+            .background(Color.LightGray),
+    )
 }
 
 @Composable

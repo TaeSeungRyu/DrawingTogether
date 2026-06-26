@@ -73,6 +73,7 @@ fun Toolbar(
     val context = LocalContext.current
     val paletteRepo = remember { UserPaletteRepo.get(context) }
     val palette by paletteRepo.palette.collectAsState()
+    val recent by paletteRepo.recent.collectAsState()
 
     // ColorPickerSheet 는 두 가지 케이스에서 띄움 — 임시 색 (+ 버튼) 또는 슬롯 편집.
     // 어느 케이스인지 onConfirm 분기에 사용.
@@ -101,6 +102,7 @@ fun Toolbar(
                 onCustom = { pickerTarget = PickerTarget.Temp },
                 eyedropperActive = tool.kind == ToolKind.Eyedropper,
                 onEyedropper = onEyedropper,
+                recents = recent,
                 presets = palette,
                 editing = paletteEditing,
                 onToggleEdit = { paletteEditing = !paletteEditing },

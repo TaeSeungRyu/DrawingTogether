@@ -184,6 +184,7 @@
 - [x] **손떨림 보정(스트로크 안정화)** — 입력 점에 지수이동평균(EMA) 적용. 끔/약/강 3단(`Smoothing` enum, alpha 1.0/0.5/0.28). `DrawingCanvas` 입력 단계에서 보정 → 보정된 점만 stroke 에 저장·전송하므로 동기화·저장·undo 자동. 도구바 굵기 줄 "보정" 토글 칩(`SmoothingChip`). 로컬 설정.
 - [x] **선 곡선 평활화(렌더)** — 자유 곡선을 직선 폴리라인이 아니라 인접 점 중간점-2차 베지어로 그려 꺾임을 둥글게(`buildFreehandPath`). 색·굵기가 구간별인 무지개·붓펜은 `forEachSmoothPiece`+`drawSmoothPiece`. 화면·PNG 공유. 손떨림 보정(입력)과 별개 단계.
 - [x] **스포이드(색 추출)** — `ToolKind.Eyedropper` + 색 팔레트 스포이드 버튼(`EyedropperButton`). 누른 채 드래그하면 조준 십자(`drawEyedropperCursor`)가 따라오고 떼는 순간 그 지점 색을 집음(손가락 가림 보정). `PngComposer` 로 사진+stroke+스티커 합성 비트맵을 만들어 픽셀을 읽음(`CanvasColorSampler`, "보이는 색=집히는 색", alpha 불투명 강제). 집으면 `selectColor` 로 펜 복귀. 로컬 설정.
+- [x] **최근 색 / 색 팔레트 저장** — 색을 쓸 때마다 `UserPaletteRepo.addRecent`(최신 앞, 중복 제거, 최대 8개, prefs 영속). 색 팔레트 줄에 프리셋과 구분선으로 나눠 표시(`ColorDot`/`PaletteDivider`, 프리셋 중복 제외). 프리셋/커스텀/스포이드 모든 선택 경로가 기록됨. 로컬 설정.
 
 **반응형 가로 모드 + 회전**
 - [x] 홈/페어링(함께·모임) 화면 `verticalScroll` — 가로에서 버튼/요소가 화면 밖으로 밀려 선택 안 되던 문제. 발견 리스트는 `heightIn` + `Column forEach`.
