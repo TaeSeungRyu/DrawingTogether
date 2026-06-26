@@ -43,7 +43,8 @@ com.rts.rys.ryy.drawingtogether
 ├── works/               저장된 작품 영속성
 │   ├── Work             메타데이터 (id, 저장 시각, 크기, 사진 유무, 이름)
 │   ├── WorkStore        filesDir/works/ PNG+.meta, StateFlow 인덱스, 갤러리 export, 100개 한도
-│   └── PngComposer      CanvasState → ImageBitmap → PNG (StrokeRenderer 재사용)
+│   ├── PngComposer      CanvasState → ImageBitmap → PNG (StrokeRenderer 재사용)
+│   └── CanvasColorSampler  스포이드 — PngComposer 합성 비트맵 픽셀 샘플
 ├── transport/           Nearby Connections 연결 + 직렬화
 │   ├── nearby/          NearbyTransport + TransportMode{Duo,Party} — 광고/검색/연결/relay
 │   ├── codec/           FrameCodec — Frame ↔ CBOR 바이트

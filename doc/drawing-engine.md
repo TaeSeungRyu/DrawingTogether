@@ -5,7 +5,8 @@
 ```kotlin
 data class Point(val x: Float, val y: Float)              // 캔버스 정규화 좌표 (0..1)
 
-enum class ToolKind { Pen, Eraser, Sticker }   // Sticker = 스티커 배치/편집 모드
+enum class ToolKind { Pen, Eraser, Sticker, Eyedropper }
+// Sticker = 스티커 배치/편집 모드, Eyedropper = 스포이드(색 추출) 모드
 enum class BrushCapStyle { Round, Square }
 
 enum class BrushType(
@@ -15,8 +16,11 @@ enum class BrushType(
     val alpha: Float,
     val widthScale: Float,
 ) {
-    Pen, Pencil, Ink, Marker, Highlighter, Crayon
-    // 각 항목이 cap, 알파, 굵기 배수를 들고 있어 색·굵기와 직교
+    Pen, Pencil, Ink, Marker, Highlighter, Crayon,   // 기본 6종
+    Airbrush, Blur,                                  // 분사 / 번짐 (특수 렌더)
+    Neon, Dash, Rainbow, Calligraphy                 // 발광 / 점선 / 무지개 / 속도-굵기
+    // 각 항목이 cap, 알파, 굵기 배수를 들고 있어 색·굵기와 직교.
+    // Airbrush/Blur/Neon/Rainbow/Calligraphy 는 StrokeRenderer 에서 전용 렌더 분기.
 }
 
 enum class ShapeMode(val displayName: String) {
@@ -131,6 +135,14 @@ Canvas(
 - 포인터 이벤트는 ~16ms마다 들어오지만 원격으로는 그렇게 자주 보낼 필요 없음 — **20–30ms 단위 배치 코얼레싱**.
 - 베지어/카트멀-롬 보간은 **렌더링 단계에서만** 수행. 데이터에는 원본 점만.
 
+손떨림 보정(입력 단계):
+- `DrawingViewModel.Smoothing`(끔/약/강, alpha 1.0/0.5/0.28). `DrawingCanvas` 입력에서 점에
+  지수이동평균(EMA)을 적용한 **보정된 점만** 저장·전송 → 동기화·저장·undo 자동. 렌더 곡선 평활화와 별개.
+
+스포이드(`ToolKind.Eyedropper`):
+- 누른 채 드래그하면 조준 십자가 따라오고 떼는 순간 그 지점 색을 추출. `CanvasColorSampler` 가
+  `PngComposer` 합성 비트맵의 픽셀을 읽어("보이는 색=집히는 색") `selectColor` 로 펜 색에 적용.
+
 ## 4. Compose 렌더링
 
 레이어 순서 (아래가 먼저, 위가 나중):
@@ -143,6 +155,7 @@ Canvas(
 5. 안내선(가이드라인)         (격자/십자선 — 로컬 전용)
 6. 스티커 선택 핸들           (스티커 모드 + 선택됨 — 바운딩 박스 + 크기·회전/삭제 핸들)
 7. brushIndicator            (커서 위치 펜 발자국 — 그리기 모드)
+8. 스포이드 조준 십자          (스포이드 모드 + 누르는 중 — drawEyedropperCursor)
 ```
 
 - **완료된 획 비트맵 캐시**는 Phase 5(다듬기)에서. 현재 트래픽 수준에선 Compose RenderNode 캐싱만으로 충분.
