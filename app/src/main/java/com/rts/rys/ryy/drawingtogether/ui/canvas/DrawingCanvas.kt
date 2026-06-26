@@ -54,6 +54,8 @@ fun DrawingCanvas(
     modifier: Modifier = Modifier,
     guideCross: Boolean = false,
     guideGridCells: Int = 0,
+    // 손떨림 보정 계수(지수이동평균). 1f = 보정 없음(원본). 작을수록 더 매끄럽게.
+    smoothingAlpha: Float = 1f,
     // 스티커 편집 콜백 — 스티커 모드에서만 호출.
     onPlaceSticker: (Float, Float) -> StickerId? = { _, _ -> null },
     onTransformStickerLocal: (StickerId, Float, Float, Float, Float) -> Unit = { _, _, _, _, _ -> },
@@ -93,22 +95,23 @@ fun DrawingCanvas(
                         cursor = first.position
                         first.consume()
 
+                        // 지수이동평균(EMA) 상태 — 첫 점에서 시작. alpha=1f 면 원본 그대로.
+                        val alpha = smoothingAlpha.coerceIn(0.05f, 1f)
+                        var smoothed = first.position
+
                         val pending = mutableListOf<DrawPoint>()
                         while (true) {
                             val event = awaitPointerEvent()
                             var anyPressed = false
-                            var latestPos: Offset? = null
                             event.changes.forEach { change: PointerInputChange ->
-                                if (change.pressed) {
-                                    anyPressed = true
-                                    latestPos = change.position
-                                }
+                                if (change.pressed) anyPressed = true
                                 if (change.positionChanged()) {
-                                    pending.add(change.position.toNormalized(size))
+                                    smoothed += (change.position - smoothed) * alpha
+                                    pending.add(smoothed.toNormalized(size))
+                                    cursor = smoothed
                                     change.consume()
                                 }
                             }
-                            if (latestPos != null) cursor = latestPos
                             if (pending.isNotEmpty()) {
                                 onStrokeAppend(strokeId, pending.toList())
                                 pending.clear()

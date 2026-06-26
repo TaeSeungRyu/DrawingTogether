@@ -1,6 +1,8 @@
 package com.rts.rys.ryy.drawingtogether.ui.canvas
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -56,6 +58,8 @@ fun Toolbar(
     guideGrid: GuideGrid = GuideGrid.None,
     onToggleGuideCross: () -> Unit = {},
     onSelectGuideGrid: (GuideGrid) -> Unit = {},
+    smoothing: Smoothing = Smoothing.Off,
+    onCycleSmoothing: () -> Unit = {},
     modifier: Modifier = Modifier,
     // null 이면 버튼 숨김 — 싱글 모드 또는 미연결 상태.
     onSync: (() -> Unit)? = null,
@@ -174,6 +178,7 @@ fun Toolbar(
                         .weight(1f)
                         .padding(horizontal = 12.dp),
                 )
+                SmoothingChip(smoothing = smoothing, onClick = onCycleSmoothing)
             }
 
             // 호스트는 동기화·방 열기·되돌리기·전체 지우기 4개라 좁은 폭에서 한 줄에 안 들어감.
@@ -260,6 +265,33 @@ fun Toolbar(
             currentKey = tool.stickerKey,
             onSelect = onSticker,
             onDismiss = { stickerSheetOpen = false },
+        )
+    }
+}
+
+// 손떨림 보정 토글 칩 — 탭하면 끔 → 약 → 강 순환. 활성(약/강)일 때 강조 색.
+@Composable
+private fun SmoothingChip(smoothing: Smoothing, onClick: () -> Unit) {
+    val active = smoothing != Smoothing.Off
+    val container = if (active)
+        MaterialTheme.colorScheme.secondaryContainer
+    else
+        MaterialTheme.colorScheme.surfaceVariant
+    val content = if (active)
+        MaterialTheme.colorScheme.onSecondaryContainer
+    else
+        MaterialTheme.colorScheme.onSurfaceVariant
+
+    Surface(
+        color = container,
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.clickable(onClick = onClick),
+    ) {
+        Text(
+            text = "보정 ${smoothing.label}",
+            style = MaterialTheme.typography.labelMedium,
+            color = content,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
         )
     }
 }

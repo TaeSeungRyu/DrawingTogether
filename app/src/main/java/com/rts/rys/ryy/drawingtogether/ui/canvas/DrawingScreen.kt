@@ -712,6 +712,8 @@ fun DrawingScreen(
                 guideGrid = vm.guideGrid,
                 onToggleGuideCross = vm::toggleGuideCross,
                 onSelectGuideGrid = vm::selectGuideGrid,
+                smoothing = vm.smoothing,
+                onCycleSmoothing = vm::cycleSmoothing,
                 // 동기화 버튼은 Connected 일 때만 노출. 모드별 다이얼로그 분기.
                 onSync = if (sessionState is SessionState.Connected) {
                     {
@@ -978,6 +980,7 @@ private fun MyCanvasContent(vm: DrawingViewModel, selfNick: String? = null) {
             modifier = Modifier.fillMaxSize(),
             guideCross = vm.guideCross,
             guideGridCells = vm.guideGrid.cells,
+            smoothingAlpha = vm.smoothing.alpha,
             onPlaceSticker = vm::placeSticker,
             onTransformStickerLocal = vm::transformStickerLocal,
             onCommitStickerTransform = vm::commitStickerTransform,

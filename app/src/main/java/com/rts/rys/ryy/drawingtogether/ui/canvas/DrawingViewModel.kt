@@ -47,6 +47,16 @@ enum class GuideGrid(val cells: Int, val label: String) {
     Cells18(18, "격자 18×18"),
 }
 
+// 손떨림 보정 강도. alpha = 지수이동평균 계수(작을수록 더 매끄럽고 더 늘어짐). Off=1f(원본 그대로).
+// 보정은 DrawingCanvas 입력 단계에서 적용 — 보정된 점만 stroke 에 저장·전송되므로 동기화·저장·undo 자동.
+enum class Smoothing(val alpha: Float, val label: String) {
+    Off(1f, "끔"),
+    Low(0.5f, "약"),
+    High(0.28f, "강");
+
+    fun next(): Smoothing = values()[(ordinal + 1) % values().size]
+}
+
 class DrawingViewModel : ViewModel() {
     val canvas = CanvasState()
 
@@ -84,6 +94,12 @@ class DrawingViewModel : ViewModel() {
     fun selectGuideGrid(grid: GuideGrid) {
         guideGrid = if (guideGrid == grid) GuideGrid.None else grid
     }
+
+    // 손떨림 보정 강도 — 끔 → 약 → 강 순환.
+    var smoothing by mutableStateOf(Smoothing.Off)
+        private set
+
+    fun cycleSmoothing() { smoothing = smoothing.next() }
 
     // 로컬에서 발생한 모든 DrawingEvent. DrawingScreen 이 collect 해서
     // 함께 모드 연결 중이면 Frame.Event 로 송신. 함께 모드 아니면 그냥 흘려보냄.

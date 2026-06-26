@@ -181,6 +181,7 @@
 - [x] **번짐(수채/스머지)** — `BrushType.Blur`. native `Paint` + `BlurMaskFilter` via `drawIntoCanvas{nativeCanvas}`. PNG 합성에서도 동작.
 - [x] **스티커** — 자체 벡터 12종 배치/이동/크기·회전/삭제 + 통합 undo. stroke 아닌 새 요소 타입 (`Sticker`/`StickerKey`/`StickerId`, `DrawingEvent` 3종 Place/Transform/Remove, `CanvasState._stickers` + `UndoItem` 통합 undo, `StickerRenderer.drawSticker` 화면·PNG·미니뷰 공유, Snapshot `CanvasSnapshot`(strokes+stickers) 확장). 변형은 commit-on-end. 상세: [sticker-plan.md](sticker-plan.md).
 - [x] **브러시 변형 4종(네온/점선/무지개/붓펜)** — `BrushType` 4개 추가 + `StrokeRenderer` 분기. 네온=발광 후광(BlurMaskFilter)+밝은 코어, 점선=`dashPathEffect`, 무지개=누적 길이→hue 회전(결정론 phase=`stroke.id`), 붓펜=점 간 거리(속도)→구간별 굵기 변조. 모두 점 좌표에서 유도 → 와이어 변경 없음, 화면·PNG·멀티 자동 공유. `PenIllustration`/`BrushPreview` 도 4종 추가.
+- [x] **손떨림 보정(스트로크 안정화)** — 입력 점에 지수이동평균(EMA) 적용. 끔/약/강 3단(`Smoothing` enum, alpha 1.0/0.5/0.28). `DrawingCanvas` 입력 단계에서 보정 → 보정된 점만 stroke 에 저장·전송하므로 동기화·저장·undo 자동. 도구바 굵기 줄 "보정" 토글 칩(`SmoothingChip`). 로컬 설정.
 
 **반응형 가로 모드 + 회전**
 - [x] 홈/페어링(함께·모임) 화면 `verticalScroll` — 가로에서 버튼/요소가 화면 밖으로 밀려 선택 안 되던 문제. 발견 리스트는 `heightIn` + `Column forEach`.
