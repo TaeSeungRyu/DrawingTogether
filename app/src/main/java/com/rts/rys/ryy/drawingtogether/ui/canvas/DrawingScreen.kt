@@ -641,6 +641,16 @@ fun DrawingScreen(
                         content = MaterialTheme.colorScheme.onTertiaryContainer,
                     ) { CameraGlyph(modifier = Modifier.fillMaxSize()) }
                     if (vm.canvas.background != null) {
+                        // 트레이싱 보조 — 사진 표시 농도 순환(원본→연하게→아주 연하게). 표시만, 저장 무관.
+                        val tracing = vm.traceOpacity != TraceOpacity.Full
+                        TopActionButton(
+                            label = if (tracing) vm.traceOpacity.label else "트레이싱",
+                            onClick = { vm.cycleTraceOpacity() },
+                            container = if (tracing) MaterialTheme.colorScheme.tertiary
+                            else MaterialTheme.colorScheme.tertiaryContainer,
+                            content = if (tracing) MaterialTheme.colorScheme.onTertiary
+                            else MaterialTheme.colorScheme.onTertiaryContainer,
+                        ) { TraceGlyph(modifier = Modifier.fillMaxSize()) }
                         TopActionButton(
                             label = "제거",
                             onClick = {
@@ -989,6 +999,7 @@ private fun MyCanvasContent(vm: DrawingViewModel, selfNick: String? = null) {
             guideCross = vm.guideCross,
             guideGridCells = vm.guideGrid.cells,
             smoothingAlpha = vm.smoothing.alpha,
+            backgroundAlpha = vm.traceOpacity.alpha,
             onPickColor = { nx, ny ->
                 val argb = CanvasColorSampler.sampleColor(vm.canvas, density, nx, ny)
                 UserPaletteRepo.get(context).addRecent(argb)

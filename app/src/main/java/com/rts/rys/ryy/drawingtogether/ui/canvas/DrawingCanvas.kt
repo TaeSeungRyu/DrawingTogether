@@ -57,6 +57,8 @@ fun DrawingCanvas(
     guideGridCells: Int = 0,
     // 손떨림 보정 계수(지수이동평균). 1f = 보정 없음(원본). 작을수록 더 매끄럽게.
     smoothingAlpha: Float = 1f,
+    // 트레이싱 보조 — 사진 배경 표시 알파(1f=원본). 저장/동기화엔 미반영, 화면 표시만.
+    backgroundAlpha: Float = 1f,
     // 스포이드 — 탭한 정규화 좌표의 색을 집는다. 스포이드 모드에서만 호출.
     onPickColor: (Float, Float) -> Unit = { _, _ -> },
     // 스티커 편집 콜백 — 스티커 모드에서만 호출.
@@ -156,7 +158,7 @@ fun DrawingCanvas(
                 }
             }
     ) {
-        // 1. 사진 배경 (있으면)
+        // 1. 사진 배경 (있으면). 트레이싱 보조 알파 적용 — 표시만, 저장 PNG 엔 영향 없음.
         state.background?.bitmap?.let { bg ->
             drawImage(
                 image = bg,
@@ -164,6 +166,7 @@ fun DrawingCanvas(
                 srcSize = IntSize(bg.width, bg.height),
                 dstOffset = IntOffset.Zero,
                 dstSize = IntSize(canvasSize.width, canvasSize.height),
+                alpha = backgroundAlpha,
             )
         }
         // 2. 완료된 stroke

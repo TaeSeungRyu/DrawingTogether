@@ -303,6 +303,30 @@ fun SaveGlyph(modifier: Modifier = Modifier, tint: Color = LocalContentColor.cur
     }
 }
 
+// 트레이싱 글리프 — 겹친 사진 위에 펜 끝. 사진을 연하게 깔고 따라 그린다는 의미.
+@Composable
+fun TraceGlyph(modifier: Modifier = Modifier, tint: Color = LocalContentColor.current) {
+    Canvas(modifier = modifier) {
+        val w = size.width; val h = size.height
+        if (w <= 0f || h <= 0f) return@Canvas
+        val s = minOf(w, h)
+        val sw = s * 0.08f
+        // 사진(연한 액자) — 좌상단.
+        drawRoundRect(
+            color = tint.copy(alpha = 0.45f),
+            topLeft = Offset(w * 0.14f, h * 0.16f),
+            size = Size(w * 0.56f, h * 0.56f),
+            cornerRadius = CornerRadius(s * 0.10f, s * 0.10f),
+            style = Stroke(width = sw),
+        )
+        // 펜 (대각선) — 우하단에서 사진 위로.
+        drawLine(tint, Offset(w * 0.86f, h * 0.30f), Offset(w * 0.50f, h * 0.66f), sw * 1.2f, cap = StrokeCap.Round)
+        // 펜 끝점.
+        drawLine(tint, Offset(w * 0.50f, h * 0.66f), Offset(w * 0.44f, h * 0.80f), sw * 1.2f, cap = StrokeCap.Round)
+        drawCircle(tint, radius = sw * 0.7f, center = Offset(w * 0.42f, h * 0.84f))
+    }
+}
+
 // 저장 시 사진 배경을 결과 PNG에 포함할지 켜고 끄는 토글.
 // enabled=false(사진 없음)면 흐리게 + 클릭 불가 — 사진이 있어야 의미 있는 옵션이라.
 @OptIn(ExperimentalMaterial3Api::class)

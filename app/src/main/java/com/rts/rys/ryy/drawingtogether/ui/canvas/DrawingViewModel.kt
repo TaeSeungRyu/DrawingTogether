@@ -57,6 +57,16 @@ enum class Smoothing(val alpha: Float, val label: String) {
     fun next(): Smoothing = values()[(ordinal + 1) % values().size]
 }
 
+// 트레이싱 보조 — 그리는 동안 사진 배경을 얼마나 진하게 보여줄지(표시 알파). 따라 그리기 가이드.
+// "사진 배경 포함 저장"(mergeBackgroundOnSave)과 직교 — 이건 화면 표시 알파일 뿐, 저장/동기화엔 미반영.
+enum class TraceOpacity(val alpha: Float, val label: String) {
+    Full(1f, "원본"),
+    Faint(0.45f, "연하게"),
+    Ghost(0.2f, "아주 연하게");
+
+    fun next(): TraceOpacity = values()[(ordinal + 1) % values().size]
+}
+
 class DrawingViewModel : ViewModel() {
     val canvas = CanvasState()
 
@@ -100,6 +110,12 @@ class DrawingViewModel : ViewModel() {
         private set
 
     fun cycleSmoothing() { smoothing = smoothing.next() }
+
+    // 트레이싱 보조 — 사진 배경 표시 알파(원본 → 연하게 → 아주 연하게). 로컬 표시 전용.
+    var traceOpacity by mutableStateOf(TraceOpacity.Full)
+        private set
+
+    fun cycleTraceOpacity() { traceOpacity = traceOpacity.next() }
 
     // 로컬에서 발생한 모든 DrawingEvent. DrawingScreen 이 collect 해서
     // 함께 모드 연결 중이면 Frame.Event 로 송신. 함께 모드 아니면 그냥 흘려보냄.
