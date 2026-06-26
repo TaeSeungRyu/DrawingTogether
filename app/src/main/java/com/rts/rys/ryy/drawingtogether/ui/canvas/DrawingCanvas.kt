@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke as DrawStroke
 import androidx.compose.ui.graphics.drawscope.withTransform
@@ -70,6 +71,8 @@ fun DrawingCanvas(
     var cursor by remember { mutableStateOf<Offset?>(null) }
     // 선택된 스티커. 스티커 모드에서만 의미. 모드를 벗어나면 오버레이/핸들이 숨겨진다.
     var selectedStickerId by remember { mutableStateOf<StickerId?>(null) }
+    // 스포이드 조준 위치 — 누르는 동안만 non-null. 십자 커서를 그 위치에 그린다.
+    var eyedropperPos by remember { mutableStateOf<Offset?>(null) }
     val selectionColor = MaterialTheme.colorScheme.primary
     val isSticker = tool.kind == ToolKind.Sticker
     val isEyedropper = tool.kind == ToolKind.Eyedropper
@@ -91,13 +94,29 @@ fun DrawingCanvas(
                         onRemove = onRemoveSticker,
                     )
                 } else if (isEyedropper) {
-                    // 스포이드 — 누른 지점 색을 집고 나머지 드래그는 무시. selectColor 가 펜으로 전환.
+                    // 스포이드 — 누른 채 드래그하면 조준 십자가 따라오고, 떼는 순간 그 지점 색을 집는다.
+                    // 손가락에 가린 지점을 십자로 확인하며 정확히 조준 가능. selectColor 가 펜으로 전환.
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
                         down.consume()
-                        val n = down.position.toNormalized(size)
-                        onPickColor(n.x, n.y)
-                        drainGesture()
+                        eyedropperPos = down.position
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            var pressed = false
+                            event.changes.forEach { c ->
+                                if (c.pressed) pressed = true
+                                if (c.positionChanged()) {
+                                    eyedropperPos = c.position
+                                    c.consume()
+                                }
+                            }
+                            if (!pressed) break
+                        }
+                        eyedropperPos?.let { p ->
+                            val n = p.toNormalized(size)
+                            onPickColor(n.x, n.y)
+                        }
+                        eyedropperPos = null
                     }
                 } else {
                     awaitEachGesture {
@@ -164,7 +183,29 @@ fun DrawingCanvas(
         cursor?.let { pos ->
             drawBrushIndicator(center = pos, tool = tool, density = density)
         }
+        // 8. 스포이드 조준 십자 (스포이드 모드 + 누르는 중)
+        eyedropperPos?.let { pos ->
+            drawEyedropperCursor(center = pos, density = density)
+        }
     }
+}
+
+// 스포이드 조준 십자 — 중앙에 빈 틈을 둔 십자 + 링. 어떤 배경에서도 보이게 흰 외곽선 위에
+// 검은 선을 겹쳐 그린다. 중앙 틈으로 정확히 어느 픽셀을 집는지 가려지지 않게 한다.
+private fun DrawScope.drawEyedropperCursor(center: Offset, density: Float) {
+    val arm = 14f * density
+    val gap = 5f * density
+    val ring = 9f * density
+
+    fun cross(color: Color, w: Float) {
+        drawLine(color, Offset(center.x - arm, center.y), Offset(center.x - gap, center.y), strokeWidth = w, cap = StrokeCap.Round)
+        drawLine(color, Offset(center.x + gap, center.y), Offset(center.x + arm, center.y), strokeWidth = w, cap = StrokeCap.Round)
+        drawLine(color, Offset(center.x, center.y - arm), Offset(center.x, center.y - gap), strokeWidth = w, cap = StrokeCap.Round)
+        drawLine(color, Offset(center.x, center.y + gap), Offset(center.x, center.y + arm), strokeWidth = w, cap = StrokeCap.Round)
+        drawCircle(color = color, radius = ring, center = center, style = DrawStroke(width = w))
+    }
+    cross(Color.White.copy(alpha = 0.9f), 3f * density)
+    cross(Color.Black.copy(alpha = 0.85f), 1.5f * density)
 }
 
 // 스티커 편집 제스처 루프. 한 번의 down→up 마다:
