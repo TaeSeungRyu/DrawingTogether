@@ -4,9 +4,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.asAndroidPath
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke as DrawStroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
@@ -28,6 +30,10 @@ internal fun DrawScope.drawStroke(stroke: Stroke, canvasSize: IntSize, density: 
         ShapeMode.None -> when (stroke.tool.brush) {
             BrushType.Airbrush -> drawAirbrush(stroke, canvasSize, density)
             BrushType.Blur -> drawBlurred(stroke, canvasSize, density)
+            BrushType.Neon -> drawNeon(stroke, canvasSize, density)
+            BrushType.Dash -> drawDashed(stroke, canvasSize, density)
+            BrushType.Rainbow -> drawRainbow(stroke, canvasSize, density)
+            BrushType.Calligraphy -> drawCalligraphy(stroke, canvasSize, density)
             else -> drawFreehand(stroke, canvasSize, density)
         }
         else -> drawShapeForm(stroke, canvasSize, density)
@@ -133,6 +139,129 @@ private fun DrawScope.drawAirbrush(stroke: Stroke, canvasSize: IntSize, density:
     // 마지막 점도 분사.
     spray(pts.last().x * w, pts.last().y * h)
 }
+
+// 네온 — 굵게 번진 발광 후광(native BlurMaskFilter) 위에 밝은 코어 선을 겹친다.
+// 어두운 배경에서 빛나 보임. 후광·코어 모두 결정론적이라 PNG 합성에서도 동일.
+private fun DrawScope.drawNeon(stroke: Stroke, canvasSize: IntSize, density: Float) {
+    val composePath = buildFreehandPath(stroke, canvasSize)
+    val androidPath = composePath.asAndroidPath()
+    val widthPx = strokeWidthPxFor(stroke.tool, density)
+    val base = Color(stroke.tool.colorArgb)
+
+    fun glow(strokeW: Float, blur: Float, alpha: Float) {
+        val paint = android.graphics.Paint().apply {
+            isAntiAlias = true
+            style = android.graphics.Paint.Style.STROKE
+            strokeWidth = strokeW
+            strokeCap = android.graphics.Paint.Cap.ROUND
+            strokeJoin = android.graphics.Paint.Join.ROUND
+            color = base.copy(alpha = alpha).toArgb()
+            maskFilter = android.graphics.BlurMaskFilter(
+                blur.coerceAtLeast(1f),
+                android.graphics.BlurMaskFilter.Blur.NORMAL,
+            )
+        }
+        drawIntoCanvas { it.nativeCanvas.drawPath(androidPath, paint) }
+    }
+
+    glow(widthPx * 2.4f, widthPx, 0.35f)
+    glow(widthPx * 1.4f, widthPx * 0.5f, 0.5f)
+    // 밝은 코어 — 색을 흰색 쪽으로 당겨 빛나는 심지.
+    drawPath(
+        path = composePath,
+        color = lerp(base, Color.White, 0.6f),
+        style = DrawStroke(
+            width = (widthPx * 0.5f).coerceAtLeast(1f),
+            cap = StrokeCap.Round,
+            join = StrokeJoin.Round,
+        ),
+    )
+}
+
+// 점선 — 일반 폴리라인에 dashPathEffect 적용. on/off 간격을 굵기에 비례시켜 굵을수록 성긴 파선.
+private fun DrawScope.drawDashed(stroke: Stroke, canvasSize: IntSize, density: Float) {
+    val path = buildFreehandPath(stroke, canvasSize)
+    val widthPx = strokeWidthPxFor(stroke.tool, density)
+    val dash = (widthPx * 2f).coerceAtLeast(4f)
+    drawPath(
+        path = path,
+        color = colorFor(stroke.tool),
+        style = DrawStroke(
+            width = widthPx,
+            cap = StrokeCap.Round,
+            join = StrokeJoin.Round,
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(dash, dash), 0f),
+        ),
+    )
+}
+
+// 무지개 — 경로 누적 길이에 따라 색상(hue)을 회전시키며 구간별로 선을 그린다.
+// colorArgb 는 무시. 색 시작 위상만 stroke.id 로 결정론화 → 매 프레임·양 단말 동일.
+private fun DrawScope.drawRainbow(stroke: Stroke, canvasSize: IntSize, density: Float) {
+    val w = canvasSize.width.toFloat()
+    val h = canvasSize.height.toFloat()
+    val widthPx = strokeWidthPxFor(stroke.tool, density)
+    val pts = stroke.points
+    val phase = (stroke.id.value.hashCode() % 360 + 360) % 360
+    // hue 가 한 바퀴 도는 기준 길이(px) — 화면 폭의 절반 정도마다 한 바퀴.
+    val cycle = (w * 0.5f).coerceAtLeast(1f)
+
+    if (pts.size == 1) {
+        drawCircle(
+            color = Color.hsv(phase.toFloat(), 1f, 1f),
+            radius = (widthPx / 2f).coerceAtLeast(1f),
+            center = Offset(pts[0].x * w, pts[0].y * h),
+        )
+        return
+    }
+    var acc = 0f
+    for (i in 0 until pts.size - 1) {
+        val x1 = pts[i].x * w; val y1 = pts[i].y * h
+        val x2 = pts[i + 1].x * w; val y2 = pts[i + 1].y * h
+        val hue = (phase + acc / cycle * 360f) % 360f
+        drawLine(
+            color = Color.hsv(hue, 1f, 1f),
+            start = Offset(x1, y1),
+            end = Offset(x2, y2),
+            strokeWidth = widthPx,
+            cap = StrokeCap.Round,
+        )
+        acc += kotlin.math.hypot(x2 - x1, y2 - y1)
+    }
+}
+
+// 붓펜(속도 기반 굵기) — 인접 점 간 거리를 속도로 보고 구간별 굵기를 변조한다.
+// 빠르면(거리 큼) 가늘게, 느리면 굵게. 굵기는 점 좌표에서 유도 → 와이어 변경 불필요.
+private fun DrawScope.drawCalligraphy(stroke: Stroke, canvasSize: IntSize, density: Float) {
+    val w = canvasSize.width.toFloat()
+    val h = canvasSize.height.toFloat()
+    val color = colorFor(stroke.tool)
+    val maxW = strokeWidthPxFor(stroke.tool, density)
+    val minW = (maxW * 0.25f).coerceAtLeast(1f)
+    val refDist = 40f * density // 이 거리 이상 빠르면 최소 굵기.
+    val pts = stroke.points
+
+    if (pts.size == 1) {
+        drawCircle(color = color, radius = maxW / 2f, center = Offset(pts[0].x * w, pts[0].y * h))
+        return
+    }
+    for (i in 0 until pts.size - 1) {
+        val x1 = pts[i].x * w; val y1 = pts[i].y * h
+        val x2 = pts[i + 1].x * w; val y2 = pts[i + 1].y * h
+        val dist = kotlin.math.hypot(x2 - x1, y2 - y1)
+        val speed = (dist / refDist).coerceIn(0f, 1f)
+        val width = lerpFloat(maxW, minW, speed)
+        drawLine(
+            color = color,
+            start = Offset(x1, y1),
+            end = Offset(x2, y2),
+            strokeWidth = width,
+            cap = StrokeCap.Round,
+        )
+    }
+}
+
+private fun lerpFloat(a: Float, b: Float, t: Float): Float = a + (b - a) * t
 
 // 첫 점과 마지막 점을 바운딩 박스로 삼아 정해진 도형 하나를 외곽선으로 그린다.
 private fun DrawScope.drawShapeForm(stroke: Stroke, canvasSize: IntSize, density: Float) {

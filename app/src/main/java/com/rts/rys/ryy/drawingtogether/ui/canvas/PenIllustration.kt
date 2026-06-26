@@ -8,7 +8,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import com.rts.rys.ryy.drawingtogether.drawing.model.BrushType
 
 // 각 브러시 타입의 실제 펜 모양을 가로로 누운 실루엣으로 그린다.
@@ -28,8 +30,99 @@ fun PenIllustration(brush: BrushType, modifier: Modifier = Modifier) {
             BrushType.Crayon -> drawCrayon(w, h)
             BrushType.Airbrush -> drawSprayCan(w, h)
             BrushType.Blur -> drawWaterDrop(w, h)
+            BrushType.Neon -> drawNeonSign(w, h)
+            BrushType.Dash -> drawDashIcon(w, h)
+            BrushType.Rainbow -> drawRainbowArc(w, h)
+            BrushType.Calligraphy -> drawBrushPen(w, h)
         }
     }
+}
+
+// 네온 — 발광 후광을 겹친 밝은 번개선.
+private fun DrawScope.drawNeonSign(w: Float, h: Float) {
+    val pts = listOf(
+        Offset(w * 0.12f, h * 0.30f),
+        Offset(w * 0.42f, h * 0.58f),
+        Offset(w * 0.30f, h * 0.58f),
+        Offset(w * 0.62f, h * 0.78f),
+        Offset(w * 0.88f, h * 0.34f),
+    )
+    val glow = Color(0xFF00E5FF)
+    fun pass(width: Float, color: Color) {
+        for (i in 0 until pts.size - 1) {
+            drawLine(color, pts[i], pts[i + 1], strokeWidth = width, cap = StrokeCap.Round)
+        }
+    }
+    pass(h * 0.34f, glow.copy(alpha = 0.18f))
+    pass(h * 0.20f, glow.copy(alpha = 0.35f))
+    pass(h * 0.06f, Color.White)
+}
+
+// 점선 — 가로 파선.
+private fun DrawScope.drawDashIcon(w: Float, h: Float) {
+    val y = h * 0.5f
+    val seg = w * 0.16f
+    val gap = w * 0.10f
+    var x = w * 0.08f
+    while (x + seg <= w * 0.94f) {
+        drawLine(
+            color = Color(0xFF5E35B1),
+            start = Offset(x, y),
+            end = Offset(x + seg, y),
+            strokeWidth = h * 0.18f,
+            cap = StrokeCap.Round,
+        )
+        x += seg + gap
+    }
+}
+
+// 무지개 — 색 밴드 아크.
+private fun DrawScope.drawRainbowArc(w: Float, h: Float) {
+    val bands = 6
+    val bandW = h * 0.10f
+    val cx = w * 0.5f
+    val cy = h * 0.92f
+    val outer = minOf(w * 0.42f, h * 0.78f)
+    for (i in 0 until bands) {
+        val radius = outer - i * bandW
+        if (radius <= 0f) break
+        drawArc(
+            color = Color.hsv(i * 50f, 0.9f, 1f),
+            startAngle = 180f,
+            sweepAngle = 180f,
+            useCenter = false,
+            topLeft = Offset(cx - radius, cy - radius),
+            size = Size(radius * 2f, radius * 2f),
+            style = Stroke(width = bandW * 0.9f),
+        )
+    }
+}
+
+// 붓펜 — 손잡이 + 뾰족한 붓끝.
+private fun DrawScope.drawBrushPen(w: Float, h: Float) {
+    val bodyTop = h * 0.34f
+    val bodyHeight = h * 0.32f
+    val bodyEnd = w * 0.60f
+    drawRoundRect(
+        color = Color(0xFF37474F),
+        topLeft = Offset(0f, bodyTop),
+        size = Size(bodyEnd, bodyHeight),
+        cornerRadius = CornerRadius(bodyHeight * 0.4f),
+    )
+    // 금속 페룰.
+    drawRect(
+        color = Color(0xFFBCAAA4),
+        topLeft = Offset(bodyEnd - w * 0.04f, bodyTop),
+        size = Size(w * 0.08f, bodyHeight),
+    )
+    // 붓끝 — 점점 뾰족.
+    val tip = Path().apply {
+        moveTo(bodyEnd + w * 0.02f, bodyTop)
+        lineTo(w * 0.97f, h * 0.5f)
+        lineTo(bodyEnd + w * 0.02f, bodyTop + bodyHeight)
+        close()
+    }
+    drawPath(tip, Color(0xFF263238))
 }
 
 // 번짐 — 물방울 + 번진 후광.

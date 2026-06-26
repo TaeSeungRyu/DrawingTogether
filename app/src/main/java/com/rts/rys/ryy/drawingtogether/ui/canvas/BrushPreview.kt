@@ -6,9 +6,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.asAndroidPath
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
@@ -78,6 +80,71 @@ fun BrushPreview(
         }
 
         val widthPx = (h * 0.22f * brush.widthScale).coerceAtLeast(2f)
+
+        if (brush == BrushType.Rainbow) {
+            // 곡선을 잘게 샘플해 구간마다 색을 바꿔 그림.
+            val steps = 24
+            var prev = sCurveAt(0f)
+            for (i in 1..steps) {
+                val t = i.toFloat() / steps
+                val cur = sCurveAt(t)
+                drawLine(
+                    color = Color.hsv(t * 320f, 1f, 1f),
+                    start = prev,
+                    end = cur,
+                    strokeWidth = widthPx,
+                    cap = StrokeCap.Round,
+                )
+                prev = cur
+            }
+            return@Canvas
+        }
+
+        if (brush == BrushType.Calligraphy) {
+            // 굵기 변조 시연 — 가운데가 굵고 양끝이 가늘게.
+            val steps = 24
+            var prev = sCurveAt(0f)
+            for (i in 1..steps) {
+                val t = i.toFloat() / steps
+                val cur = sCurveAt(t)
+                val taper = 1f - kotlin.math.abs(t - 0.5f) * 2f // 0..1, 가운데 1.
+                val lineW = (widthPx * (0.3f + 0.7f * taper)).coerceAtLeast(1.5f)
+                drawLine(
+                    color = color.copy(alpha = brush.alpha),
+                    start = prev,
+                    end = cur,
+                    strokeWidth = lineW,
+                    cap = StrokeCap.Round,
+                )
+                prev = cur
+            }
+            return@Canvas
+        }
+
+        if (brush == BrushType.Neon) {
+            // 발광 후광 + 밝은 코어.
+            fun pass(width: Float, c: Color) =
+                drawPath(path, c, style = Stroke(width = width, cap = StrokeCap.Round, join = StrokeJoin.Round))
+            pass(widthPx * 2.4f, color.copy(alpha = 0.18f))
+            pass(widthPx * 1.4f, color.copy(alpha = 0.35f))
+            pass(widthPx * 0.5f, lerp(color, Color.White, 0.6f))
+            return@Canvas
+        }
+
+        if (brush == BrushType.Dash) {
+            val dash = (widthPx * 2f).coerceAtLeast(4f)
+            drawPath(
+                path = path,
+                color = color,
+                style = Stroke(
+                    width = widthPx,
+                    cap = StrokeCap.Round,
+                    join = StrokeJoin.Round,
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(dash, dash), 0f),
+                ),
+            )
+            return@Canvas
+        }
 
         if (brush == BrushType.Blur) {
             // 번짐 미리보기 — native Paint + BlurMaskFilter.

@@ -74,6 +74,35 @@ enum class BrushType(
         alpha = 0.7f,
         widthScale = 1.3f,
     ),
+    Neon(
+        displayName = "네온",
+        description = "어두운 배경에서 빛나는 발광 선",
+        capStyle = BrushCapStyle.Round,
+        alpha = 1.0f,
+        widthScale = 1.1f,
+    ),
+    Dash(
+        displayName = "점선",
+        description = "끊어지는 파선",
+        capStyle = BrushCapStyle.Round,
+        alpha = 1.0f,
+        widthScale = 1.0f,
+    ),
+    Rainbow(
+        displayName = "무지개",
+        description = "진행에 따라 색이 변하는 선",
+        capStyle = BrushCapStyle.Round,
+        // 색은 렌더 시 결정론적으로 생성 — colorArgb 무시.
+        alpha = 1.0f,
+        widthScale = 1.2f,
+    ),
+    Calligraphy(
+        displayName = "붓펜",
+        description = "속도에 따라 굵기가 변하는 붓",
+        capStyle = BrushCapStyle.Round,
+        alpha = 1.0f,
+        widthScale = 1.4f,
+    ),
 }
 
 enum class BrushCapStyle { Round, Square }
