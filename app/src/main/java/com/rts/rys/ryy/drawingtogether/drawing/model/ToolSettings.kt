@@ -3,7 +3,7 @@ package com.rts.rys.ryy.drawingtogether.drawing.model
 import kotlinx.serialization.Serializable
 
 @Serializable
-enum class ToolKind { Pen, Eraser, Sticker }
+enum class ToolKind { Pen, Eraser, Sticker, Eyedropper }
 
 @Serializable
 data class ToolSettings(

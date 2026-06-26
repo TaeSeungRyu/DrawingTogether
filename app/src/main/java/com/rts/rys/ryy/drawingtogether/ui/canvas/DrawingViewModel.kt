@@ -145,6 +145,13 @@ class DrawingViewModel : ViewModel() {
         tool = tool.copy(kind = nextKind)
     }
 
+    // 스포이드 버튼 토글 — 스포이드 상태에서 다시 누르면 펜으로. 색을 집으면 selectColor 가
+    // 펜으로 되돌리며 색을 적용하므로(아래 onPickColor 경로), 보통 한 번 집으면 자동 해제된다.
+    fun toggleEyedropper() {
+        val nextKind = if (tool.kind == ToolKind.Eyedropper) ToolKind.Pen else ToolKind.Eyedropper
+        tool = tool.copy(kind = nextKind)
+    }
+
     fun setStrokeWidth(dp: Float) {
         tool = tool.copy(strokeWidthDp = dp)
     }

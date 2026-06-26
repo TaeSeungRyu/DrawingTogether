@@ -1,5 +1,6 @@
 package com.rts.rys.ryy.drawingtogether.ui.canvas
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,8 +23,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.unit.dp
 
 // 자주 쓰는 색 프리셋 7개 — 검정/흰색/빨강/파랑/초록/노랑/갈색. 그 외 색은 + (임시) 또는
@@ -45,6 +49,8 @@ fun ColorPaletteRow(
     onColor: (Int) -> Unit,
     onCustom: () -> Unit,
     modifier: Modifier = Modifier,
+    eyedropperActive: Boolean = false,
+    onEyedropper: () -> Unit = {},
     presets: List<Int> = DefaultColorPalette,
     // 편집 모드 — 슬롯 탭 시 onColor 대신 onEditSlot 호출.
     editing: Boolean = false,
@@ -88,6 +94,7 @@ fun ColorPaletteRow(
         }
         if (!editing) {
             item { CustomColorButton(onClick = onCustom) }
+            item { EyedropperButton(active = eyedropperActive, onClick = onEyedropper) }
         }
         item { EditToggleButton(editing = editing, onClick = onToggleEdit) }
         if (editing) {
@@ -125,6 +132,52 @@ private fun CustomColorButton(onClick: () -> Unit) {
             tint = Color.White,
             modifier = Modifier.size(20.dp),
         )
+    }
+}
+
+// 스포이드 토글 버튼 — 활성 시 강조 색. 글리프는 대각 스포이드(튜브 + 끝 방울)를 직접 그림
+// (material-icons-extended 의존성 없이).
+@Composable
+private fun EyedropperButton(active: Boolean, onClick: () -> Unit) {
+    val container = if (active) MaterialTheme.colorScheme.tertiary
+                    else MaterialTheme.colorScheme.surfaceVariant
+    val content = if (active) MaterialTheme.colorScheme.onTertiary
+                  else MaterialTheme.colorScheme.onSurfaceVariant
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(CircleShape)
+            .background(container)
+            .border(1.dp, Color.LightGray, CircleShape)
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(modifier = Modifier.size(20.dp)) {
+            val s = size.minDimension
+            val cap = s * 0.22f
+            // 손잡이(우상단) → 끝(좌하단) 대각선 튜브.
+            drawLine(
+                color = content,
+                start = Offset(s * 0.78f, s * 0.22f),
+                end = Offset(s * 0.34f, s * 0.66f),
+                strokeWidth = s * 0.18f,
+                cap = StrokeCap.Round,
+            )
+            // 누름부(둥근 머리).
+            drawCircle(
+                color = content,
+                radius = cap * 0.55f,
+                center = Offset(s * 0.82f, s * 0.18f),
+            )
+            // 끝 방울(삼각 팁).
+            val tip = Path().apply {
+                moveTo(s * 0.34f, s * 0.62f)
+                lineTo(s * 0.18f, s * 0.86f)
+                lineTo(s * 0.40f, s * 0.70f)
+                close()
+            }
+            drawPath(tip, content)
+        }
     }
 }
 

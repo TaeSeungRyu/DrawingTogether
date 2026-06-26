@@ -56,6 +56,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rts.rys.ryy.drawingtogether.drawing.model.BackgroundImage
@@ -72,6 +73,7 @@ import com.rts.rys.ryy.drawingtogether.transport.Frame
 import com.rts.rys.ryy.drawingtogether.transport.nearby.TransportMode
 import com.rts.rys.ryy.drawingtogether.ui.DrawMode
 import kotlinx.coroutines.delay
+import com.rts.rys.ryy.drawingtogether.works.CanvasColorSampler
 import com.rts.rys.ryy.drawingtogether.works.PngComposer
 import com.rts.rys.ryy.drawingtogether.works.WorkStore
 import kotlinx.coroutines.launch
@@ -701,6 +703,7 @@ fun DrawingScreen(
                 canUndo = vm.canvas.canUndo,
                 onColor = vm::selectColor,
                 onEraser = vm::toggleEraser,
+                onEyedropper = vm::toggleEyedropper,
                 onBrush = vm::setBrush,
                 onShape = vm::setShape,
                 onSticker = vm::selectSticker,
@@ -965,6 +968,7 @@ fun DrawingScreen(
 @Composable
 private fun MyCanvasContent(vm: DrawingViewModel, selfNick: String? = null) {
     val bg = vm.canvas.background
+    val density = LocalDensity.current.density
     val sizeModifier = if (bg != null) {
         Modifier.aspectRatio(bg.aspectRatio)
     } else {
@@ -981,6 +985,9 @@ private fun MyCanvasContent(vm: DrawingViewModel, selfNick: String? = null) {
             guideCross = vm.guideCross,
             guideGridCells = vm.guideGrid.cells,
             smoothingAlpha = vm.smoothing.alpha,
+            onPickColor = { nx, ny ->
+                vm.selectColor(CanvasColorSampler.sampleColor(vm.canvas, density, nx, ny))
+            },
             onPlaceSticker = vm::placeSticker,
             onTransformStickerLocal = vm::transformStickerLocal,
             onCommitStickerTransform = vm::commitStickerTransform,

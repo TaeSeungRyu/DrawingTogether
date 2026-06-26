@@ -56,6 +56,8 @@ fun DrawingCanvas(
     guideGridCells: Int = 0,
     // 손떨림 보정 계수(지수이동평균). 1f = 보정 없음(원본). 작을수록 더 매끄럽게.
     smoothingAlpha: Float = 1f,
+    // 스포이드 — 탭한 정규화 좌표의 색을 집는다. 스포이드 모드에서만 호출.
+    onPickColor: (Float, Float) -> Unit = { _, _ -> },
     // 스티커 편집 콜백 — 스티커 모드에서만 호출.
     onPlaceSticker: (Float, Float) -> StickerId? = { _, _ -> null },
     onTransformStickerLocal: (StickerId, Float, Float, Float, Float) -> Unit = { _, _, _, _, _ -> },
@@ -70,12 +72,13 @@ fun DrawingCanvas(
     var selectedStickerId by remember { mutableStateOf<StickerId?>(null) }
     val selectionColor = MaterialTheme.colorScheme.primary
     val isSticker = tool.kind == ToolKind.Sticker
+    val isEyedropper = tool.kind == ToolKind.Eyedropper
 
     Canvas(
         modifier = modifier
             .fillMaxSize()
             .onSizeChanged { canvasSize = it }
-            .pointerInput(isSticker) {
+            .pointerInput(tool.kind) {
                 if (isSticker) {
                     stickerGestures(
                         stickers = { state.stickers },
@@ -87,6 +90,15 @@ fun DrawingCanvas(
                         onCommit = onCommitStickerTransform,
                         onRemove = onRemoveSticker,
                     )
+                } else if (isEyedropper) {
+                    // 스포이드 — 누른 지점 색을 집고 나머지 드래그는 무시. selectColor 가 펜으로 전환.
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        down.consume()
+                        val n = down.position.toNormalized(size)
+                        onPickColor(n.x, n.y)
+                        drainGesture()
+                    }
                 } else {
                     awaitEachGesture {
                         val first = awaitFirstDown(requireUnconsumed = false)
