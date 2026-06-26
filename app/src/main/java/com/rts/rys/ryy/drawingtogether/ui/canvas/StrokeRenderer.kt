@@ -40,20 +40,29 @@ internal fun DrawScope.drawStroke(stroke: Stroke, canvasSize: IntSize, density: 
     }
 }
 
-// 폴리라인 Path 빌드 — drawFreehand / drawBlurred 공유.
-// 점이 1개면 같은 좌표로 lineTo 해서 round cap 점(또는 blur 점)이 찍히게 한다.
+// 부드러운 Path 빌드 — drawFreehand / drawBlurred / drawNeon / drawDashed 공유.
+// 직선 lineTo 폴리라인 대신 인접 점의 중간점을 잇는 2차 베지어로 그려 꺾이는 부분을 둥글게 한다
+// (각 점은 control point, 중간점이 곡선 끝). 점이 1~2개면 점/직선으로 폴백.
 private fun buildFreehandPath(stroke: Stroke, canvasSize: IntSize): Path {
     val w = canvasSize.width.toFloat()
     val h = canvasSize.height.toFloat()
+    val pts = stroke.points
     return Path().apply {
-        val first = stroke.points.first()
+        val first = pts.first()
         moveTo(first.x * w, first.y * h)
-        if (stroke.points.size == 1) {
-            lineTo(first.x * w, first.y * h)
-        } else {
-            for (i in 1 until stroke.points.size) {
-                val p = stroke.points[i]
-                lineTo(p.x * w, p.y * h)
+        when (pts.size) {
+            1 -> lineTo(first.x * w, first.y * h)
+            2 -> lineTo(pts[1].x * w, pts[1].y * h)
+            else -> {
+                for (i in 1 until pts.size - 1) {
+                    val c = pts[i]
+                    val next = pts[i + 1]
+                    val midX = (c.x + next.x) / 2f * w
+                    val midY = (c.y + next.y) / 2f * h
+                    quadraticBezierTo(c.x * w, c.y * h, midX, midY)
+                }
+                val last = pts.last()
+                lineTo(last.x * w, last.y * h)
             }
         }
     }
@@ -195,43 +204,34 @@ private fun DrawScope.drawDashed(stroke: Stroke, canvasSize: IntSize, density: F
     )
 }
 
-// 무지개 — 경로 누적 길이에 따라 색상(hue)을 회전시키며 구간별로 선을 그린다.
+// 무지개 — 경로 누적 길이에 따라 색상(hue)을 회전시키며 구간별로 그린다.
+// 구간마다 색이 달라 한 Path 로 못 그리므로, 각 조각을 중간점-2차 베지어로 그려 꺾임을 둥글게 한다.
 // colorArgb 는 무시. 색 시작 위상만 stroke.id 로 결정론화 → 매 프레임·양 단말 동일.
 private fun DrawScope.drawRainbow(stroke: Stroke, canvasSize: IntSize, density: Float) {
     val w = canvasSize.width.toFloat()
     val h = canvasSize.height.toFloat()
     val widthPx = strokeWidthPxFor(stroke.tool, density)
-    val pts = stroke.points
+    val p = stroke.points.map { Offset(it.x * w, it.y * h) }
     val phase = (stroke.id.value.hashCode() % 360 + 360) % 360
     // hue 가 한 바퀴 도는 기준 길이(px) — 화면 폭의 절반 정도마다 한 바퀴.
     val cycle = (w * 0.5f).coerceAtLeast(1f)
 
-    if (pts.size == 1) {
+    if (p.size == 1) {
         drawCircle(
             color = Color.hsv(phase.toFloat(), 1f, 1f),
             radius = (widthPx / 2f).coerceAtLeast(1f),
-            center = Offset(pts[0].x * w, pts[0].y * h),
+            center = p[0],
         )
         return
     }
-    var acc = 0f
-    for (i in 0 until pts.size - 1) {
-        val x1 = pts[i].x * w; val y1 = pts[i].y * h
-        val x2 = pts[i + 1].x * w; val y2 = pts[i + 1].y * h
-        val hue = (phase + acc / cycle * 360f) % 360f
-        drawLine(
-            color = Color.hsv(hue, 1f, 1f),
-            start = Offset(x1, y1),
-            end = Offset(x2, y2),
-            strokeWidth = widthPx,
-            cap = StrokeCap.Round,
-        )
-        acc += kotlin.math.hypot(x2 - x1, y2 - y1)
+    forEachSmoothPiece(p) { start, ctrl, end, lenAtCtrl ->
+        val hue = (phase + lenAtCtrl / cycle * 360f) % 360f
+        drawSmoothPiece(start, ctrl, end, Color.hsv(hue, 1f, 1f), widthPx)
     }
 }
 
-// 붓펜(속도 기반 굵기) — 인접 점 간 거리를 속도로 보고 구간별 굵기를 변조한다.
-// 빠르면(거리 큼) 가늘게, 느리면 굵게. 굵기는 점 좌표에서 유도 → 와이어 변경 불필요.
+// 붓펜(속도 기반 굵기) — 인접 점 간 거리를 속도로 보고 조각별 굵기를 변조한다.
+// 빠르면(거리 큼) 가늘게, 느리면 굵게. 조각은 중간점-2차 베지어로 그려 꺾임을 둥글게.
 private fun DrawScope.drawCalligraphy(stroke: Stroke, canvasSize: IntSize, density: Float) {
     val w = canvasSize.width.toFloat()
     val h = canvasSize.height.toFloat()
@@ -239,26 +239,53 @@ private fun DrawScope.drawCalligraphy(stroke: Stroke, canvasSize: IntSize, densi
     val maxW = strokeWidthPxFor(stroke.tool, density)
     val minW = (maxW * 0.25f).coerceAtLeast(1f)
     val refDist = 40f * density // 이 거리 이상 빠르면 최소 굵기.
-    val pts = stroke.points
+    val p = stroke.points.map { Offset(it.x * w, it.y * h) }
 
-    if (pts.size == 1) {
-        drawCircle(color = color, radius = maxW / 2f, center = Offset(pts[0].x * w, pts[0].y * h))
+    if (p.size == 1) {
+        drawCircle(color = color, radius = maxW / 2f, center = p[0])
         return
     }
-    for (i in 0 until pts.size - 1) {
-        val x1 = pts[i].x * w; val y1 = pts[i].y * h
-        val x2 = pts[i + 1].x * w; val y2 = pts[i + 1].y * h
-        val dist = kotlin.math.hypot(x2 - x1, y2 - y1)
+    forEachSmoothPiece(p) { start, ctrl, end, _ ->
+        // 조각 길이(start→ctrl→end)를 속도 대용으로 사용.
+        val dist = kotlin.math.hypot(ctrl.x - start.x, ctrl.y - start.y) +
+            kotlin.math.hypot(end.x - ctrl.x, end.y - ctrl.y)
         val speed = (dist / refDist).coerceIn(0f, 1f)
-        val width = lerpFloat(maxW, minW, speed)
-        drawLine(
-            color = color,
-            start = Offset(x1, y1),
-            end = Offset(x2, y2),
-            strokeWidth = width,
-            cap = StrokeCap.Round,
-        )
+        drawSmoothPiece(start, ctrl, end, color, lerpFloat(maxW, minW, speed))
     }
+}
+
+// 중간점-2차 베지어로 경로를 조각낸다. 각 조각: 이전 중간점(start) → 점 p[i](control) → 다음 중간점(end).
+// 양 끝은 실제 끝점으로 마감. block 에 누적 길이(control 점까지)를 함께 넘겨 색/굵기 변조에 쓰게 한다.
+// 조각 단위라야 색·굵기를 구간마다 바꿀 수 있음(단색·균일 굵기는 buildFreehandPath 한 방으로 충분).
+private inline fun forEachSmoothPiece(
+    p: List<Offset>,
+    block: (start: Offset, ctrl: Offset, end: Offset, lenAtCtrl: Float) -> Unit,
+) {
+    val n = p.size
+    if (n < 2) return
+    var prevMid = p[0]
+    var acc = 0f
+    for (i in 1 until n - 1) {
+        acc += kotlin.math.hypot(p[i].x - p[i - 1].x, p[i].y - p[i - 1].y)
+        val mid = Offset((p[i].x + p[i + 1].x) / 2f, (p[i].y + p[i + 1].y) / 2f)
+        block(prevMid, p[i], mid, acc)
+        prevMid = mid
+    }
+    // 마지막 조각 — 마지막 중간점(또는 첫 점)에서 끝점까지. control = 끝점(직선처럼).
+    acc += kotlin.math.hypot(p[n - 1].x - p[n - 2].x, p[n - 1].y - p[n - 2].y)
+    block(prevMid, p[n - 1], p[n - 1], acc)
+}
+
+private fun DrawScope.drawSmoothPiece(start: Offset, ctrl: Offset, end: Offset, color: Color, width: Float) {
+    val piece = Path().apply {
+        moveTo(start.x, start.y)
+        quadraticBezierTo(ctrl.x, ctrl.y, end.x, end.y)
+    }
+    drawPath(
+        path = piece,
+        color = color,
+        style = DrawStroke(width = width, cap = StrokeCap.Round, join = StrokeJoin.Round),
+    )
 }
 
 private fun lerpFloat(a: Float, b: Float, t: Float): Float = a + (b - a) * t

@@ -146,7 +146,7 @@ Canvas(
 ```
 
 - **완료된 획 비트맵 캐시**는 Phase 5(다듬기)에서. 현재 트래픽 수준에선 Compose RenderNode 캐싱만으로 충분.
-- 도형 모드(`ShapeMode != None`)면 첫·마지막 점을 바운딩 박스로 도형 외곽선 하나, 그 외엔 폴리라인.
+- 도형 모드(`ShapeMode != None`)면 첫·마지막 점을 바운딩 박스로 도형 외곽선 하나, 그 외엔 자유 곡선. 자유 곡선은 직선 폴리라인이 아니라 **인접 점의 중간점을 잇는 2차 베지어**(각 점이 control)로 그려 꺾임을 둥글게 한다(`buildFreehandPath`). 무지개·붓펜은 색·굵기가 구간마다 달라 한 Path 로 못 그리므로 `forEachSmoothPiece` 로 조각별 베지어를 그린다.
 - 브러시는 `BrushType`의 `capStyle`/`alpha`/`widthScale`을 cap/색알파/굵기에 곱해 적용.
 - 스티커는 `withTransform { translate(중심); rotate(deg) }` 안에서 key 별 벡터를 그림. `drawStroke` 와 마찬가지로 화면·PNG·미니뷰가 같은 `drawSticker` 함수 공유.
 
