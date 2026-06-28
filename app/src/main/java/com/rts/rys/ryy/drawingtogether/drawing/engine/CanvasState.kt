@@ -48,6 +48,15 @@ class CanvasState {
         _background = image
     }
 
+    // 캔버스 배경색 — 사진이 없을 때(또는 사진 미포함 저장 시) 흰색 대신 칠하는 바탕색.
+    // 사진 배경과 같은 "캔버스 속성" 이라 apply() 가 아닌 별도 setter. 기본 흰색.
+    private var _backgroundColor: Int by mutableStateOf(0xFFFFFFFF.toInt())
+    val backgroundColor: Int get() = _backgroundColor
+
+    fun setBackgroundColor(argb: Int) {
+        _backgroundColor = argb
+    }
+
     // 저장 시 사진 배경을 PNG에 합쳐 굽을지 여부. 토글을 사진 추가보다 먼저 켜둘 수 있도록
     // 배경 유무와 독립적으로 보관. 기본 true — 기존 동작과 호환.
     private var _mergeBackgroundOnSave: Boolean by mutableStateOf(true)

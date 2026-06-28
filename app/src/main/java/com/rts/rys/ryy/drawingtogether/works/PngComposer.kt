@@ -40,7 +40,7 @@ object PngComposer {
             canvas = canvas,
             size = sizeFloat,
         ) {
-            // 배경: 사진이 있고 합치기 모드면 사진, 아니면 흰색.
+            // 배경: 사진이 있고 합치기 모드면 사진, 아니면 캔버스 배경색(기본 흰색).
             if (bg != null && includeBackground) {
                 drawImage(
                     image = bg.bitmap,
@@ -50,7 +50,7 @@ object PngComposer {
                     dstSize = sizeInt,
                 )
             } else {
-                drawRect(color = Color.White)
+                drawRect(color = Color(state.backgroundColor))
             }
             // 완료된 stroke만.
             state.strokes.forEach { stroke ->

@@ -158,6 +158,8 @@ fun DrawingCanvas(
                 }
             }
     ) {
+        // 0. 캔버스 배경색 (기본 흰색). 사진이 있으면 그 아래 깔린다.
+        drawRect(color = Color(state.backgroundColor))
         // 1. 사진 배경 (있으면). 트레이싱 보조 알파 적용 — 표시만, 저장 PNG 엔 영향 없음.
         state.background?.bitmap?.let { bg ->
             drawImage(

@@ -311,6 +311,10 @@ class DrawingViewModel : ViewModel() {
         canvas.setBackground(image)
     }
 
+    fun setBackgroundColor(argb: Int) {
+        canvas.setBackgroundColor(argb)
+    }
+
     fun setMergeBackgroundOnSave(value: Boolean) {
         canvas.setMergeBackgroundOnSave(value)
     }

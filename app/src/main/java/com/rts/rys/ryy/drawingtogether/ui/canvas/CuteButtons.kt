@@ -303,6 +303,33 @@ fun SaveGlyph(modifier: Modifier = Modifier, tint: Color = LocalContentColor.cur
     }
 }
 
+// 배경색 글리프 — 채워진 캔버스(액자) 모서리에 접힌 색지. 바탕색 칠 의미.
+@Composable
+fun BgColorGlyph(modifier: Modifier = Modifier, tint: Color = LocalContentColor.current) {
+    Canvas(modifier = modifier) {
+        val w = size.width; val h = size.height
+        if (w <= 0f || h <= 0f) return@Canvas
+        val s = minOf(w, h)
+        val sw = s * 0.08f
+        val l = w * 0.18f; val t = h * 0.18f; val r = w * 0.82f; val b = h * 0.82f
+        // 채워진 바탕(연하게).
+        drawRoundRect(
+            color = tint.copy(alpha = 0.30f),
+            topLeft = Offset(l, t),
+            size = Size(r - l, b - t),
+            cornerRadius = CornerRadius(s * 0.12f, s * 0.12f),
+        )
+        // 외곽선.
+        drawRoundRect(
+            color = tint,
+            topLeft = Offset(l, t),
+            size = Size(r - l, b - t),
+            cornerRadius = CornerRadius(s * 0.12f, s * 0.12f),
+            style = Stroke(width = sw),
+        )
+    }
+}
+
 // 트레이싱 글리프 — 겹친 사진 위에 펜 끝. 사진을 연하게 깔고 따라 그린다는 의미.
 @Composable
 fun TraceGlyph(modifier: Modifier = Modifier, tint: Color = LocalContentColor.current) {

@@ -54,6 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -280,6 +281,8 @@ fun DrawingScreen(
     val density = androidx.compose.ui.platform.LocalDensity.current.density
     val snackbarHostState = remember { SnackbarHostState() }
     var showSaveDialog by remember { mutableStateOf(false) }
+    // 배경색 선택 다이얼로그 표시 여부.
+    var showBgColorPicker by remember { mutableStateOf(false) }
     // Phase 4-G: 동기화 다이얼로그 단계 — Duo 는 컨펌 1단계, Party 는 피커 → 컨펌 2단계.
     var syncStep by remember { mutableStateOf<SyncStep>(SyncStep.None) }
     // 모임 모드 동기화 응답 후, 내 캔버스를 다른 참가자에게 broadcast 해 그들이 보는 내 미니뷰도
@@ -640,6 +643,15 @@ fun DrawingScreen(
                         container = MaterialTheme.colorScheme.tertiaryContainer,
                         content = MaterialTheme.colorScheme.onTertiaryContainer,
                     ) { CameraGlyph(modifier = Modifier.fillMaxSize()) }
+                    // 버튼 자체가 현재 배경색 스와치 — 색에 따라 글자/아이콘 대비 자동.
+                    val bgSwatch = Color(vm.canvas.backgroundColor)
+                    val bgOn = if (bgSwatch.luminance() > 0.5f) Color.Black else Color.White
+                    TopActionButton(
+                        label = "배경색",
+                        onClick = { showBgColorPicker = true },
+                        container = bgSwatch,
+                        content = bgOn,
+                    ) { BgColorGlyph(modifier = Modifier.fillMaxSize()) }
                     if (vm.canvas.background != null) {
                         // 트레이싱 보조 — 사진 표시 농도 순환(원본→연하게→아주 연하게). 표시만, 저장 무관.
                         val tracing = vm.traceOpacity != TraceOpacity.Full
@@ -909,6 +921,17 @@ fun DrawingScreen(
                     scope.launch { session.transport.rejectPending() }
                 }) { Text("취소") }
             },
+        )
+    }
+
+    if (showBgColorPicker) {
+        ColorPickerSheet(
+            initialColor = vm.canvas.backgroundColor,
+            onConfirm = { argb ->
+                vm.setBackgroundColor(argb)
+                showBgColorPicker = false
+            },
+            onDismiss = { showBgColorPicker = false },
         )
     }
 
