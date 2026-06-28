@@ -34,6 +34,7 @@ data class ToolSettings(
     val strokeWidthDp: Float,
     val brush: BrushType = BrushType.Pen,
     val shape: ShapeMode = ShapeMode.None,
+    val fill: Boolean = false,            // 도형 채우기 — true 면 외곽선 대신 색 채움(shape != None)
     val stickerKey: StickerKey? = null,   // ToolKind.Sticker 일 때 배치할 스티커
 )
 
@@ -103,10 +104,13 @@ class CanvasState {
 
     var background: BackgroundImage? by mutableStateOf(null)
         private set
+    var backgroundColor: Int by mutableStateOf(WHITE)   // 사진 없을 때 바탕색. 캔버스 속성.
+        private set
 
     fun apply(event: DrawingEvent) { /* Stroke* / Clear / Undo / *Sticker dispatch */ }
     fun applySnapshot(strokes: List<Stroke>, stickers: List<Sticker> = emptyList()) { /* 전체 교체 */ }
     fun setBackground(image: BackgroundImage?) { background = image }
+    fun setBackgroundColor(argb: Int) { backgroundColor = argb }
 }
 ```
 
@@ -148,7 +152,8 @@ Canvas(
 레이어 순서 (아래가 먼저, 위가 나중):
 
 ```
-1. background?.bitmap        (사진. ContentScale.Fit으로 캔버스에 맞춤)
+0. backgroundColor          (바탕색 채움. 기본 흰색 — 사진이 그 위에 깔림)
+1. background?.bitmap        (사진. ContentScale.Fit으로 캔버스에 맞춤, 트레이싱 표시 알파 적용)
 2. state.strokes             (완료된 획)
 3. state.openStrokes.values  (진행 중 획)
 4. state.stickers            (스티커 — StickerRenderer.drawSticker)
@@ -159,7 +164,7 @@ Canvas(
 ```
 
 - **완료된 획 비트맵 캐시**는 Phase 5(다듬기)에서. 현재 트래픽 수준에선 Compose RenderNode 캐싱만으로 충분.
-- 도형 모드(`ShapeMode != None`)면 첫·마지막 점을 바운딩 박스로 도형 외곽선 하나, 그 외엔 자유 곡선. 자유 곡선은 직선 폴리라인이 아니라 **인접 점의 중간점을 잇는 2차 베지어**(각 점이 control)로 그려 꺾임을 둥글게 한다(`buildFreehandPath`). 무지개·붓펜은 색·굵기가 구간마다 달라 한 Path 로 못 그리므로 `forEachSmoothPiece` 로 조각별 베지어를 그린다.
+- 도형 모드(`ShapeMode != None`)면 첫·마지막 점을 바운딩 박스로 도형 하나 — `tool.fill` 이면 색 채움(`Fill`), 아니면 외곽선(`Stroke`). 자유 곡선은 직선 폴리라인이 아니라 **인접 점의 중간점을 잇는 2차 베지어**(각 점이 control)로 그려 꺾임을 둥글게 한다(`buildFreehandPath`). 무지개·붓펜은 색·굵기가 구간마다 달라 한 Path 로 못 그리므로 `forEachSmoothPiece` 로 조각별 베지어를 그린다.
 - 브러시는 `BrushType`의 `capStyle`/`alpha`/`widthScale`을 cap/색알파/굵기에 곱해 적용.
 - 스티커는 `withTransform { translate(중심); rotate(deg) }` 안에서 key 별 벡터를 그림. `drawStroke` 와 마찬가지로 화면·PNG·미니뷰가 같은 `drawSticker` 함수 공유.
 
@@ -202,8 +207,8 @@ fun exportPng(state: CanvasState, density: Float): Bitmap {
                  ?: defaultCanvasSize()                              // 정사각 또는 화면 비율
     val bitmap = createBitmap(w, h)
     val canvas = Canvas(bitmap)
-    // 1. 배경: 사진이 있으면 그리고, 없으면 흰색으로 채움
-    state.background?.bitmap?.let { canvas.drawImage(it, ...) } ?: canvas.drawColor(WHITE)
+    // 1. 배경: 사진이 있고 합치기 모드면 사진, 아니면 backgroundColor(기본 흰색)로 채움
+    state.background?.bitmap?.let { canvas.drawImage(it, ...) } ?: canvas.drawColor(state.backgroundColor)
     // 2. 완료된 stroke들을 같은 drawStroke() 로직으로 합성
     state.strokes.forEach { drawStroke(it, ..., canvas) }
     // 3. 스티커를 stroke 위에 합성 (같은 drawSticker() 로직)
