@@ -10,6 +10,8 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.asAndroidPath
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.DrawStyle
+import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke as DrawStroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
@@ -309,11 +311,16 @@ private fun DrawScope.drawShapeForm(stroke: Stroke, canvasSize: IntSize, density
 
     val color = colorFor(stroke.tool)
     val (cap, join) = capJoinFor(stroke.tool.brush)
-    val style = DrawStroke(
-        width = strokeWidthPxFor(stroke.tool, density),
-        cap = cap,
-        join = join,
-    )
+    // 채우기면 Fill, 아니면 외곽선 Stroke. 둘 다 DrawStyle 이라 같은 style 인자로 넘긴다.
+    val style: DrawStyle = if (stroke.tool.fill) {
+        Fill
+    } else {
+        DrawStroke(
+            width = strokeWidthPxFor(stroke.tool, density),
+            cap = cap,
+            join = join,
+        )
+    }
 
     when (stroke.tool.shape) {
         ShapeMode.Circle -> drawOval(

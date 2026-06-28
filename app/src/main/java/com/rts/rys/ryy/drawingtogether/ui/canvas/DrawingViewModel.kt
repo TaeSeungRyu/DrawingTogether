@@ -181,6 +181,11 @@ class DrawingViewModel : ViewModel() {
         tool = tool.copy(kind = ToolKind.Pen, shape = shape)
     }
 
+    // 도형 채우기 토글 — 외곽선 ↔ 색 채움. 다음에 그리는 도형부터 적용.
+    fun toggleFill() {
+        tool = tool.copy(fill = !tool.fill)
+    }
+
     fun strokeStart(strokeId: StrokeId, point: Point) {
         if (tool.kind == ToolKind.Eraser) {
             eraseAt(point)

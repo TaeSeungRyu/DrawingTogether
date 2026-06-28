@@ -50,6 +50,7 @@ fun Toolbar(
     onEyedropper: () -> Unit,
     onBrush: (BrushType) -> Unit,
     onShape: (ShapeMode) -> Unit,
+    onToggleFill: () -> Unit,
     onSticker: (StickerKey) -> Unit,
     onPen: () -> Unit,
     onStrokeWidth: (Float) -> Unit,
@@ -137,6 +138,8 @@ fun Toolbar(
                 ShapeDropdownButton(
                     shape = tool.shape,
                     onShape = onShape,
+                    fill = tool.fill,
+                    onToggleFill = onToggleFill,
                     modifier = Modifier.weight(1f),
                 )
                 ToolIconButton(

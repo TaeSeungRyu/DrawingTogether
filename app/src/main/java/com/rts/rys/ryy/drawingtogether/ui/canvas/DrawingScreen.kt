@@ -719,6 +719,7 @@ fun DrawingScreen(
                 onEyedropper = vm::toggleEyedropper,
                 onBrush = vm::setBrush,
                 onShape = vm::setShape,
+                onToggleFill = vm::toggleFill,
                 onSticker = vm::selectSticker,
                 onPen = vm::selectPenFreehand,
                 onStrokeWidth = vm::setStrokeWidth,

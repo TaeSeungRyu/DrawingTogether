@@ -186,6 +186,7 @@
 - [x] **스포이드(색 추출)** — `ToolKind.Eyedropper` + 색 팔레트 스포이드 버튼(`EyedropperButton`). 누른 채 드래그하면 조준 십자(`drawEyedropperCursor`)가 따라오고 떼는 순간 그 지점 색을 집음(손가락 가림 보정). `PngComposer` 로 사진+stroke+스티커 합성 비트맵을 만들어 픽셀을 읽음(`CanvasColorSampler`, "보이는 색=집히는 색", alpha 불투명 강제). 집으면 `selectColor` 로 펜 복귀. 로컬 설정.
 - [x] **최근 색 / 색 팔레트 저장** — 색을 쓸 때마다 `UserPaletteRepo.addRecent`(최신 앞, 중복 제거, 최대 8개, prefs 영속). 색 팔레트 줄에 프리셋과 구분선으로 나눠 표시(`ColorDot`/`PaletteDivider`, 프리셋 중복 제외). 프리셋/커스텀/스포이드 모든 선택 경로가 기록됨. 로컬 설정.
 - [x] **트레이싱 보조 — 반투명** — 사진 배경 표시 알파 순환(원본/연하게/아주 연하게, `TraceOpacity`). TopAppBar 트레이싱 버튼(`TraceGlyph`, 사진 있을 때만). `DrawingCanvas` 가 `drawImage(alpha=)` 로 표시만 적용 — 저장(`mergeBackgroundOnSave`)·동기화엔 미반영(직교). 엣지 검출 오버레이는 P3 잔여.
+- [x] **도형 채우기 토글** — `ToolSettings.fill`. `StrokeRenderer.drawShapeForm` 이 fill 이면 `Fill` DrawStyle, 아니면 외곽선 `Stroke`. 화면·PNG·동기화 자동 공유. 도형 드롭다운(`ShapeDropdownButton`) 하단에 "채우기" 토글.
 
 **반응형 가로 모드 + 회전**
 - [x] 홈/페어링(함께·모임) 화면 `verticalScroll` — 가로에서 버튼/요소가 화면 밖으로 밀려 선택 안 되던 문제. 발견 리스트는 `heightIn` + `Column forEach`.

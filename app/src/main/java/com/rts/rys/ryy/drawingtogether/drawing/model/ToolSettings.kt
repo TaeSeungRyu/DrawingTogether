@@ -12,6 +12,8 @@ data class ToolSettings(
     val strokeWidthDp: Float,
     val brush: BrushType = BrushType.Pen,
     val shape: ShapeMode = ShapeMode.None,
+    // 도형 채우기 — true 면 외곽선 대신 색으로 채운다. shape == None(자유 곡선)에선 무시.
+    val fill: Boolean = false,
     // ToolKind.Sticker 일 때 배치할 스티커 종류. 그 외 모드에선 무시.
     val stickerKey: StickerKey? = null,
 ) {

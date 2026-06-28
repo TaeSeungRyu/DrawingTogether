@@ -13,10 +13,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -190,6 +192,8 @@ fun ShapeDropdownButton(
     shape: ShapeMode,
     onShape: (ShapeMode) -> Unit,
     modifier: Modifier = Modifier,
+    fill: Boolean = false,
+    onToggleFill: () -> Unit = {},
 ) {
     var expanded by remember { mutableStateOf(false) }
     val active = shape != ShapeMode.None
@@ -223,6 +227,15 @@ fun ShapeDropdownButton(
                     },
                 )
             }
+            HorizontalDivider()
+            // 채우기 토글 — 메뉴를 닫지 않고 상태만 바꿔 즉시 확인 가능.
+            DropdownMenuItem(
+                text = { Text(if (fill) "채우기: 켬" else "채우기: 끔") },
+                trailingIcon = {
+                    if (fill) Icon(Icons.Default.Check, contentDescription = null)
+                },
+                onClick = { onToggleFill() },
+            )
         }
     }
 }
