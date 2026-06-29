@@ -40,12 +40,20 @@ class CanvasState {
 
     fun lastUndoable(): UndoItem? = _undoStack.lastOrNull()
 
+    // 캐시 무효화용 리비전 — "완료된 stroke 비트맵 캐시"(DrawingCanvas)가 이 값이 바뀔 때만
+    // 캐시를 다시 렌더한다. 완료 stroke 집합/배경/배경색이 바뀔 때만 증가(진행 중 stroke·스티커는
+    // 라이브로 위에 그리므로 무관). Compose 가 추적하도록 mutableStateOf.
+    private var _contentRevision: Int by mutableStateOf(0)
+    val contentRevision: Int get() = _contentRevision
+    private fun bumpRevision() { _contentRevision++ }
+
     // 사진 배경. 이벤트(apply)가 아닌 별도 상태 — 사진은 도메인 이벤트가 아니라 캔버스 속성.
     private var _background: BackgroundImage? by mutableStateOf(null)
     val background: BackgroundImage? get() = _background
 
     fun setBackground(image: BackgroundImage?) {
         _background = image
+        bumpRevision()
     }
 
     // 캔버스 배경색 — 사진이 없을 때(또는 사진 미포함 저장 시) 흰색 대신 칠하는 바탕색.
@@ -55,6 +63,7 @@ class CanvasState {
 
     fun setBackgroundColor(argb: Int) {
         _backgroundColor = argb
+        bumpRevision()
     }
 
     // 저장 시 사진 배경을 PNG에 합쳐 굽을지 여부. 토글을 사진 추가보다 먼저 켜둘 수 있도록
@@ -80,6 +89,7 @@ class CanvasState {
         // 스티커는 추가 순서를 알 수 없으니 stroke 뒤에 이어 push (대략적 시간순).
         strokes.forEach { _undoStack.add(UndoItem.StrokeRef(it.id)) }
         stickers.forEach { _undoStack.add(UndoItem.StickerRef(it.id)) }
+        bumpRevision()
     }
 
     // 전체 초기화 — 타임랩스 재생에서 처음부터 다시 쌓을 때(seek/rebuild) 사용.
@@ -91,6 +101,7 @@ class CanvasState {
         _undoStack.clear()
         _background = null
         _backgroundColor = 0xFFFFFFFF.toInt()
+        bumpRevision()
     }
 
     fun apply(event: DrawingEvent) {
@@ -111,6 +122,7 @@ class CanvasState {
                 val finished = _openStrokes.remove(event.strokeId) ?: return
                 _strokes.add(finished)
                 _undoStack.add(UndoItem.StrokeRef(finished.id))
+                bumpRevision()
             }
             is DrawingEvent.Clear -> {
                 // "함께 그리기" 단일 모드 — Clear 는 양쪽 모두에 적용.
@@ -119,6 +131,7 @@ class CanvasState {
                 _openStrokes.clear()
                 _stickers.clear()
                 _undoStack.clear()
+                bumpRevision()
             }
             is DrawingEvent.Undo -> {
                 // strokeId 만으로 매칭 — 자기 / 상대 누구 stroke 든 제거 가능.
@@ -127,6 +140,7 @@ class CanvasState {
                 if (index >= 0) {
                     _strokes.removeAt(index)
                     _undoStack.remove(UndoItem.StrokeRef(event.strokeId))
+                    bumpRevision()
                 }
             }
             is DrawingEvent.PlaceSticker -> {

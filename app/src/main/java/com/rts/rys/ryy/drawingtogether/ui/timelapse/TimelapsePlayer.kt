@@ -3,14 +3,15 @@ package com.rts.rys.ryy.drawingtogether.ui.timelapse
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState
 import com.rts.rys.ryy.drawingtogether.drawing.model.BackgroundImage
 import com.rts.rys.ryy.drawingtogether.drawing.model.TimelapseEntry
 import com.rts.rys.ryy.drawingtogether.drawing.model.TimelapseOp
-import kotlinx.coroutines.delay
 
-// 타임랩스 재생 엔진 — 빈 CanvasState 에 이벤트 로그를 시간순으로 다시 apply.
-// 긴 정지 구간은 GAP_CAP_MS 로 압축, 배속 적용. seek 는 0부터 rebuild(역재생 안 함).
+// 타임랩스 재생 엔진 — 프레임 시계로 재생 위치(positionMs)를 연속 전진시키며, 그 시각을 지난
+// 이벤트를 apply. 정지 구간도 실시간 그대로 흐름(슬라이더가 멈추지 않음). 빠르게 보려면 배속.
+// seek 는 0부터 rebuild(역재생 안 함).
 class TimelapsePlayer(
     private val canvas: CanvasState,
     private val entries: List<TimelapseEntry>,
@@ -59,25 +60,28 @@ class TimelapsePlayer(
     }
 
     // 재생 루프 — `LaunchedEffect(isPlaying)` 안에서 isPlaying 이 true 가 되면 호출.
+    // 프레임마다 경과 시간(×배속)만큼 positionMs 를 전진시키고, 그 시각을 지난 이벤트를 적용.
+    // → 정지 구간에도 슬라이더가 실시간으로 흐른다.
     suspend fun run() {
-        while (isPlaying && index < entries.size) {
-            val prevAt = if (index == 0) 0L else entries[index - 1].atMs
-            val gap = (entries[index].atMs - prevAt).coerceAtLeast(0L)
-            val wait = minOf(gap, GAP_CAP_MS)
-            if (wait > 0) delay((wait / speed).toLong().coerceAtLeast(1L))
-            if (!isPlaying) break
-            applyOp(entries[index].op)
-            positionMs = entries[index].atMs
-            index++
+        var lastNanos = 0L
+        while (isPlaying && positionMs < durationMs) {
+            withFrameNanos { now ->
+                if (lastNanos != 0L) {
+                    val dtMs = (now - lastNanos) / 1_000_000f * speed
+                    val next = (positionMs + dtMs.toLong()).coerceIn(0L, durationMs)
+                    while (index < entries.size && entries[index].atMs <= next) {
+                        applyOp(entries[index].op)
+                        index++
+                    }
+                    positionMs = next
+                }
+                lastNanos = now
+            }
         }
-        if (index >= entries.size) {
-            positionMs = durationMs
-            isPlaying = false
-        }
+        if (positionMs >= durationMs) isPlaying = false
     }
 
     companion object {
-        const val GAP_CAP_MS: Long = 800L
         val SPEEDS = listOf(1f, 2f, 4f)
     }
 }

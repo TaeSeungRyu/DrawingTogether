@@ -13,10 +13,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke as DrawStroke
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
@@ -78,6 +82,17 @@ fun DrawingCanvas(
     val selectionColor = MaterialTheme.colorScheme.primary
     val isSticker = tool.kind == ToolKind.Sticker
     val isEyedropper = tool.kind == ToolKind.Eyedropper
+
+    // 완료된 stroke 비트맵 캐시 — contentRevision(완료 stroke 추가/제거/Clear/snapshot) 또는 캔버스
+    // 크기가 바뀔 때만 다시 렌더. 색·도구 변경이나 진행 중 stroke 프레임에선 캐시를 그대로 재사용해
+    // 매번 전체 벡터 재그리기를 피한다. 배경은 캐시하지 않음(트레이싱 알파가 표시마다 달라질 수 있어 라이브).
+    val committedStrokes: ImageBitmap? = remember(state.contentRevision, canvasSize, density) {
+        if (canvasSize.width <= 0 || canvasSize.height <= 0) {
+            null
+        } else {
+            renderCommittedStrokes(state, canvasSize, density)
+        }
+    }
 
     Canvas(
         modifier = modifier
@@ -160,7 +175,7 @@ fun DrawingCanvas(
     ) {
         // 0. 캔버스 배경색 (기본 흰색). 사진이 있으면 그 아래 깔린다.
         drawRect(color = Color(state.backgroundColor))
-        // 1. 사진 배경 (있으면). 트레이싱 보조 알파 적용 — 표시만, 저장 PNG 엔 영향 없음.
+        // 1. 사진 배경 (있으면). 트레이싱 보조 알파 적용 — 표시만, 저장 PNG 엔 영향 없음. (라이브, 캐시 안 함)
         state.background?.bitmap?.let { bg ->
             drawImage(
                 image = bg,
@@ -171,9 +186,14 @@ fun DrawingCanvas(
                 alpha = backgroundAlpha,
             )
         }
-        // 2. 완료된 stroke
-        state.strokes.forEach { drawStroke(it, canvasSize, density) }
-        // 3. 진행 중 stroke
+        // 2. 완료된 stroke — 캐시 비트맵으로 한 번에. (없으면 첫 프레임 등 — 폴백 직접 그리기)
+        val cached = committedStrokes
+        if (cached != null) {
+            drawImage(cached)
+        } else {
+            state.strokes.forEach { drawStroke(it, canvasSize, density) }
+        }
+        // 3. 진행 중 stroke (라이브)
         state.openStrokes.values.forEach { drawStroke(it, canvasSize, density) }
         // 4. 스티커 (stroke 위)
         state.stickers.forEach { drawSticker(it, canvasSize) }
@@ -211,6 +231,26 @@ private fun DrawScope.drawEyedropperCursor(center: Offset, density: Float) {
     }
     cross(Color.White.copy(alpha = 0.9f), 3f * density)
     cross(Color.Black.copy(alpha = 0.85f), 1.5f * density)
+}
+
+// 완료된 stroke 만 투명 배경 비트맵에 렌더 — DrawingCanvas 의 캐시 레이어. 배경(사진/색)은
+// 포함하지 않는다(라이브로 그려야 트레이싱 알파가 반영됨). contentRevision/크기 변경 시에만 호출.
+private fun renderCommittedStrokes(
+    state: CanvasState,
+    canvasSize: IntSize,
+    density: Float,
+): ImageBitmap {
+    val image = ImageBitmap(canvasSize.width, canvasSize.height)
+    val canvas = androidx.compose.ui.graphics.Canvas(image)
+    CanvasDrawScope().draw(
+        density = Density(density),
+        layoutDirection = LayoutDirection.Ltr,
+        canvas = canvas,
+        size = Size(canvasSize.width.toFloat(), canvasSize.height.toFloat()),
+    ) {
+        state.strokes.forEach { drawStroke(it, canvasSize, density) }
+    }
+    return image
 }
 
 // 스티커 편집 제스처 루프. 한 번의 down→up 마다:
