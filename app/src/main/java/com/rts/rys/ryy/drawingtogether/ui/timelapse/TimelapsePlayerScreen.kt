@@ -5,16 +5,20 @@ import android.graphics.BitmapFactory
 import android.widget.Toast
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -65,6 +69,33 @@ fun TimelapsePlayerScreen(id: String, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     val store = remember { TimelapseStore.get(context) }
     var exportProgress by remember { mutableStateOf<Float?>(null) }   // null = 비-내보내기 중
+    var showExportOptions by remember { mutableStateOf(false) }
+    var exportMaxDim by remember { mutableStateOf(480) }
+    var exportSpeed by remember { mutableStateOf(1f) }
+
+    // 선택한 해상도·배속으로 내보내기 실행.
+    val runExport: (Int, Float) -> Unit = { maxDim, speed ->
+        scope.launch {
+            exportProgress = 0f
+            val uri = runCatching {
+                TimelapseVideoExporter.exportToGallery(context, id, maxDim, speed) { p ->
+                    exportProgress = p
+                }
+            }.getOrNull()
+            exportProgress = null
+            if (uri != null) {
+                Toast.makeText(context, "갤러리에 저장했어요", Toast.LENGTH_SHORT).show()
+                val share = Intent(Intent.ACTION_SEND).apply {
+                    type = "video/mp4"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(Intent.createChooser(share, "타임랩스 공유"))
+            } else {
+                Toast.makeText(context, "내보내기에 실패했어요", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     val loaded by produceState<LoadedTimelapse?>(initialValue = null, id) {
         value = withContext(Dispatchers.IO) {
@@ -91,28 +122,7 @@ fun TimelapsePlayerScreen(id: String, onBack: () -> Unit) {
                 actions = {
                     TextButton(
                         enabled = exportProgress == null,
-                        onClick = {
-                            scope.launch {
-                                exportProgress = 0f
-                                val uri = runCatching {
-                                    TimelapseVideoExporter.exportToGallery(context, id) { p ->
-                                        exportProgress = p
-                                    }
-                                }.getOrNull()
-                                exportProgress = null
-                                if (uri != null) {
-                                    Toast.makeText(context, "갤러리에 저장했어요", Toast.LENGTH_SHORT).show()
-                                    val share = Intent(Intent.ACTION_SEND).apply {
-                                        type = "video/mp4"
-                                        putExtra(Intent.EXTRA_STREAM, uri)
-                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                    }
-                                    context.startActivity(Intent.createChooser(share, "타임랩스 공유"))
-                                } else {
-                                    Toast.makeText(context, "내보내기에 실패했어요", Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                        },
+                        onClick = { showExportOptions = true },
                     ) { Text("내보내기") }
                     TextButton(
                         enabled = exportProgress == null,
@@ -170,6 +180,65 @@ fun TimelapsePlayerScreen(id: String, onBack: () -> Unit) {
                 }
             }
         }
+    }
+
+    if (showExportOptions) {
+        AlertDialog(
+            onDismissRequest = { showExportOptions = false },
+            title = { Text("내보내기 설정") },
+            text = {
+                Column {
+                    Text("해상도", style = MaterialTheme.typography.labelLarge)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OptionChip("보통", exportMaxDim == 480) { exportMaxDim = 480 }
+                        OptionChip("높음", exportMaxDim == 720) { exportMaxDim = 720 }
+                        OptionChip("최고", exportMaxDim == 1080) { exportMaxDim = 1080 }
+                    }
+                    Text(
+                        "사진 위에 그렸다면 '최고'가 또렷해요(내보내기는 더 느려요).",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    Text("배속", style = MaterialTheme.typography.labelLarge)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OptionChip("1x", exportSpeed == 1f) { exportSpeed = 1f }
+                        OptionChip("2x", exportSpeed == 2f) { exportSpeed = 2f }
+                        OptionChip("4x", exportSpeed == 4f) { exportSpeed = 4f }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showExportOptions = false
+                    runExport(exportMaxDim, exportSpeed)
+                }) { Text("내보내기") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExportOptions = false }) { Text("취소") }
+            },
+        )
+    }
+}
+
+// 선택형 칩 — 내보내기 설정(해상도/배속)용.
+@Composable
+private fun OptionChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    val container = if (selected) MaterialTheme.colorScheme.primary
+    else MaterialTheme.colorScheme.surfaceVariant
+    val content = if (selected) MaterialTheme.colorScheme.onPrimary
+    else MaterialTheme.colorScheme.onSurfaceVariant
+    androidx.compose.material3.Surface(
+        color = container,
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+        modifier = Modifier.clickable(onClick = onClick),
+    ) {
+        Text(
+            text = label,
+            color = content,
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        )
     }
 }
 

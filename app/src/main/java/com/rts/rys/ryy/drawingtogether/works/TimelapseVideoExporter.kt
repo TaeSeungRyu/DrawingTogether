@@ -37,14 +37,17 @@ import java.io.File
 object TimelapseVideoExporter {
 
     private const val FPS = 30               // 인앱 재생만큼 부드럽게
-    private const val MAX_DIM = 480          // 출력 최대 변(짝수 보정)
+    const val DEFAULT_MAX_DIM = 480          // 출력 최대 변(짝수 보정)
     private const val MAX_FRAMES = 1800      // 너무 긴 녹화는 프레임 간격을 늘려 영상 길이를 제한(자동 가속, ~60s@30fps)
     private const val I_FRAME_INTERVAL = 1
 
     // 진행률(0..1) 콜백. 반환: 갤러리 URI.
+    // maxDim: 출력 최대 변(해상도 옵션). speed: 그리는 과정 배속(1=실시간, 2/4=빠르게).
     suspend fun exportToGallery(
         context: Context,
         id: String,
+        maxDim: Int = DEFAULT_MAX_DIM,
+        speed: Float = 1f,
         onProgress: (Float) -> Unit = {},
     ): Uri = withContext(Dispatchers.IO) {
         val store = TimelapseStore.get(context)
@@ -57,22 +60,24 @@ object TimelapseVideoExporter {
             .mapNotNull { ref -> decodeBg(store.backgroundFile(id, ref))?.let { ref to it } }
             .toMap()
 
-        val (w, h) = outputSize(bgMap.values.firstOrNull())
+        val (w, h) = outputSize(bgMap.values.firstOrNull(), maxDim)
         val tmp = File(context.cacheDir, "timelapse_$id.mp4")
         if (tmp.exists()) tmp.delete()
 
-        encode(log.entries, log.durationMs, bgMap, w, h, tmp, onProgress)
+        encode(log.entries, log.durationMs, bgMap, w, h, speed, tmp, onProgress)
         val uri = copyToGallery(context, tmp, id)
         tmp.delete()
         uri
     }
 
-    private fun outputSize(bg: BackgroundImage?): Pair<Int, Int> {
+    private fun outputSize(bg: BackgroundImage?, maxDim: Int): Pair<Int, Int> {
         val (w, h) = if (bg != null && bg.widthPx > 0 && bg.heightPx > 0) {
+            // 사진보다 크게 키워봐야 흐릿하게 늘어날 뿐 → 사진의 큰 변 이하로 제한.
+            val eff = minOf(maxDim, maxOf(bg.widthPx, bg.heightPx))
             val ar = bg.widthPx.toFloat() / bg.heightPx
-            if (ar >= 1f) MAX_DIM to (MAX_DIM / ar).toInt() else (MAX_DIM * ar).toInt() to MAX_DIM
+            if (ar >= 1f) eff to (eff / ar).toInt() else (eff * ar).toInt() to eff
         } else {
-            MAX_DIM to MAX_DIM
+            maxDim to maxDim
         }
         return even(w) to even(h)
     }
@@ -85,6 +90,7 @@ object TimelapseVideoExporter {
         bgMap: Map<String, BackgroundImage>,
         w: Int,
         h: Int,
+        speed: Float,
         outFile: File,
         onProgress: (Float) -> Unit,
     ) {
@@ -94,7 +100,11 @@ object TimelapseVideoExporter {
                 MediaFormat.KEY_COLOR_FORMAT,
                 MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible,
             )
-            setInteger(MediaFormat.KEY_BIT_RATE, (w * h * FPS * 0.2f).toInt().coerceAtLeast(1_000_000))
+            // 선화는 가장자리가 또렷해야 해 비트레이트가 화질의 핵심 — 넉넉히(약 0.5bpp, 4~24Mbps).
+            setInteger(
+                MediaFormat.KEY_BIT_RATE,
+                (w.toLong() * h * FPS * 0.5f).toInt().coerceIn(4_000_000, 24_000_000),
+            )
             setInteger(MediaFormat.KEY_FRAME_RATE, FPS)
             setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, I_FRAME_INTERVAL)
         }
@@ -108,7 +118,8 @@ object TimelapseVideoExporter {
 
         // 콘텐츠 시계(frameStepMs)는 길면 가속, 영상 fps 는 고정 → 너무 긴 녹화도 영상 길이 제한.
         val totalMs = durationMs.coerceAtLeast(1L)
-        val minStep = 1000L / FPS
+        // 배속 — 프레임당 콘텐츠 진행 시간(=1/FPS) × speed. 클수록 과정이 빨리 지나가 영상이 짧아짐.
+        val minStep = (1000f / FPS * speed).toLong().coerceAtLeast(1L)
         val frameStepMs = maxOf(minStep, (totalMs + MAX_FRAMES - 1) / MAX_FRAMES)
         val contentFrames = (totalMs / frameStepMs).toInt() + 1
         val tailFrames = FPS // 마지막 화면 ~1초 유지(마지막 획이 곧장 끝나 안 보이던 문제)

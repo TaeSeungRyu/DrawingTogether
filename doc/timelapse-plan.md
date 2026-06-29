@@ -141,9 +141,11 @@ filesDir/timelapses/<id>/
     (plane rowStride/pixelStride 따름 → planar/semiplanar 대응) + `MediaMuxer`(MP4, cache temp).
   - 저장: `MediaStore.Video`(`Movies/DrawingTogether`, IS_PENDING 패턴) → 공유 인텐트(`ACTION_SEND`).
   - 출력: 최대 변 480(짝수), 배경 비율 반영. 해상도별 stroke 굵기는 density=w/400 근사.
-- [x] `TimelapsePlayerScreen` 상단 "내보내기" + 진행률 오버레이(%) + 완료 시 갤러리 저장 Toast + 공유 시트.
-- **위험**: 중상 — MediaCodec/색포맷·해상도 기기차. **에뮬레이터/CI 검증 불가, 실기기 필수.**
-- **후속 여지**: 내보내기 배속/해상도 선택, 진행 중 취소, 매우 긴 녹화 메모리.
+- [x] `TimelapsePlayerScreen` 상단 "내보내기" → **설정 다이얼로그(해상도 낮음/보통/높음=360/480/720,
+  배속 1x/2x/4x)** → 진행률 오버레이(%) + 완료 시 갤러리 저장 Toast + 공유 시트.
+  배속은 프레임당 콘텐츠 진행 시간을 늘려 영상 길이를 줄임(`encode(speed)`), 해상도는 출력 최대 변(`maxDim`).
+- **위험**: 중상 — MediaCodec/색포맷·해상도 기기차. **에뮬레이터/CI 검증 불가, 실기기 필수.** (기본 검증 양호)
+- **후속 여지**: 진행 중 취소, 매우 긴 녹화 메모리.
 
 ## 5. 사진 배경 처리 (기능 정의 3)
 
