@@ -190,7 +190,7 @@ Canvas(
 - **통합 undo**: undoStack 은 `UndoItem`(StrokeRef/StickerRef) 을 시간순으로 담아 "되돌리기" 버튼이 stroke·스티커 구분 없이 최근 *추가* 동작을 취소. StrokeRef → `Undo`, StickerRef → `RemoveSticker` emit.
 - **스티커 변형(이동/크기/회전)은 undo 대상 아님** — 라이브 편집(commit-on-end). 배치/삭제만 undo 스택에 반영. 삭제는 선택 시 X 핸들로도 가능.
 - `Undo` 이벤트는 `strokeId` 지정 방식. 시퀀스 기반 "마지막 N개"는 협업에서 의미 흔들리므로 피함.
-- 다시 실행(redo)은 미지원 (필요해지면 별도 스택).
+- 다시 실행(redo)은 미지원 — **보류 결정**. 로컬은 별도 스택으로 쉬우나 협업(공유 undo·지우개 공유·Clear/동기화·와이어) 의미 합의가 필요. 상세: [drawing-ideas.md](drawing-ideas.md) 보류 섹션.
 - 사진 자체는 되돌리기 대상 아님 — 별도 "사진 제거" 액션.
 
 ## 7. 캔버스 크기/DPI
