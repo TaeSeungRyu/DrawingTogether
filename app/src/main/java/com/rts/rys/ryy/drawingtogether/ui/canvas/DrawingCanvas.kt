@@ -63,6 +63,8 @@ fun DrawingCanvas(
     smoothingAlpha: Float = 1f,
     // 트레이싱 보조 — 사진 배경 표시 알파(1f=원본). 저장/동기화엔 미반영, 화면 표시만.
     backgroundAlpha: Float = 1f,
+    // 트레이싱 외곽선 모드 — non-null 이면 사진 대신 추출한 외곽선 오버레이를 그린다. 로컬 표시만.
+    edgeOverlay: ImageBitmap? = null,
     // 스포이드 — 탭한 정규화 좌표의 색을 집는다. 스포이드 모드에서만 호출.
     onPickColor: (Float, Float) -> Unit = { _, _ -> },
     // 스티커 편집 콜백 — 스티커 모드에서만 호출.
@@ -176,14 +178,15 @@ fun DrawingCanvas(
         // 0. 캔버스 배경색 (기본 흰색). 사진이 있으면 그 아래 깔린다.
         drawRect(color = Color(state.backgroundColor))
         // 1. 사진 배경 (있으면). 트레이싱 보조 알파 적용 — 표시만, 저장 PNG 엔 영향 없음. (라이브, 캐시 안 함)
+        //    외곽선 모드(edgeOverlay non-null)면 사진 대신 추출한 라인만 그린다. 계산 전이면 사진을 alpha 로 표시.
         state.background?.bitmap?.let { bg ->
             drawImage(
-                image = bg,
+                image = edgeOverlay ?: bg,
                 srcOffset = IntOffset.Zero,
-                srcSize = IntSize(bg.width, bg.height),
+                srcSize = IntSize((edgeOverlay ?: bg).width, (edgeOverlay ?: bg).height),
                 dstOffset = IntOffset.Zero,
                 dstSize = IntSize(canvasSize.width, canvasSize.height),
-                alpha = backgroundAlpha,
+                alpha = if (edgeOverlay != null) 1f else backgroundAlpha,
             )
         }
         // 2. 완료된 stroke — 캐시 비트맵으로 한 번에. (없으면 첫 프레임 등 — 폴백 직접 그리기)

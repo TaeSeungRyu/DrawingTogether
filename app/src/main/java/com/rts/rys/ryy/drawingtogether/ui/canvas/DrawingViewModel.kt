@@ -5,7 +5,9 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateMap
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState
 import com.rts.rys.ryy.drawingtogether.drawing.engine.UndoItem
 import com.rts.rys.ryy.drawingtogether.drawing.model.BackgroundImage
@@ -21,9 +23,14 @@ import com.rts.rys.ryy.drawingtogether.drawing.model.Stroke
 import com.rts.rys.ryy.drawingtogether.drawing.model.StrokeId
 import com.rts.rys.ryy.drawingtogether.drawing.model.ToolKind
 import com.rts.rys.ryy.drawingtogether.drawing.model.ToolSettings
+import com.rts.rys.ryy.drawingtogether.photo.EdgeDetector
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 // Phase 3-A: 로컬 입력 + 원격 인바운드 이벤트 둘 다 같은 canvas.apply() 루프를 통과.
 // outbound 는 SharedFlow 로 노출해 DrawingScreen 이 Connected 상태에서만 transport.send 로 흘려보낸다.
@@ -59,10 +66,12 @@ enum class Smoothing(val alpha: Float, val label: String) {
 
 // 트레이싱 보조 — 그리는 동안 사진 배경을 얼마나 진하게 보여줄지(표시 알파). 따라 그리기 가이드.
 // "사진 배경 포함 저장"(mergeBackgroundOnSave)과 직교 — 이건 화면 표시 알파일 뿐, 저장/동기화엔 미반영.
-enum class TraceOpacity(val alpha: Float, val label: String) {
+// Edge = 사진 대신 외곽선만 추출(EdgeDetector)해 또렷한 라인 가이드로 표시. alpha 는 계산 전 placeholder 용.
+enum class TraceOpacity(val alpha: Float, val label: String, val edge: Boolean = false) {
     Full(1f, "원본"),
     Faint(0.45f, "연하게"),
-    Ghost(0.2f, "아주 연하게");
+    Ghost(0.2f, "아주 연하게"),
+    Edge(0.2f, "외곽선", edge = true);
 
     fun next(): TraceOpacity = values()[(ordinal + 1) % values().size]
 }
@@ -135,11 +144,29 @@ class DrawingViewModel : ViewModel() {
 
     fun cycleSmoothing() { smoothing = smoothing.next() }
 
-    // 트레이싱 보조 — 사진 배경 표시 알파(원본 → 연하게 → 아주 연하게). 로컬 표시 전용.
+    // 트레이싱 보조 — 사진 배경 표시 알파(원본 → 연하게 → 아주 연하게 → 외곽선). 로컬 표시 전용.
     var traceOpacity by mutableStateOf(TraceOpacity.Full)
         private set
 
-    fun cycleTraceOpacity() { traceOpacity = traceOpacity.next() }
+    // 외곽선(Edge) 모드용으로 현재 사진에서 추출한 라인 오버레이. 사진 변경 시 무효화, 모드 진입 시 지연 계산.
+    var edgeOverlay by mutableStateOf<ImageBitmap?>(null)
+        private set
+    private var edgeJob: Job? = null
+
+    fun cycleTraceOpacity() {
+        traceOpacity = traceOpacity.next()
+        if (traceOpacity.edge) ensureEdgeOverlay()
+    }
+
+    // 외곽선 오버레이를 보장 — 이미 계산됐거나 계산 중이거나 사진이 없으면 아무것도 안 함.
+    private fun ensureEdgeOverlay() {
+        if (edgeOverlay != null || edgeJob?.isActive == true) return
+        val photo = canvas.background?.bitmap ?: return
+        edgeJob = viewModelScope.launch {
+            val result = withContext(Dispatchers.Default) { EdgeDetector.detect(photo) }
+            edgeOverlay = result
+        }
+    }
 
     // 대칭(미러) 그리기 모드.
     var symmetry by mutableStateOf(SymmetryMode.Off)
@@ -374,6 +401,10 @@ class DrawingViewModel : ViewModel() {
     fun setBackground(image: BackgroundImage?) {
         canvas.setBackground(image)
         recorder.recordBackgroundPhoto(image?.bitmap)
+        // 사진이 바뀌면 외곽선 캐시 무효화. 외곽선 모드 중이면 새 사진으로 다시 계산.
+        edgeJob?.cancel()
+        edgeOverlay = null
+        if (traceOpacity.edge) ensureEdgeOverlay()
     }
 
     fun setBackgroundColor(argb: Int) {

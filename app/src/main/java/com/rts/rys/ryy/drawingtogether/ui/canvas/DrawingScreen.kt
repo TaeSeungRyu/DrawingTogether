@@ -1126,6 +1126,7 @@ private fun MyCanvasContent(vm: DrawingViewModel, selfNick: String? = null) {
             guideGridCells = vm.guideGrid.cells,
             smoothingAlpha = vm.smoothing.alpha,
             backgroundAlpha = vm.traceOpacity.alpha,
+            edgeOverlay = if (vm.traceOpacity.edge) vm.edgeOverlay else null,
             onPickColor = { nx, ny ->
                 val argb = CanvasColorSampler.sampleColor(vm.canvas, density, nx, ny)
                 UserPaletteRepo.get(context).addRecent(argb)
