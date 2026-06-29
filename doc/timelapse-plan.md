@@ -1,6 +1,6 @@
 # 타임랩스 재생·공유 계획 — 이벤트 로그 기록 → 재생 → 영상 내보내기
 
-> 상태: **Phase 1(기록+저장) 구현됨**. Phase 2(재생·갤러리)·Phase 3(영상) 미착수. P3 백로그.
+> 상태: **Phase 1(기록+저장) + Phase 2(재생·갤러리·삭제) 구현됨**. Phase 3(영상) 미착수.
 > 상세·우선순위는 [drawing-ideas.md](drawing-ideas.md), 단계 표기는 [roadmap.md](roadmap.md).
 > 결정 사항은 §7 확정 완료.
 
@@ -104,25 +104,24 @@ filesDir/timelapses/<id>/
   CBOR 라운드트립 통과. 실기기 기록→저장 동작 확인 필요.
 - **위험**: 낮. 인메모리 수집 + 저장 시 일괄 쓰기(기존 PNG 저장 패턴).
 
-## 3. Phase 2 — 인앱 재생 (view) + 갤러리 + 삭제
+## 3. Phase 2 — 인앱 재생 (view) + 갤러리 + 삭제 ✅ 구현됨
 
 > 목표: 홈에서 별도 타임랩스 갤러리로 들어가 선택·재생·삭제.
 
 ### 2-A 재생 엔진
-- [ ] `TimelapsePlayer` — 빈 `CanvasState` 에 `entries` 를 코루틴 스케줄러로 재적용.
-  `Draw` → `canvas.apply(event)`, 배경 마커 → `setBackground*`(ref 비트맵 로드). 다음 항목까지 `atMs` 차이만큼 delay.
-- [ ] 컨트롤: 재생/일시정지, 스크럽(특정 시점으로 = 0부터 그 지점까지 즉시 재적용), 속도(1x/2x/4x),
-  **긴 정지 구간 압축**(gap 상한, 예: 1s) — "타임랩스" 다운 속도감.
+- [x] `TimelapsePlayer` — 빈 `CanvasState` 에 `entries` 를 코루틴(delay)으로 재적용.
+  `Draw` → `canvas.apply`, 배경 마커 → `setBackground*`(ref 비트맵 사전 디코드 맵). gap 상한 800ms + 배속.
+- [x] 컨트롤: 재생/일시정지, **seek 슬라이더**(0부터 `rebuildTo` 재적용), 속도(1x/2x/4x), 처음으로.
+  `CanvasState.reset()` 추가(재생 rebuild 용).
 
 ### 2-B 홈 진입 + 갤러리 화면
-- [ ] **홈 화면에 "타임랩스" 진입점** 추가(최근 작품 갤러리와 별도 섹션/버튼).
-- [ ] 새 라우트 `timelapses` — `TimelapseStore` 목록을 썸네일 그리드로. 탭 → 재생.
-  **삭제**: 항목 길게 누르기 또는 삭제 버튼 → `TimelapseStore.delete(id)`(디렉터리 삭제).
-- [ ] 새 라우트 `timelapse/{id}` — 재생 화면(`DrawingCanvas` read-only + 재생 컨트롤).
-  여기에서도 삭제 가능.
-- **산출물**: 홈 → 갤러리 → 재생/삭제 동선.
-- **검증**: 재생 후 최종 캔버스 == `thumb.png`(같은 이벤트·렌더러라 일치). 삭제 후 목록 갱신. 실기기 체감.
-- **위험**: 중. 스케줄러 정확도·스크럽 재적용 비용·배경 복원.
+- [x] **홈 "타임랩스" 버튼** 추가(`onTimelapses`). 최근 작품과 별도.
+- [x] 라우트 `timelapses` — `TimelapseGalleryScreen`: `TimelapseStore.items` 썸네일 그리드(다운샘플 디코드),
+  탭 → 재생, **길게 누르기 → 삭제 확인**(`store.delete`).
+- [x] 라우트 `timelapse/{id}` — `TimelapsePlayerScreen`: read-only `ReplayCanvas`(DrawingCanvas 렌더러
+  재사용, pointerInput 없음) + 컨트롤 + 상단 "삭제".
+- **검증**: 컴파일 통과. 재생 후 최종 == `thumb.png` 여부·seek 체감·배경 복원은 실기기 확인 필요.
+- **위험**: 중. 스크럽 시 매번 0부터 rebuild — 긴 로그에서 드래그 비용(후속 최적화 여지).
 
 ## 4. Phase 3 — 영상/GIF 내보내기 (share)
 

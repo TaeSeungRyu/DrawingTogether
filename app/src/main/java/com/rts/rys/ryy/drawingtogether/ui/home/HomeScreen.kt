@@ -50,6 +50,7 @@ fun HomeScreen(
     onDuoMode: () -> Unit,
     onPartyMode: () -> Unit,
     onWorkClick: (String) -> Unit,
+    onTimelapses: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -195,6 +196,27 @@ fun HomeScreen(
                            else "${works.size}개 저장됨",
                     style = MaterialTheme.typography.bodySmall,
                 )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // 타임랩스 — 라벤더 컨테이너 톤. 그리기 과정 재생 갤러리.
+        Button(
+            onClick = onTimelapses,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(72.dp),
+            shape = MaterialTheme.shapes.extraLarge,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+            ),
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("타임랩스", style = MaterialTheme.typography.titleLarge)
+                Spacer(modifier = Modifier.height(2.dp))
+                Text("그리는 과정 다시 보기", style = MaterialTheme.typography.bodySmall)
             }
         }
             Spacer(modifier = Modifier.height(32.dp))

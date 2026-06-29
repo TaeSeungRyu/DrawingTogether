@@ -13,6 +13,8 @@ import com.rts.rys.ryy.drawingtogether.ui.pairing.PairingScreen
 import com.rts.rys.ryy.drawingtogether.ui.pairing.PartyPairingScreen
 import com.rts.rys.ryy.drawingtogether.ui.preview.PreviewScreen
 import com.rts.rys.ryy.drawingtogether.ui.splash.SplashScreen
+import com.rts.rys.ryy.drawingtogether.ui.timelapse.TimelapseGalleryScreen
+import com.rts.rys.ryy.drawingtogether.ui.timelapse.TimelapsePlayerScreen
 
 // Phase 4-D: Draw 화면이 셋 중 하나의 모드로 진입한다.
 // - Single  : 네트워크 없음, 혼자 그리기
@@ -33,6 +35,9 @@ object Routes {
     const val PartyPairing = "party-pairing"  // 모임 모드 (1:N) 페어링
     const val Preview = "preview"             // path 인자: workId
     const val PreviewArg = "workId"
+    const val Timelapses = "timelapses"       // 타임랩스 갤러리
+    const val Timelapse = "timelapse"         // path 인자: id (재생)
+    const val TimelapseArg = "id"
 }
 
 private fun drawRoute(mode: DrawMode): String = "${Routes.Draw}/${mode.name}"
@@ -62,6 +67,7 @@ fun AppNavGraph(modifier: Modifier = Modifier) {
                 onWorkClick = { workId ->
                     nav.navigate("${Routes.Preview}/$workId")
                 },
+                onTimelapses = { nav.navigate(Routes.Timelapses) },
             )
         }
         composable(
@@ -129,6 +135,19 @@ fun AppNavGraph(modifier: Modifier = Modifier) {
         ) { backStackEntry ->
             val workId = backStackEntry.arguments?.getString(Routes.PreviewArg).orEmpty()
             PreviewScreen(workId = workId, onBack = { nav.popBackStack() })
+        }
+        composable(Routes.Timelapses) {
+            TimelapseGalleryScreen(
+                onBack = { nav.popBackStack() },
+                onPlay = { id -> nav.navigate("${Routes.Timelapse}/$id") },
+            )
+        }
+        composable(
+            route = "${Routes.Timelapse}/{${Routes.TimelapseArg}}",
+            arguments = listOf(navArgument(Routes.TimelapseArg) { type = NavType.StringType }),
+        ) { backStackEntry ->
+            val id = backStackEntry.arguments?.getString(Routes.TimelapseArg).orEmpty()
+            TimelapsePlayerScreen(id = id, onBack = { nav.popBackStack() })
         }
     }
 }

@@ -82,6 +82,17 @@ class CanvasState {
         stickers.forEach { _undoStack.add(UndoItem.StickerRef(it.id)) }
     }
 
+    // 전체 초기화 — 타임랩스 재생에서 처음부터 다시 쌓을 때(seek/rebuild) 사용.
+    // 일반 그리기 경로에선 쓰지 않는다(apply(Clear) 와 달리 배경까지 비움).
+    fun reset() {
+        _strokes.clear()
+        _openStrokes.clear()
+        _stickers.clear()
+        _undoStack.clear()
+        _background = null
+        _backgroundColor = 0xFFFFFFFF.toInt()
+    }
+
     fun apply(event: DrawingEvent) {
         when (event) {
             is DrawingEvent.StrokeStart -> {
