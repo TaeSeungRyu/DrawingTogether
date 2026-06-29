@@ -21,6 +21,15 @@ sealed interface TimelapseOp {
     @Serializable
     @SerialName("bg_photo")
     data class BackgroundPhoto(val ref: String?) : TimelapseOp
+
+    // 기록 시작 시점에 이미 그려져 있던 내용(기록 버튼 전 작업)을 초기 상태로 심는다.
+    // 재생 시 applySnapshot 으로 한 번에 복원. 보통 로그 맨 앞(atMs=0)에 1회.
+    @Serializable
+    @SerialName("snapshot")
+    data class Snapshot(
+        val strokes: List<Stroke>,
+        val stickers: List<Sticker>,
+    ) : TimelapseOp
 }
 
 @Serializable

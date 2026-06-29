@@ -6,6 +6,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import com.rts.rys.ryy.drawingtogether.drawing.model.DrawingEvent
+import com.rts.rys.ryy.drawingtogether.drawing.model.Sticker
+import com.rts.rys.ryy.drawingtogether.drawing.model.Stroke
 import com.rts.rys.ryy.drawingtogether.drawing.model.TimelapseEntry
 import com.rts.rys.ryy.drawingtogether.drawing.model.TimelapseOp
 
@@ -27,11 +29,27 @@ class TimelapseRecorder {
     private val backgrounds = mutableListOf<ImageBitmap>()
     private var startMs = 0L
 
-    fun start() {
+    // 기록 시작. 시작 시점의 캔버스(기록 버튼 전 작업)를 atMs=0 초기 상태로 심어 재생이 빈
+    // 캔버스가 아니라 "이미 그려진 것"부터 시작하게 한다.
+    fun start(
+        initialStrokes: List<Stroke> = emptyList(),
+        initialStickers: List<Sticker> = emptyList(),
+        initialBgColor: Int = 0xFFFFFFFF.toInt(),
+        initialBgPhoto: ImageBitmap? = null,
+    ) {
         entries.clear()
         backgrounds.clear()
         startMs = SystemClock.elapsedRealtime()
         isRecording = true
+        // 초기 상태 시딩(atMs=0). 배경색 → 배경사진 → 스냅샷 순.
+        entries.add(TimelapseEntry(0L, TimelapseOp.BackgroundColor(initialBgColor)))
+        if (initialBgPhoto != null) {
+            backgrounds.add(initialBgPhoto)
+            entries.add(TimelapseEntry(0L, TimelapseOp.BackgroundPhoto("bg-0")))
+        }
+        if (initialStrokes.isNotEmpty() || initialStickers.isNotEmpty()) {
+            entries.add(TimelapseEntry(0L, TimelapseOp.Snapshot(initialStrokes, initialStickers)))
+        }
     }
 
     fun discard() {
@@ -64,11 +82,11 @@ class TimelapseRecorder {
         entries.add(TimelapseEntry(now(), TimelapseOp.BackgroundPhoto(ref)))
     }
 
-    // 종료 — 기록이 비어 있으면 null. 호출 후 녹화 off.
+    // 종료 — 기록 중 그린 게 없으면(시작 시점 시드만 있으면) null. 호출 후 녹화 off.
     fun stop(): RecordedTimelapse? {
         if (!isRecording) return null
         isRecording = false
-        if (entries.isEmpty()) return null
+        if (entries.none { it.op is TimelapseOp.Draw }) return null
         val duration = entries.last().atMs
         return RecordedTimelapse(
             entries = entries.toList(),

@@ -25,6 +25,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -158,14 +159,21 @@ private fun PlaybackControls(player: TimelapsePlayer) {
         modifier = Modifier.fillMaxWidth().padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        // 드래그 중에는 썸네일 위치만 바꾸고(scrub), 손을 뗄 때 한 번만 rebuild — 매 프레임
+        // 0부터 재구성하던 끊김 제거.
+        var scrubMs by remember { mutableStateOf<Float?>(null) }
         Slider(
-            value = player.positionMs.toFloat(),
-            onValueChange = { player.seekTo(it.toLong()) },
+            value = scrubMs ?: player.positionMs.toFloat(),
+            onValueChange = { scrubMs = it },
+            onValueChangeFinished = {
+                scrubMs?.let { player.seekTo(it.toLong()) }
+                scrubMs = null
+            },
             valueRange = 0f..player.durationMs.coerceAtLeast(1L).toFloat(),
             modifier = Modifier.fillMaxWidth(),
         )
         Text(
-            text = "${fmt(player.positionMs)} / ${fmt(player.durationMs)}",
+            text = "${fmt((scrubMs ?: player.positionMs.toFloat()).toLong())} / ${fmt(player.durationMs)}",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

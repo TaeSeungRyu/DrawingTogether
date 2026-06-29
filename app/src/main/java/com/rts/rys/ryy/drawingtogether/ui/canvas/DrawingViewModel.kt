@@ -83,7 +83,13 @@ class DrawingViewModel : ViewModel() {
     private val recorder = TimelapseRecorder()
     val isRecording: Boolean get() = recorder.isRecording
 
-    fun startRecording() = recorder.start()
+    // 기록 시작 — 현재 캔버스(기록 버튼 전 작업)를 초기 상태로 심는다.
+    fun startRecording() = recorder.start(
+        initialStrokes = canvas.strokes.toList(),
+        initialStickers = canvas.stickers.toList(),
+        initialBgColor = canvas.backgroundColor,
+        initialBgPhoto = canvas.background?.bitmap,
+    )
     fun discardRecording() = recorder.discard()
     fun finishRecording(): RecordedTimelapse? = recorder.stop()
 

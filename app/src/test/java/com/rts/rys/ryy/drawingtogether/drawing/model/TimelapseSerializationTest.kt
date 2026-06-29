@@ -29,6 +29,27 @@ class TimelapseSerializationTest {
             durationMs = 1234L,
             entries = listOf(
                 TimelapseEntry(0L, TimelapseOp.BackgroundColor(0xFFFFFFFF.toInt())),
+                TimelapseEntry(
+                    0L,
+                    TimelapseOp.Snapshot(
+                        strokes = listOf(
+                            Stroke(
+                                id = StrokeId("pre-1"),
+                                authorId = PeerId("local"),
+                                tool = tool,
+                                points = listOf(Point(0.7f, 0.7f), Point(0.8f, 0.8f)),
+                            ),
+                        ),
+                        stickers = listOf(
+                            Sticker(
+                                id = StickerId("st-1"),
+                                authorId = PeerId("local"),
+                                key = StickerKey.Heart,
+                                cx = 0.5f, cy = 0.5f, scale = 0.2f, rotationDeg = 0f,
+                            ),
+                        ),
+                    ),
+                ),
                 TimelapseEntry(10L, TimelapseOp.BackgroundPhoto("bg-0")),
                 TimelapseEntry(
                     20L,

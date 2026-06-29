@@ -84,8 +84,10 @@ filesDir/timelapses/<id>/
 > 저장 전 앱 종료 시 소실(증분 저장·복구 없음).
 
 ### 1-A 수집 엔진 (인메모리)
-- [x] `TimelapseRecorder` (ui/canvas) — `start()/stop()/discard()` + 인메모리 `entries`/`backgrounds`.
+- [x] `TimelapseRecorder` (ui/canvas) — `start(초기 스냅샷)/stop()/discard()` + 인메모리 `entries`/`backgrounds`.
   시작 기준 `SystemClock.elapsedRealtime()` 로 `atMs`. `stop()` 은 `RecordedTimelapse`(로그+배경) 반환.
+- [x] **기록 시작 시점 캔버스 시딩** — 기록 버튼 전 작업도 재생에 보이도록 시작 시 현재 strokes/스티커/
+  배경을 atMs=0 의 `TimelapseOp.Snapshot`+배경 마커로 심음(`startRecording`). 기록 중 그린 게 없으면 저장 안 함.
 - [x] `DrawingViewModel` 배선: `emit` 와 `applyRemoteEvent`(Shared 만) 에서 `recorder.recordEvent`,
   `setBackground`/`setBackgroundColor` 에서 배경 마커.
 - [ ] 메모리 상한(§7) — 매우 긴 세션 대비 상한 도달 시 동작(경고/자동 종료저장). **미구현**(후속).
@@ -112,7 +114,8 @@ filesDir/timelapses/<id>/
 - [x] `TimelapsePlayer` — 빈 `CanvasState` 에 `entries` 를 코루틴(delay)으로 재적용.
   `Draw` → `canvas.apply`, 배경 마커 → `setBackground*`(ref 비트맵 사전 디코드 맵). gap 상한 800ms + 배속.
 - [x] 컨트롤: 재생/일시정지, **seek 슬라이더**(0부터 `rebuildTo` 재적용), 속도(1x/2x/4x), 처음으로.
-  `CanvasState.reset()` 추가(재생 rebuild 용).
+  `CanvasState.reset()` 추가(재생 rebuild 용). seek 은 드래그 중이 아닌 **놓을 때(`onValueChangeFinished`)만**
+  rebuild — 드래그마다 0부터 재구성하던 끊김 제거.
 
 ### 2-B 홈 진입 + 갤러리 화면
 - [x] **홈 "타임랩스" 버튼** 추가(`onTimelapses`). 최근 작품과 별도.
