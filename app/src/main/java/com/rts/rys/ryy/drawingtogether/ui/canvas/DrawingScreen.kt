@@ -325,6 +325,26 @@ fun DrawingScreen(
 
     // 기록 중 시스템 뒤로가기 → 바로 나가지 않고 저장/폐기 확인.
     BackHandler(enabled = vm.isRecording) { showRecordBackConfirm = true }
+
+    // 소프트 가드 — 인메모리 기록이라 너무 길면 앱 종료 시 소실·탐색 둔화 위험. 1분 전 경고,
+    // 최대(MAX_RECORD_MS) 도달 시 자동 종료-저장.
+    LaunchedEffect(vm.isRecording) {
+        if (!vm.isRecording) return@LaunchedEffect
+        var warned = false
+        while (vm.isRecording) {
+            val e = vm.recordingElapsedMs()
+            if (!warned && e >= MAX_RECORD_MS - 60_000L) {
+                warned = true
+                Toast.makeText(context, "곧 최대 기록 시간(${MAX_RECORD_MS / 60_000}분)에 도달해요", Toast.LENGTH_SHORT).show()
+            }
+            if (e >= MAX_RECORD_MS) {
+                Toast.makeText(context, "최대 기록 시간에 도달해 저장했어요", Toast.LENGTH_LONG).show()
+                saveTimelapse()
+                break
+            }
+            kotlinx.coroutines.delay(1000)
+        }
+    }
     // Phase 4-G: 동기화 다이얼로그 단계 — Duo 는 컨펌 1단계, Party 는 피커 → 컨펌 2단계.
     var syncStep by remember { mutableStateOf<SyncStep>(SyncStep.None) }
     // 모임 모드 동기화 응답 후, 내 캔버스를 다른 참가자에게 broadcast 해 그들이 보는 내 미니뷰도
@@ -1169,6 +1189,9 @@ private fun MyCanvasContent(vm: DrawingViewModel, selfNick: String? = null) {
         }
     }
 }
+
+// 타임랩스 기록 소프트 가드 — 인메모리라 무한정 두면 앱 종료 시 소실·탐색 둔화. 도달 시 자동 저장.
+private const val MAX_RECORD_MS: Long = 15 * 60 * 1000L
 
 // 녹화 경과 시간 mm:ss.
 private fun formatElapsed(ms: Long): String {

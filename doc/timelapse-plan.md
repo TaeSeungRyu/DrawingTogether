@@ -90,7 +90,8 @@ filesDir/timelapses/<id>/
   배경을 atMs=0 의 `TimelapseOp.Snapshot`+배경 마커로 심음(`startRecording`). 기록 중 그린 게 없으면 저장 안 함.
 - [x] `DrawingViewModel` 배선: `emit` 와 `applyRemoteEvent`(Shared 만) 에서 `recorder.recordEvent`,
   `setBackground`/`setBackgroundColor` 에서 배경 마커.
-- [ ] 메모리 상한(§7) — 매우 긴 세션 대비 상한 도달 시 동작(경고/자동 종료저장). **미구현**(후속).
+- [x] 기록 경과 시간(● REC m:ss) + **소프트 가드** — 인메모리라 무한정이면 앱 종료 시 소실·탐색 둔화
+  위험. `MAX_RECORD_MS`(15분) 1분 전 경고 + 도달 시 자동 종료-저장(`DrawingScreen` LaunchedEffect).
 
 ### 1-B 기록 컨트롤 (UI)
 - [x] **TopAppBar** 기록 시작 / 종료(저장) 토글(`RecordGlyph`/`StopGlyph`) + 캔버스 좌상단 ● REC 인디케이터.
@@ -185,7 +186,7 @@ filesDir/timelapses/<id>/
 | 사진 배경 | 메모리 보유 → 저장 시 `bg-<n>.png` 기록 + 로그 `ref`(§5). MVP 1장 |
 | 타이밍/길이 | 원본 `atMs` 저장 → 재생은 **실시간 보존**(프레임 시계로 연속 전진) + 배속(1/2/4x). gap 압축은 폐기(정지도 실제 시간만큼 흐름) |
 | 스크럽 | **0부터 재적용**(rebuild). 역재생 안 함 |
-| 메모리 상한 | 매우 긴 세션 대비 상한 + 도달 시 동작(경고/자동 종료저장) — 구현 시 수치 확정 |
+| 메모리 상한 | **확정·구현**: 시간 기반 소프트 가드 `MAX_RECORD_MS`=15분(1분 전 경고 + 자동 종료저장) |
 
 ## 8. 보류 / 비범위
 
