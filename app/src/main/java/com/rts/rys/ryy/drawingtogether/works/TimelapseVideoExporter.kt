@@ -36,9 +36,9 @@ import java.io.File
 // 헤드리스로 프레임을 그려(같은 렌더러 재사용) YUV420 로 인코딩. 기기별 코덱 차이가 있어 실기기 검증 필요.
 object TimelapseVideoExporter {
 
-    private const val FPS = 12
+    private const val FPS = 30               // 인앱 재생만큼 부드럽게
     private const val MAX_DIM = 480          // 출력 최대 변(짝수 보정)
-    private const val MAX_FRAMES = 1200      // 너무 긴 녹화는 프레임 간격을 늘려 영상 길이를 제한(자동 가속)
+    private const val MAX_FRAMES = 1800      // 너무 긴 녹화는 프레임 간격을 늘려 영상 길이를 제한(자동 가속, ~60s@30fps)
     private const val I_FRAME_INTERVAL = 1
 
     // 진행률(0..1) 콜백. 반환: 갤러리 URI.
@@ -110,7 +110,9 @@ object TimelapseVideoExporter {
         val totalMs = durationMs.coerceAtLeast(1L)
         val minStep = 1000L / FPS
         val frameStepMs = maxOf(minStep, (totalMs + MAX_FRAMES - 1) / MAX_FRAMES)
-        val frameCount = (totalMs / frameStepMs).toInt() + 1
+        val contentFrames = (totalMs / frameStepMs).toInt() + 1
+        val tailFrames = FPS // 마지막 화면 ~1초 유지(마지막 획이 곧장 끝나 안 보이던 문제)
+        val frameCount = contentFrames + tailFrames
 
         val canvas = CanvasState()
         var entryIndex = 0
@@ -142,7 +144,9 @@ object TimelapseVideoExporter {
 
         try {
             for (f in 0 until frameCount) {
-                val contentMs = f * frameStepMs
+                // durationMs 로 clamp — 마지막 프레임이 끝(마지막 StrokeEnd)까지 확실히 적용.
+                // tail 구간에선 totalMs 에 머물러 완성 화면을 유지.
+                val contentMs = minOf(f.toLong() * frameStepMs, totalMs)
                 while (entryIndex < entries.size && entries[entryIndex].atMs <= contentMs) {
                     applyOp(canvas, entries[entryIndex].op, bgMap)
                     entryIndex++
@@ -218,6 +222,8 @@ object TimelapseVideoExporter {
                 )
             }
             state.strokes.forEach { drawStroke(it, size, density) }
+            // 진행 중 stroke 도 그려야 "그려지는 과정"이 보인다(이게 빠지면 획이 끝날 때 통째로 팝업).
+            state.openStrokes.values.forEach { drawStroke(it, size, density) }
             state.stickers.forEach { drawSticker(it, size) }
         }
         return image.asAndroidBitmap()
