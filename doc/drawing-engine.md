@@ -106,11 +106,14 @@ class CanvasState {
         private set
     var backgroundColor: Int by mutableStateOf(WHITE)   // 사진 없을 때 바탕색. 캔버스 속성.
         private set
+    var contentRevision: Int by mutableStateOf(0)       // 완료 stroke/배경 변경 시 ++ — 비트맵 캐시 무효화
+        private set
 
-    fun apply(event: DrawingEvent) { /* Stroke* / Clear / Undo / *Sticker dispatch */ }
-    fun applySnapshot(strokes: List<Stroke>, stickers: List<Sticker> = emptyList()) { /* 전체 교체 */ }
-    fun setBackground(image: BackgroundImage?) { background = image }
-    fun setBackgroundColor(argb: Int) { backgroundColor = argb }
+    fun apply(event: DrawingEvent) { /* Stroke* / Clear / Undo / *Sticker dispatch (+완료 stroke 변경 시 bumpRevision) */ }
+    fun applySnapshot(strokes: List<Stroke>, stickers: List<Sticker> = emptyList()) { /* 전체 교체 + bump */ }
+    fun reset() { /* 전부 비움(배경 포함) — 타임랩스 재생 rebuild 용 */ }
+    fun setBackground(image: BackgroundImage?) { background = image; /* bump */ }
+    fun setBackgroundColor(argb: Int) { backgroundColor = argb; /* bump */ }
 }
 ```
 
@@ -118,6 +121,7 @@ class CanvasState {
 - **스티커**: `PlaceSticker` → 추가 + undoStack push, `TransformSticker`(이동/크기/회전 공용) → 교체(undo 불변), `RemoveSticker` → 제거 + undo 항목 제거.
 - 사진은 `apply` 밖의 별도 setter — 사진은 이벤트가 아니라 상태이기 때문.
 - `mutableStateListOf` + `mutableStateMapOf`로 Compose가 변경된 부분만 다시 그리도록.
+- **타임랩스**: 모든 변경이 이 이벤트 스트림을 지나므로(`DrawingViewModel.emit`/`applyRemoteEvent` + 배경 setter), 기록기가 `(atMs, op)` 로그만 모았다가 빈 `CanvasState` 에 다시 재생/렌더한다. 상세: [timelapse-plan.md](timelapse-plan.md).
 
 ## 3. 입력 처리
 
@@ -163,7 +167,7 @@ Canvas(
 8. 스포이드 조준 십자          (스포이드 모드 + 누르는 중 — drawEyedropperCursor)
 ```
 
-- **완료된 획 비트맵 캐시**는 Phase 5(다듬기)에서. 현재 트래픽 수준에선 Compose RenderNode 캐싱만으로 충분.
+- **완료된 획 비트맵 캐시**(구현됨): 완료 stroke 를 투명 `ImageBitmap` 에 렌더해두고(`remember(contentRevision, size, density)`, `renderCommittedStrokes`) 매 프레임 `drawImage(cached)` 로 재사용. 색·도구 변경·진행 중 stroke 프레임에 전체 벡터 재그리기를 피함. 배경은 캐시 안 함(트레이싱 알파 라이브). 진행 중 stroke·스티커·커서는 캐시 위에 라이브.
 - 도형 모드(`ShapeMode != None`)면 첫·마지막 점을 바운딩 박스로 도형 하나 — `tool.fill` 이면 색 채움(`Fill`), 아니면 외곽선(`Stroke`). 자유 곡선은 직선 폴리라인이 아니라 **인접 점의 중간점을 잇는 2차 베지어**(각 점이 control)로 그려 꺾임을 둥글게 한다(`buildFreehandPath`). 무지개·붓펜은 색·굵기가 구간마다 달라 한 Path 로 못 그리므로 `forEachSmoothPiece` 로 조각별 베지어를 그린다.
 - 브러시는 `BrushType`의 `capStyle`/`alpha`/`widthScale`을 cap/색알파/굵기에 곱해 적용.
 - 스티커는 `withTransform { translate(중심); rotate(deg) }` 안에서 key 별 벡터를 그림. `drawStroke` 와 마찬가지로 화면·PNG·미니뷰가 같은 `drawSticker` 함수 공유.

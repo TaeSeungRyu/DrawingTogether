@@ -27,24 +27,27 @@
 ```
 com.rts.rys.ryy.drawingtogether
 ├── ui/                  Compose 화면 + 테마
-│   ├── AppNavGraph.kt   NavHost + DrawMode{Single,Duo,Party} — splash → home → (draw/{mode} | pairing | party-pairing | preview/{workId})
+│   ├── AppNavGraph.kt   NavHost + DrawMode{Single,Duo,Party} — splash → home → (draw/{mode} | pairing | party-pairing | preview/{workId} | timelapses | timelapse/{id})
 │   ├── splash/          앱 진입 시 잠깐 보이는 스플래시
 │   ├── home/            모드 선택 (싱글/함께/모임) + 최근 작업 모달 + 닉네임 설정
 │   ├── pairing/         PairingScreen(1:1) + PartyPairingScreen(1:N)
-│   ├── canvas/          드로잉 화면 (DrawingScreen/VM, DrawingCanvas, MiniCanvas, Toolbar, StrokeRenderer, StickerRenderer/StickerPickerSheet, 색 팔레트/피커)
+│   ├── canvas/          드로잉 화면 (DrawingScreen/VM, DrawingCanvas, MiniCanvas, Toolbar, StrokeRenderer, StickerRenderer/StickerPickerSheet, 색 팔레트/피커, TimelapseRecorder)
+│   ├── timelapse/       타임랩스 갤러리/재생 (TimelapseGalleryScreen, TimelapsePlayerScreen, TimelapsePlayer)
 │   ├── preview/         저장된 작품 풀사이즈 보기 + 갤러리 저장/공유
 │   └── theme/           Candy Pop 팔레트 + 테마
 ├── drawing/             드로잉 도메인 — UI/네트워크 무관
-│   ├── model/           Stroke, Point, ToolSettings, DrawingEvent, BackgroundImage, PeerId/StrokeId, Sticker/StickerKey/StickerId, CanvasSnapshot
-│   └── engine/          CanvasState — apply(event) 리듀서 + 통합 undo 스택(UndoItem) + 스티커 + 배경 슬롯
+│   ├── model/           Stroke, Point, ToolSettings, DrawingEvent, BackgroundImage, PeerId/StrokeId, Sticker/StickerKey/StickerId, CanvasSnapshot, Timelapse/TimelapseEntry/TimelapseOp
+│   └── engine/          CanvasState — apply(event) 리듀서 + 통합 undo 스택(UndoItem) + 스티커 + 배경 슬롯 + contentRevision(캐시 무효화)/reset(재생 rebuild)
 ├── photo/               사진 입력
-│   ├── PhotoLoader      Uri → BackgroundImage (다운샘플 + EXIF 회전)
+│   ├── PhotoLoader      Uri → BackgroundImage (다운샘플 max 2048 + EXIF 회전)
 │   └── CameraCaptureFile  FileProvider 기반 촬영 임시 URI (TakePicture)
-├── works/               저장된 작품 영속성
+├── works/               저장된 작품 + 타임랩스 영속성
 │   ├── Work             메타데이터 (id, 저장 시각, 크기, 사진 유무, 이름)
 │   ├── WorkStore        filesDir/works/ PNG+.meta, StateFlow 인덱스, 갤러리 export, 100개 한도
 │   ├── PngComposer      CanvasState → ImageBitmap → PNG (StrokeRenderer 재사용)
-│   └── CanvasColorSampler  스포이드 — PngComposer 합성 비트맵 픽셀 샘플
+│   ├── CanvasColorSampler  스포이드 — PngComposer 합성 비트맵 픽셀 샘플
+│   ├── TimelapseStore   filesDir/timelapses/<id>/ (log.timelapse CBOR + meta + thumb + bg-*), StateFlow, 50개 한도
+│   └── TimelapseVideoExporter  타임랩스 로그 → MP4 (MediaCodec/MediaMuxer) → MediaStore.Video
 ├── transport/           Nearby Connections 연결 + 직렬화
 │   ├── nearby/          NearbyTransport + TransportMode{Duo,Party} — 광고/검색/연결/relay
 │   ├── codec/           FrameCodec — Frame ↔ CBOR 바이트
@@ -63,7 +66,8 @@ com.rts.rys.ryy.drawingtogether
 splash ──auto──► home ──싱글──► draw/Single   (DrawingScreen, 네트워크 미사용)
                   ├──함께──► pairing/{autoHost} ──연결──► draw/Duo
                   ├──모임──► party-pairing ──그리기시작──► draw/Party
-                  └──썸네일 탭──► preview/{workId}
+                  ├──썸네일 탭──► preview/{workId}
+                  └──타임랩스──► timelapses ──탭──► timelapse/{id}  (재생·내보내기·삭제)
 ```
 
 `splash`에서 `home`으로 진입할 때는 `popUpTo(Splash) { inclusive = true }`로 백스택에서 제거. 미리보기는 백스택에 쌓여 뒤로 가기로 홈 복귀.
