@@ -77,11 +77,14 @@ import com.rts.rys.ryy.drawingtogether.transport.Frame
 import com.rts.rys.ryy.drawingtogether.transport.nearby.TransportMode
 import com.rts.rys.ryy.drawingtogether.ui.DrawMode
 import kotlinx.coroutines.delay
+import com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState
 import com.rts.rys.ryy.drawingtogether.works.CanvasColorSampler
 import com.rts.rys.ryy.drawingtogether.works.PngComposer
 import com.rts.rys.ryy.drawingtogether.works.TimelapseStore
 import com.rts.rys.ryy.drawingtogether.works.WorkStore
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private const val ASPECT_TOAST_TEXT = "사진 비율로 화면을 맞췄어요"
 // 저장 후 안내 — 길어서 토스트로는 잘림. Snackbar(여러 줄 + 닫기)로 표시.
@@ -291,11 +294,24 @@ fun DrawingScreen(
     var showRecordBackConfirm by remember { mutableStateOf(false) }
 
     // 타임랩스 저장 — 인메모리 로그 + 종료 상태 썸네일을 TimelapseStore 에 기록.
+    // 썸네일(PngComposer)·디스크 쓰기는 백그라운드에서 — 메인 스레드 프리징(종료 시 멈춤) 방지.
+    // 현재 캔버스 내용을 메인에서 가볍게 복사해 넘겨 동시 수정 위험도 없앤다.
     val saveTimelapse: () -> Unit = saveTimelapse@{
         val recorded = vm.finishRecording() ?: return@saveTimelapse
-        val thumb = PngComposer.compose(vm.canvas, density)
+        val strokesCopy = vm.canvas.strokes.toList()
+        val stickersCopy = vm.canvas.stickers.toList()
+        val bg = vm.canvas.background
+        val bgColor = vm.canvas.backgroundColor
         scope.launch {
             val ok = runCatching {
+                val thumb = withContext(Dispatchers.Default) {
+                    val snap = CanvasState().apply {
+                        applySnapshot(strokesCopy, stickersCopy)
+                        setBackground(bg)
+                        setBackgroundColor(bgColor)
+                    }
+                    PngComposer.compose(snap, density)
+                }
                 TimelapseStore.get(context)
                     .save(recorded.entries, recorded.durationMs, recorded.backgrounds, thumb)
             }.isSuccess
