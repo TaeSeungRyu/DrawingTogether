@@ -17,7 +17,7 @@
 구현 세부는 코드와 [roadmap.md](roadmap.md) Phase 5.5 참고. 여기선 요약만.
 
 1. **안내선(가이드라인)** — 중앙 십자선 + 격자(6×6 / 18×18 택1). 로컬 전용(동기화·저장
-   미포함). `DrawingViewModel.guideCross/guideGrid`, `DrawingCanvas.drawGuides`, 도구바 안내선 아이콘.
+   미포함). `DrawingViewModel.guideCross/guideGrid`, `DrawingCanvas.drawGuides`, 도구바 "보조" 드롭다운(안내선 섹션).
 2. **에어브러시(분사)** — `BrushType.Airbrush`. 분사점을 stroke 에 저장하지 않고 렌더 시
    결정론 seed(`stroke.id` 해시)로 생성 → 매 프레임·양 단말 동일. `StrokeRenderer.drawAirbrush`.
 3. **번짐(수채/스머지)** — `BrushType.Blur`. native `Paint` + `BlurMaskFilter` via
@@ -48,7 +48,7 @@
     TopAppBar "배경색" 버튼 → `ColorPickerSheet`. **현재 로컬 전용**(멀티 동기화 미포함 — 와이어 추가는 후속).
 12. **대칭(미러) 그리기** — `SymmetryMode`(끔/좌우/상하/4분할). `DrawingViewModel` 이 입력 stroke 의
     미러 좌표 stroke 를 독립 `StrokeId` 로 함께 emit(정규화 좌표 반사) → 동기화·저장 자동. 도형·브러시도
-    그대로 미러. 안내선 드롭다운에 대칭 섹션. 한 제스처가 N개 stroke 라 undo 는 미러별 1회씩(향후 묶기 가능).
+    그대로 미러. "보조" 드롭다운(구 안내선)에 대칭 섹션. 한 제스처가 N개 stroke 라 undo 는 미러별 1회씩(향후 묶기 가능).
 
 > **선 곡선 평활화**(렌더): 자유 곡선은 직선 폴리라인이 아니라 인접 점 중간점-2차 베지어로
 > 그려 꺾임을 둥글게(`buildFreehandPath`, 무지개·붓펜은 `forEachSmoothPiece`). 손떨림 보정(입력)과 별개.

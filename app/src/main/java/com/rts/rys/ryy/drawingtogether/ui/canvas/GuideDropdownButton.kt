@@ -50,7 +50,7 @@ fun GuideDropdownButton(
 
     Box(modifier = modifier) {
         ToolIconButton(
-            label = "안내선",
+            label = "보조",
             selected = active,
             onClick = { expanded = true },
             modifier = Modifier.fillMaxWidth(),
@@ -70,6 +70,16 @@ fun GuideDropdownButton(
                     modifier = Modifier.size(20.dp),
                 )
             }
+            @Composable
+            fun SectionLabel(text: String) {
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 12.dp, top = 6.dp, bottom = 2.dp),
+                )
+            }
+            SectionLabel("안내선")
             DropdownMenuItem(
                 text = { Text("중앙 십자선") },
                 leadingIcon = { CheckMark(checked = cross) },
@@ -83,12 +93,7 @@ fun GuideDropdownButton(
                 )
             }
             HorizontalDivider()
-            Text(
-                text = "대칭",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 12.dp, top = 6.dp, bottom = 2.dp),
-            )
+            SectionLabel("대칭")
             SymmetryMode.values().forEach { m ->
                 DropdownMenuItem(
                     text = { Text(m.label) },
