@@ -60,6 +60,8 @@ fun Toolbar(
     guideGrid: GuideGrid = GuideGrid.None,
     onToggleGuideCross: () -> Unit = {},
     onSelectGuideGrid: (GuideGrid) -> Unit = {},
+    symmetry: SymmetryMode = SymmetryMode.Off,
+    onSelectSymmetry: (SymmetryMode) -> Unit = {},
     smoothing: Smoothing = Smoothing.Off,
     onCycleSmoothing: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -166,6 +168,8 @@ fun Toolbar(
                     grid = guideGrid,
                     onToggleCross = onToggleGuideCross,
                     onSelectGrid = onSelectGuideGrid,
+                    symmetry = symmetry,
+                    onSelectSymmetry = onSelectSymmetry,
                     modifier = Modifier.weight(1f),
                 )
             }

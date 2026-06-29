@@ -67,6 +67,15 @@ enum class TraceOpacity(val alpha: Float, val label: String) {
     fun next(): TraceOpacity = values()[(ordinal + 1) % values().size]
 }
 
+// 대칭(미러) 그리기 — 입력 stroke 를 축 기준으로 자동 복제. 안내선 중앙 십자선과 시너지.
+// Off=복제 없음, Horizontal=좌우(x축 반사), Vertical=상하(y축 반사), Quad=4분할(좌우+상하+대각).
+enum class SymmetryMode(val label: String) {
+    Off("끔"),
+    Horizontal("좌우"),
+    Vertical("상하"),
+    Quad("4분할"),
+}
+
 class DrawingViewModel : ViewModel() {
     val canvas = CanvasState()
 
@@ -116,6 +125,27 @@ class DrawingViewModel : ViewModel() {
         private set
 
     fun cycleTraceOpacity() { traceOpacity = traceOpacity.next() }
+
+    // 대칭(미러) 그리기 모드.
+    var symmetry by mutableStateOf(SymmetryMode.Off)
+        private set
+
+    fun selectSymmetry(mode: SymmetryMode) { symmetry = mode }
+
+    // 진행 중인 입력 stroke 의 미러 복제본들 — primary StrokeId → (미러 StrokeId, 좌표 변환).
+    // 시작 시점의 대칭 모드로 고정(그리는 도중 모드가 바뀌어도 일관). 종료 시 제거.
+    private val mirrorStrokes = mutableMapOf<StrokeId, List<Pair<StrokeId, (Point) -> Point>>>()
+
+    private fun mirrorTransforms(mode: SymmetryMode): List<(Point) -> Point> = when (mode) {
+        SymmetryMode.Off -> emptyList()
+        SymmetryMode.Horizontal -> listOf({ p: Point -> Point(1f - p.x, p.y) })
+        SymmetryMode.Vertical -> listOf({ p: Point -> Point(p.x, 1f - p.y) })
+        SymmetryMode.Quad -> listOf(
+            { p: Point -> Point(1f - p.x, p.y) },
+            { p: Point -> Point(p.x, 1f - p.y) },
+            { p: Point -> Point(1f - p.x, 1f - p.y) },
+        )
+    }
 
     // 로컬에서 발생한 모든 DrawingEvent. DrawingScreen 이 collect 해서
     // 함께 모드 연결 중이면 Frame.Event 로 송신. 함께 모드 아니면 그냥 흘려보냄.
@@ -189,8 +219,17 @@ class DrawingViewModel : ViewModel() {
     fun strokeStart(strokeId: StrokeId, point: Point) {
         if (tool.kind == ToolKind.Eraser) {
             eraseAt(point)
-        } else {
-            emit(DrawingEvent.StrokeStart(nextSeq(), author, strokeId, tool, point))
+            return
+        }
+        emit(DrawingEvent.StrokeStart(nextSeq(), author, strokeId, tool, point))
+        // 대칭 모드면 미러 stroke 들도 함께 시작 (각자 독립 StrokeId).
+        val transforms = mirrorTransforms(symmetry)
+        if (transforms.isNotEmpty()) {
+            val entries = transforms.map { StrokeId.random() to it }
+            mirrorStrokes[strokeId] = entries
+            entries.forEach { (mid, t) ->
+                emit(DrawingEvent.StrokeStart(nextSeq(), author, mid, tool, t(point)))
+            }
         }
     }
 
@@ -198,8 +237,11 @@ class DrawingViewModel : ViewModel() {
         if (points.isEmpty()) return
         if (tool.kind == ToolKind.Eraser) {
             points.forEach { eraseAt(it) }
-        } else {
-            emit(DrawingEvent.StrokeAppend(nextSeq(), author, strokeId, points))
+            return
+        }
+        emit(DrawingEvent.StrokeAppend(nextSeq(), author, strokeId, points))
+        mirrorStrokes[strokeId]?.forEach { (mid, t) ->
+            emit(DrawingEvent.StrokeAppend(nextSeq(), author, mid, points.map(t)))
         }
     }
 
@@ -209,6 +251,9 @@ class DrawingViewModel : ViewModel() {
             return
         }
         emit(DrawingEvent.StrokeEnd(nextSeq(), author, strokeId))
+        mirrorStrokes.remove(strokeId)?.forEach { (mid, _) ->
+            emit(DrawingEvent.StrokeEnd(nextSeq(), author, mid))
+        }
     }
 
     // 지우개 한 점이 stroke 과 충돌하면 그 stroke 에 대해 Undo 이벤트 발행.

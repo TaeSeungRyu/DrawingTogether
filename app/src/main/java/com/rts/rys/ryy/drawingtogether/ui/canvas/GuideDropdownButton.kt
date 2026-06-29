@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -41,9 +42,11 @@ fun GuideDropdownButton(
     onToggleCross: () -> Unit,
     onSelectGrid: (GuideGrid) -> Unit,
     modifier: Modifier = Modifier,
+    symmetry: SymmetryMode = SymmetryMode.Off,
+    onSelectSymmetry: (SymmetryMode) -> Unit = {},
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val active = cross || grid != GuideGrid.None
+    val active = cross || grid != GuideGrid.None || symmetry != SymmetryMode.Off
 
     Box(modifier = modifier) {
         ToolIconButton(
@@ -77,6 +80,20 @@ fun GuideDropdownButton(
                     text = { Text(g.label) },
                     leadingIcon = { CheckMark(checked = grid == g) },
                     onClick = { onSelectGrid(g) },
+                )
+            }
+            HorizontalDivider()
+            Text(
+                text = "대칭",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 12.dp, top = 6.dp, bottom = 2.dp),
+            )
+            SymmetryMode.values().forEach { m ->
+                DropdownMenuItem(
+                    text = { Text(m.label) },
+                    leadingIcon = { CheckMark(checked = symmetry == m) },
+                    onClick = { onSelectSymmetry(m) },
                 )
             }
         }

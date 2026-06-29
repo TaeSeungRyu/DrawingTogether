@@ -188,6 +188,7 @@
 - [x] **트레이싱 보조 — 반투명** — 사진 배경 표시 알파 순환(원본/연하게/아주 연하게, `TraceOpacity`). TopAppBar 트레이싱 버튼(`TraceGlyph`, 사진 있을 때만). `DrawingCanvas` 가 `drawImage(alpha=)` 로 표시만 적용 — 저장(`mergeBackgroundOnSave`)·동기화엔 미반영(직교). 엣지 검출 오버레이는 P3 잔여.
 - [x] **도형 채우기 토글** — `ToolSettings.fill`. `StrokeRenderer.drawShapeForm` 이 fill 이면 `Fill` DrawStyle, 아니면 외곽선 `Stroke`. 화면·PNG·동기화 자동 공유. 도형 드롭다운(`ShapeDropdownButton`) 하단에 "채우기" 토글.
 - [x] **배경색 선택** — `CanvasState.backgroundColor`(사진처럼 캔버스 속성, 기본 흰색). `DrawingCanvas` 가 맨 아래 바탕으로 칠하고 `PngComposer` 가 사진 없을 때 흰색 대신 저장. TopAppBar "배경색" 버튼(`BgColorGlyph`) → `ColorPickerSheet`. 현재 로컬 전용(멀티 동기화 미포함 — 와이어 추가는 후속).
+- [x] **대칭(미러) 그리기** — `SymmetryMode`(끔/좌우/상하/4분할). `DrawingViewModel` 이 입력 stroke 의 미러 좌표 stroke 를 독립 `StrokeId` 로 함께 emit(정규화 좌표 반사) → 동기화·저장 자동, 도형·브러시도 그대로 미러. 안내선 드롭다운(`GuideDropdownButton`)에 대칭 섹션. 한 제스처가 N개 stroke 라 undo 는 미러별 1회씩(향후 묶기 가능).
 
 **반응형 가로 모드 + 회전**
 - [x] 홈/페어링(함께·모임) 화면 `verticalScroll` — 가로에서 버튼/요소가 화면 밖으로 밀려 선택 안 되던 문제. 발견 리스트는 `heightIn` + `Column forEach`.

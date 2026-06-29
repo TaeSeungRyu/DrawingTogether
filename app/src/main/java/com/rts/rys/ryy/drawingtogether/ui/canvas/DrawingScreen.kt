@@ -741,6 +741,8 @@ fun DrawingScreen(
                 guideGrid = vm.guideGrid,
                 onToggleGuideCross = vm::toggleGuideCross,
                 onSelectGuideGrid = vm::selectGuideGrid,
+                symmetry = vm.symmetry,
+                onSelectSymmetry = vm::selectSymmetry,
                 smoothing = vm.smoothing,
                 onCycleSmoothing = vm::cycleSmoothing,
                 // 동기화 버튼은 Connected 일 때만 노출. 모드별 다이얼로그 분기.
