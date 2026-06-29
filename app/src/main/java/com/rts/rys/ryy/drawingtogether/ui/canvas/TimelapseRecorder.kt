@@ -60,6 +60,9 @@ class TimelapseRecorder {
 
     private fun now(): Long = SystemClock.elapsedRealtime() - startMs
 
+    // 기록 시작 후 경과 ms (UI 타이머용). 비기록 시 0.
+    fun elapsedMs(): Long = if (isRecording) SystemClock.elapsedRealtime() - startMs else 0L
+
     fun recordEvent(event: DrawingEvent) {
         if (!isRecording) return
         entries.add(TimelapseEntry(now(), TimelapseOp.Draw(event)))

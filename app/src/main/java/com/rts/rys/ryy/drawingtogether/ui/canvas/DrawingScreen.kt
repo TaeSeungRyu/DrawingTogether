@@ -1136,8 +1136,15 @@ private fun MyCanvasContent(vm: DrawingViewModel, selfNick: String? = null) {
                     .padding(horizontal = 10.dp, vertical = 4.dp),
             )
         }
-        // 타임랩스 녹화 인디케이터 — 좌측 상단 ● REC.
+        // 타임랩스 녹화 인디케이터 — 좌측 상단 ● REC mm:ss (0.5초마다 갱신).
         if (vm.isRecording) {
+            var elapsedMs by remember { mutableStateOf(0L) }
+            LaunchedEffect(Unit) {
+                while (true) {
+                    elapsedMs = vm.recordingElapsedMs()
+                    kotlinx.coroutines.delay(500)
+                }
+            }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -1154,13 +1161,19 @@ private fun MyCanvasContent(vm: DrawingViewModel, selfNick: String? = null) {
                     drawCircle(color = Color(0xFFE53935), radius = size.minDimension / 2f)
                 }
                 Text(
-                    text = "REC",
+                    text = "REC ${formatElapsed(elapsedMs)}",
                     color = Color(0xFFE53935),
                     style = MaterialTheme.typography.labelMedium,
                 )
             }
         }
     }
+}
+
+// 녹화 경과 시간 mm:ss.
+private fun formatElapsed(ms: Long): String {
+    val s = (ms / 1000).toInt()
+    return "%d:%02d".format(s / 60, s % 60)
 }
 
 // Phase 4-E: 모임 모드 캔버스 영역. 자기 캔버스 + 피어 미니 뷰들.

@@ -92,6 +92,7 @@ class DrawingViewModel : ViewModel() {
     )
     fun discardRecording() = recorder.discard()
     fun finishRecording(): RecordedTimelapse? = recorder.stop()
+    fun recordingElapsedMs(): Long = recorder.elapsedMs()
 
     // Phase 4-C: 모임 모드에서 peer 별로 받는 인바운드 stroke 을 담는 캔버스들.
     // SnapshotStateMap 이라 새 peerId 가 등장하면 미니 뷰 (4-E) 가 자동으로 등장.
