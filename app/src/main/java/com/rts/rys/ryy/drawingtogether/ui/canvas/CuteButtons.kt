@@ -303,6 +303,32 @@ fun SaveGlyph(modifier: Modifier = Modifier, tint: Color = LocalContentColor.cur
     }
 }
 
+// 기록 시작 글리프 — 빨간 녹화 점.
+@Composable
+fun RecordGlyph(modifier: Modifier = Modifier, tint: Color = LocalContentColor.current) {
+    Canvas(modifier = modifier) {
+        val s = minOf(size.width, size.height)
+        if (s <= 0f) return@Canvas
+        drawCircle(color = Color(0xFFE53935), radius = s * 0.30f, center = center)
+    }
+}
+
+// 기록 종료(저장) 글리프 — 정지 사각형.
+@Composable
+fun StopGlyph(modifier: Modifier = Modifier, tint: Color = LocalContentColor.current) {
+    Canvas(modifier = modifier) {
+        val s = minOf(size.width, size.height)
+        if (s <= 0f) return@Canvas
+        val half = s * 0.28f
+        drawRoundRect(
+            color = tint,
+            topLeft = Offset(center.x - half, center.y - half),
+            size = Size(half * 2f, half * 2f),
+            cornerRadius = CornerRadius(s * 0.06f, s * 0.06f),
+        )
+    }
+}
+
 // 배경색 글리프 — 채워진 캔버스(액자) 모서리에 접힌 색지. 바탕색 칠 의미.
 @Composable
 fun BgColorGlyph(modifier: Modifier = Modifier, tint: Color = LocalContentColor.current) {

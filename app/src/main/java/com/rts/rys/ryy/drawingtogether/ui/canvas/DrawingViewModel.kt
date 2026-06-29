@@ -79,6 +79,14 @@ enum class SymmetryMode(val label: String) {
 class DrawingViewModel : ViewModel() {
     val canvas = CanvasState()
 
+    // 타임랩스 기록기 — 메모리 임시 보관. 디스크 저장은 DrawingScreen 이 finishRecording() 결과로 수행.
+    private val recorder = TimelapseRecorder()
+    val isRecording: Boolean get() = recorder.isRecording
+
+    fun startRecording() = recorder.start()
+    fun discardRecording() = recorder.discard()
+    fun finishRecording(): RecordedTimelapse? = recorder.stop()
+
     // Phase 4-C: 모임 모드에서 peer 별로 받는 인바운드 stroke 을 담는 캔버스들.
     // SnapshotStateMap 이라 새 peerId 가 등장하면 미니 뷰 (4-E) 가 자동으로 등장.
     // Shared 라우팅에서는 사용하지 않는다.
@@ -158,7 +166,11 @@ class DrawingViewModel : ViewModel() {
     //   PerPeer → 발신자 authorId 별 peerCanvases 에 라우팅 (1:N 모임 모드)
     fun applyRemoteEvent(event: DrawingEvent) {
         when (routing) {
-            CanvasRouting.Shared -> canvas.apply(event)
+            CanvasRouting.Shared -> {
+                canvas.apply(event)
+                // 함께 모드 공유 캔버스 — 상대 입력도 합작 과정으로 기록.
+                recorder.recordEvent(event)
+            }
             CanvasRouting.PerPeer -> {
                 val target = peerCanvases.getOrPut(event.authorId) { CanvasState() }
                 target.apply(event)
@@ -354,10 +366,12 @@ class DrawingViewModel : ViewModel() {
 
     fun setBackground(image: BackgroundImage?) {
         canvas.setBackground(image)
+        recorder.recordBackgroundPhoto(image?.bitmap)
     }
 
     fun setBackgroundColor(argb: Int) {
         canvas.setBackgroundColor(argb)
+        recorder.recordBackgroundColor(argb)
     }
 
     fun setMergeBackgroundOnSave(value: Boolean) {
@@ -366,6 +380,7 @@ class DrawingViewModel : ViewModel() {
 
     private fun emit(event: DrawingEvent) {
         canvas.apply(event)
+        recorder.recordEvent(event)
         _outboundEvents.tryEmit(event)
     }
 

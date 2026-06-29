@@ -189,6 +189,7 @@
 - [x] **도형 채우기 토글** — `ToolSettings.fill`. `StrokeRenderer.drawShapeForm` 이 fill 이면 `Fill` DrawStyle, 아니면 외곽선 `Stroke`. 화면·PNG·동기화 자동 공유. 도형 드롭다운(`ShapeDropdownButton`) 하단에 "채우기" 토글.
 - [x] **배경색 선택** — `CanvasState.backgroundColor`(사진처럼 캔버스 속성, 기본 흰색). `DrawingCanvas` 가 맨 아래 바탕으로 칠하고 `PngComposer` 가 사진 없을 때 흰색 대신 저장. TopAppBar "배경색" 버튼(`BgColorGlyph`) → `ColorPickerSheet`. 현재 로컬 전용(멀티 동기화 미포함 — 와이어 추가는 후속).
 - [x] **대칭(미러) 그리기** — `SymmetryMode`(끔/좌우/상하/4분할). `DrawingViewModel` 이 입력 stroke 의 미러 좌표 stroke 를 독립 `StrokeId` 로 함께 emit(정규화 좌표 반사) → 동기화·저장 자동, 도형·브러시도 그대로 미러. 도구바 "보조" 드롭다운(`GuideDropdownButton`, 안내선+대칭 섹션)에 추가. 한 제스처가 N개 stroke 라 undo 는 미러별 1회씩(향후 묶기 가능).
+- [x] **타임랩스 Phase 1 (기록+저장)** — 이벤트 로그를 메모리에 기록(`TimelapseRecorder`, `emit`/`applyRemoteEvent`/배경 setter 배선), TopAppBar 기록/종료 버튼 + ● REC + 뒤로가기 저장/폐기 확인. 종료 시 `TimelapseStore`(`filesDir/timelapses/<id>/`, 작품과 독립)에 CBOR 로그+썸네일+배경 저장. 메모리 임시 보관 — 저장 전 앱 종료 시 소실. 재생·갤러리(Phase 2)·영상(Phase 3) 미착수. 상세: [timelapse-plan.md](timelapse-plan.md).
 
 **반응형 가로 모드 + 회전**
 - [x] 홈/페어링(함께·모임) 화면 `verticalScroll` — 가로에서 버튼/요소가 화면 밖으로 밀려 선택 안 되던 문제. 발견 리스트는 `heightIn` + `Column forEach`.

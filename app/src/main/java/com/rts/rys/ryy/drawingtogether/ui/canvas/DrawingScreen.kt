@@ -3,9 +3,11 @@ package com.rts.rys.ryy.drawingtogether.ui.canvas
 import android.content.res.Configuration
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.horizontalScroll
@@ -20,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
@@ -76,6 +79,7 @@ import com.rts.rys.ryy.drawingtogether.ui.DrawMode
 import kotlinx.coroutines.delay
 import com.rts.rys.ryy.drawingtogether.works.CanvasColorSampler
 import com.rts.rys.ryy.drawingtogether.works.PngComposer
+import com.rts.rys.ryy.drawingtogether.works.TimelapseStore
 import com.rts.rys.ryy.drawingtogether.works.WorkStore
 import kotlinx.coroutines.launch
 
@@ -283,6 +287,28 @@ fun DrawingScreen(
     var showSaveDialog by remember { mutableStateOf(false) }
     // 배경색 선택 다이얼로그 표시 여부.
     var showBgColorPicker by remember { mutableStateOf(false) }
+    // 기록 중 뒤로가기 시 저장/폐기 확인.
+    var showRecordBackConfirm by remember { mutableStateOf(false) }
+
+    // 타임랩스 저장 — 인메모리 로그 + 종료 상태 썸네일을 TimelapseStore 에 기록.
+    val saveTimelapse: () -> Unit = saveTimelapse@{
+        val recorded = vm.finishRecording() ?: return@saveTimelapse
+        val thumb = PngComposer.compose(vm.canvas, density)
+        scope.launch {
+            val ok = runCatching {
+                TimelapseStore.get(context)
+                    .save(recorded.entries, recorded.durationMs, recorded.backgrounds, thumb)
+            }.isSuccess
+            Toast.makeText(
+                context,
+                if (ok) "타임랩스를 저장했어요" else "타임랩스 저장에 실패했어요",
+                Toast.LENGTH_SHORT,
+            ).show()
+        }
+    }
+
+    // 기록 중 시스템 뒤로가기 → 바로 나가지 않고 저장/폐기 확인.
+    BackHandler(enabled = vm.isRecording) { showRecordBackConfirm = true }
     // Phase 4-G: 동기화 다이얼로그 단계 — Duo 는 컨펌 1단계, Party 는 피커 → 컨펌 2단계.
     var syncStep by remember { mutableStateOf<SyncStep>(SyncStep.None) }
     // 모임 모드 동기화 응답 후, 내 캔버스를 다른 참가자에게 broadcast 해 그들이 보는 내 미니뷰도
@@ -597,7 +623,7 @@ fun DrawingScreen(
         TopAppBar(
             title = {},
             navigationIcon = {
-                IconButton(onClick = onBack) {
+                IconButton(onClick = { if (vm.isRecording) showRecordBackConfirm = true else onBack() }) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "뒤로",
@@ -686,6 +712,22 @@ fun DrawingScreen(
                         container = MaterialTheme.colorScheme.secondaryContainer,
                         content = MaterialTheme.colorScheme.onSecondaryContainer,
                     ) { SaveGlyph(modifier = Modifier.fillMaxSize()) }
+                    // 타임랩스 기록 토글 — 기록 중이면 종료(저장), 아니면 시작.
+                    if (vm.isRecording) {
+                        TopActionButton(
+                            label = "종료",
+                            onClick = saveTimelapse,
+                            container = MaterialTheme.colorScheme.errorContainer,
+                            content = MaterialTheme.colorScheme.onErrorContainer,
+                        ) { StopGlyph(modifier = Modifier.fillMaxSize()) }
+                    } else {
+                        TopActionButton(
+                            label = "기록",
+                            onClick = { vm.startRecording() },
+                            container = MaterialTheme.colorScheme.primaryContainer,
+                            content = MaterialTheme.colorScheme.onPrimaryContainer,
+                        ) { RecordGlyph(modifier = Modifier.fillMaxSize()) }
+                    }
                 }
             },
         )
@@ -937,6 +979,28 @@ fun DrawingScreen(
         )
     }
 
+    if (showRecordBackConfirm) {
+        AlertDialog(
+            onDismissRequest = { showRecordBackConfirm = false },
+            title = { Text("타임랩스 기록 중") },
+            text = { Text("기록을 저장하고 나갈까요? 폐기하면 기록은 사라집니다.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    saveTimelapse()
+                    showRecordBackConfirm = false
+                    onBack()
+                }) { Text("저장하고 나가기") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    vm.discardRecording()
+                    showRecordBackConfirm = false
+                    onBack()
+                }) { Text("폐기하고 나가기") }
+            },
+        )
+    }
+
     if (showSaveDialog) {
         val focus = remember { FocusRequester() }
         LaunchedEffect(Unit) { focus.requestFocus() }
@@ -1055,6 +1119,30 @@ private fun MyCanvasContent(vm: DrawingViewModel, selfNick: String? = null) {
                     )
                     .padding(horizontal = 10.dp, vertical = 4.dp),
             )
+        }
+        // 타임랩스 녹화 인디케이터 — 좌측 상단 ● REC.
+        if (vm.isRecording) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(horizontal = 8.dp, vertical = 6.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.65f),
+                        shape = RoundedCornerShape(percent = 50),
+                    )
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+            ) {
+                Canvas(modifier = Modifier.size(10.dp)) {
+                    drawCircle(color = Color(0xFFE53935), radius = size.minDimension / 2f)
+                }
+                Text(
+                    text = "REC",
+                    color = Color(0xFFE53935),
+                    style = MaterialTheme.typography.labelMedium,
+                )
+            }
         }
     }
 }

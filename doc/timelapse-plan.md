@@ -1,8 +1,8 @@
 # 타임랩스 재생·공유 계획 — 이벤트 로그 기록 → 재생 → 영상 내보내기
 
-> 상태: **계획(미착수)**. P3 백로그. 상세 아이디어·우선순위는 [drawing-ideas.md](drawing-ideas.md),
-> 단계 표기는 [roadmap.md](roadmap.md).
-> 핵심 결정 사항(§6)은 착수 전 합의 권장.
+> 상태: **Phase 1(기록+저장) 구현됨**. Phase 2(재생·갤러리)·Phase 3(영상) 미착수. P3 백로그.
+> 상세·우선순위는 [drawing-ideas.md](drawing-ideas.md), 단계 표기는 [roadmap.md](roadmap.md).
+> 결정 사항은 §7 확정 완료.
 
 ## 배경 / 설계 원칙
 
@@ -78,31 +78,30 @@ filesDir/timelapses/<id>/
   thumb·길이). 저장/삭제 후 디스크에서 재로드.
 - 작품 PNG 저장과 **무관하게** 독립 저장(타임랩스만 남길 수도, 둘 다 남길 수도).
 
-## 2. Phase 1 — 기록 (record) + 저장
+## 2. Phase 1 — 기록 (record) + 저장 ✅ 구현됨
 
 > 목표: 명시적 버튼으로 **메모리에 녹화**하고, **저장(종료) 시에만** `TimelapseStore` 에 디스크 기록.
 > 저장 전 앱 종료 시 소실(증분 저장·복구 없음).
 
 ### 1-A 수집 엔진 (인메모리)
-- [ ] `TimelapseRecorder` (ui/canvas) — `start()/stop()/discard()` + 인메모리 `entries`.
-  시작 기준 `SystemClock.elapsedRealtime()` 로 `atMs` 계산. **디스크 쓰기 없음**(저장 시 일괄).
-- [ ] `DrawingViewModel` 배선: `emit(event)` 와 `applyRemoteEvent(event)` 에서 녹화 중이면
-  `recorder.add(Draw(event))`. `setBackground`/`setBackgroundColor` 에서 배경 마커 add(§사진 배경 처리).
-- [ ] 메모리 상한(§7) — 매우 긴 세션 대비 상한 도달 시 동작 정의(경고/자동 종료 저장 등).
+- [x] `TimelapseRecorder` (ui/canvas) — `start()/stop()/discard()` + 인메모리 `entries`/`backgrounds`.
+  시작 기준 `SystemClock.elapsedRealtime()` 로 `atMs`. `stop()` 은 `RecordedTimelapse`(로그+배경) 반환.
+- [x] `DrawingViewModel` 배선: `emit` 와 `applyRemoteEvent`(Shared 만) 에서 `recorder.recordEvent`,
+  `setBackground`/`setBackgroundColor` 에서 배경 마커.
+- [ ] 메모리 상한(§7) — 매우 긴 세션 대비 상한 도달 시 동작(경고/자동 종료저장). **미구현**(후속).
 
 ### 1-B 기록 컨트롤 (UI)
-- [ ] **TopAppBar** 에 **기록 시작 / 종료(저장)** 토글 버튼 + 녹화 중 인디케이터(● REC, 캔버스 오버레이).
-- [ ] **종료(저장) 버튼** → `recorder.stop()` → `TimelapseStore.save(...)` → Toast.
-- [ ] **뒤로가기**: 기록 중이면 `BackHandler` 로 **저장/폐기 확인 다이얼로그**(조용히 잃지 않게).
-  멀티 모드 기존 `onDispose(disconnect)` 와 순서 주의(저장 결정 먼저).
-- [ ] 앱 백그라운드/종료: 별도 저장 안 함 — **소실 허용**(설계 결정).
+- [x] **TopAppBar** 기록 시작 / 종료(저장) 토글(`RecordGlyph`/`StopGlyph`) + 캔버스 좌상단 ● REC 인디케이터.
+- [x] **종료(저장)** → `vm.finishRecording()` → `PngComposer` 썸네일 → `TimelapseStore.save` → Toast.
+- [x] **뒤로가기**(시스템 + ← 버튼): 기록 중이면 `BackHandler`/navigationIcon 가로채 **저장/폐기 확인 다이얼로그**.
+- [x] 앱 백그라운드/종료: 별도 저장 안 함 — **소실 허용**(설계 결정).
 
 ### 1-C 저장 (TimelapseStore)
-- [ ] `TimelapseStore.save` — `filesDir/timelapses/<id>/` 에 `log.timelapse`(CBOR, 인메모리 로그 일괄
-  직렬화) + `thumb.png`(종료 상태를 `PngComposer` 로 1장) + 배경 스냅샷 `bg-<n>.png`(있으면).
-- [ ] `StateFlow<List<TimelapseMeta>>` 노출(저장 후 재로드).
-- **산출물**: 저장된 타임랩스 엔티티(작품 PNG 와 독립).
-- **검증**: 단위 테스트 — 이벤트 시퀀스 → `entries` 순서/`atMs` 단조 증가, 저장→로드 라운드트립.
+- [x] `TimelapseStore.save` — `filesDir/timelapses/<id>/` 에 `log.timelapse`(CBOR) + `meta`(목록용) +
+  `thumb.png`(종료 상태 `PngComposer`) + `bg-<n>.png`(배경 있을 때).
+- [x] `StateFlow<List<TimelapseMeta>>` + `delete(id)`/`loadLog(id)`(Phase 2 용) 노출.
+- **검증**: `TimelapseSerializationTest` — `Timelapse`(`TimelapseOp.Draw` 안 sealed `DrawingEvent` 다형)
+  CBOR 라운드트립 통과. 실기기 기록→저장 동작 확인 필요.
 - **위험**: 낮. 인메모리 수집 + 저장 시 일괄 쓰기(기존 PNG 저장 패턴).
 
 ## 3. Phase 2 — 인앱 재생 (view) + 갤러리 + 삭제
