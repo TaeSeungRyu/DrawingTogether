@@ -1,6 +1,8 @@
 package com.rts.rys.ryy.drawingtogether.ui.timelapse
 
+import android.content.Intent
 import android.graphics.BitmapFactory
+import android.widget.Toast
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -47,6 +50,7 @@ import com.rts.rys.ryy.drawingtogether.drawing.model.TimelapseOp
 import com.rts.rys.ryy.drawingtogether.ui.canvas.drawSticker
 import com.rts.rys.ryy.drawingtogether.ui.canvas.drawStroke
 import com.rts.rys.ryy.drawingtogether.works.TimelapseStore
+import com.rts.rys.ryy.drawingtogether.works.TimelapseVideoExporter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -60,6 +64,7 @@ fun TimelapsePlayerScreen(id: String, onBack: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val store = remember { TimelapseStore.get(context) }
+    var exportProgress by remember { mutableStateOf<Float?>(null) }   // null = 비-내보내기 중
 
     val loaded by produceState<LoadedTimelapse?>(initialValue = null, id) {
         value = withContext(Dispatchers.IO) {
@@ -84,12 +89,40 @@ fun TimelapsePlayerScreen(id: String, onBack: () -> Unit) {
                     }
                 },
                 actions = {
-                    TextButton(onClick = {
-                        scope.launch {
-                            store.delete(id)
-                            onBack()
-                        }
-                    }) { Text("삭제") }
+                    TextButton(
+                        enabled = exportProgress == null,
+                        onClick = {
+                            scope.launch {
+                                exportProgress = 0f
+                                val uri = runCatching {
+                                    TimelapseVideoExporter.exportToGallery(context, id) { p ->
+                                        exportProgress = p
+                                    }
+                                }.getOrNull()
+                                exportProgress = null
+                                if (uri != null) {
+                                    Toast.makeText(context, "갤러리에 저장했어요", Toast.LENGTH_SHORT).show()
+                                    val share = Intent(Intent.ACTION_SEND).apply {
+                                        type = "video/mp4"
+                                        putExtra(Intent.EXTRA_STREAM, uri)
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    }
+                                    context.startActivity(Intent.createChooser(share, "타임랩스 공유"))
+                                } else {
+                                    Toast.makeText(context, "내보내기에 실패했어요", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                    ) { Text("내보내기") }
+                    TextButton(
+                        enabled = exportProgress == null,
+                        onClick = {
+                            scope.launch {
+                                store.delete(id)
+                                onBack()
+                            }
+                        },
+                    ) { Text("삭제") }
                 },
             )
         },
@@ -116,9 +149,26 @@ fun TimelapsePlayerScreen(id: String, onBack: () -> Unit) {
         // 재생 루프.
         LaunchedEffect(player.isPlaying) { if (player.isPlaying) player.run() }
 
-        Column(Modifier.fillMaxSize().padding(padding)) {
-            ReplayCanvas(canvas = canvas, modifier = Modifier.weight(1f).fillMaxWidth())
-            PlaybackControls(player = player)
+        Box(Modifier.fillMaxSize().padding(padding)) {
+            Column(Modifier.fillMaxSize()) {
+                ReplayCanvas(canvas = canvas, modifier = Modifier.weight(1f).fillMaxWidth())
+                PlaybackControls(player = player)
+            }
+            exportProgress?.let { p ->
+                Box(
+                    modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator(color = Color.White)
+                        Text(
+                            text = "내보내는 중 ${(p * 100).toInt()}%",
+                            color = Color.White,
+                            modifier = Modifier.padding(top = 12.dp),
+                        )
+                    }
+                }
+            }
         }
     }
 }

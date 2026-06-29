@@ -1,8 +1,8 @@
 # 타임랩스 재생·공유 계획 — 이벤트 로그 기록 → 재생 → 영상 내보내기
 
-> 상태: **Phase 1(기록+저장) + Phase 2(재생·갤러리·삭제) 구현됨**. Phase 3(영상) 미착수.
-> 상세·우선순위는 [drawing-ideas.md](drawing-ideas.md), 단계 표기는 [roadmap.md](roadmap.md).
-> 결정 사항은 §7 확정 완료.
+> 상태: **Phase 1~3 구현됨** (기록·저장 / 재생·갤러리·삭제 / MP4 내보내기·공유).
+> Phase 3 는 MediaCodec/MediaMuxer 라 **실기기 검증 필요**(코덱·색포맷 기기차).
+> 상세·우선순위는 [drawing-ideas.md](drawing-ideas.md), 단계 표기는 [roadmap.md](roadmap.md). 결정 사항은 §7.
 
 ## 배경 / 설계 원칙
 
@@ -129,16 +129,20 @@ filesDir/timelapses/<id>/
 - **검증**: 컴파일 통과. 재생 후 최종 == `thumb.png` 여부·seek 체감·배경 복원은 실기기 확인 필요.
 - **위험**: 중. 스크럽 시 매번 0부터 rebuild — 긴 로그에서 드래그 비용(후속 최적화 여지).
 
-## 4. Phase 3 — 영상/GIF 내보내기 (share)
+## 4. Phase 3 — 영상 내보내기 (share) ✅ 구현됨
 
-> 목표: 인앱 밖으로 공유. 무겁고 분리 가능 — Phase 2 완성 후.
+> 목표: 인앱 밖으로 공유. MP4 로 결정(GIF 미사용).
 
-- [ ] 재생하며 프레임 캡처(오프스크린 `ImageBitmap` 렌더, `PngComposer` 류 재사용) → 일정 fps 샘플.
-- [ ] 인코딩: MP4(`MediaCodec` + `MediaMuxer`) 또는 GIF. `MediaStore.Video`(`Movies/DrawingTogether`)
-  저장 + 공유 인텐트. PNG 내보내기(`WorkStore.exportToGallery`) 패턴 재사용.
-- [ ] 진행률 오버레이(인코딩은 시간 걸림).
-- **산출물**: 갤러리 영상 + 공유.
-- **위험**: 중상. 인코딩 호환성·해상도/용량·시간.
+- [x] `TimelapseVideoExporter` (works) — 헤드리스로 프레임 렌더(같은 렌더러 재사용) → MP4 인코딩.
+  - 프레임: 콘텐츠 시계를 fps(12)로 스텝, 빈 `CanvasState` 에 이벤트 누적 적용 후 `renderFrame`.
+    긴 녹화는 `frameStepMs` 를 늘려 가속(최대 ~1200 프레임)으로 영상 길이 제한.
+  - 인코딩: `MediaCodec`(H.264, `COLOR_FormatYUV420Flexible`) + `getInputImage` 로 ARGB→YUV420
+    (plane rowStride/pixelStride 따름 → planar/semiplanar 대응) + `MediaMuxer`(MP4, cache temp).
+  - 저장: `MediaStore.Video`(`Movies/DrawingTogether`, IS_PENDING 패턴) → 공유 인텐트(`ACTION_SEND`).
+  - 출력: 최대 변 480(짝수), 배경 비율 반영. 해상도별 stroke 굵기는 density=w/400 근사.
+- [x] `TimelapsePlayerScreen` 상단 "내보내기" + 진행률 오버레이(%) + 완료 시 갤러리 저장 Toast + 공유 시트.
+- **위험**: 중상 — MediaCodec/색포맷·해상도 기기차. **에뮬레이터/CI 검증 불가, 실기기 필수.**
+- **후속 여지**: 내보내기 배속/해상도 선택, 진행 중 취소, 매우 긴 녹화 메모리.
 
 ## 5. 사진 배경 처리 (기능 정의 3)
 

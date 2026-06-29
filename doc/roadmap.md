@@ -191,6 +191,7 @@
 - [x] **대칭(미러) 그리기** — `SymmetryMode`(끔/좌우/상하/4분할). `DrawingViewModel` 이 입력 stroke 의 미러 좌표 stroke 를 독립 `StrokeId` 로 함께 emit(정규화 좌표 반사) → 동기화·저장 자동, 도형·브러시도 그대로 미러. 도구바 "보조" 드롭다운(`GuideDropdownButton`, 안내선+대칭 섹션)에 추가. 한 제스처가 N개 stroke 라 undo 는 미러별 1회씩(향후 묶기 가능).
 - [x] **타임랩스 Phase 1 (기록+저장)** — 이벤트 로그를 메모리에 기록(`TimelapseRecorder`, `emit`/`applyRemoteEvent`/배경 setter 배선), TopAppBar 기록/종료 버튼 + ● REC + 뒤로가기 저장/폐기 확인. 종료 시 `TimelapseStore`(`filesDir/timelapses/<id>/`, 작품과 독립)에 CBOR 로그+썸네일+배경 저장. 메모리 임시 보관 — 저장 전 앱 종료 시 소실. 상세: [timelapse-plan.md](timelapse-plan.md).
 - [x] **타임랩스 Phase 2 (재생+갤러리+삭제)** — `TimelapsePlayer`(빈 `CanvasState` 에 로그 재적용, gap 압축+배속, seek=`rebuildTo`, `CanvasState.reset()` 추가). 홈 "타임랩스" 버튼 → `TimelapseGalleryScreen`(썸네일 그리드, 길게눌러 삭제) → `TimelapsePlayerScreen`(read-only `ReplayCanvas` + 재생/일시정지/seek/배속/삭제). 라우트 `timelapses`·`timelapse/{id}`. 영상 내보내기(Phase 3) 미착수.
+- [x] **타임랩스 Phase 3 (MP4 내보내기·공유)** — `TimelapseVideoExporter`: 헤드리스 프레임 렌더(같은 렌더러) → `MediaCodec`(H.264, YUV420 flexible, `getInputImage`) + `MediaMuxer`(MP4) → `MediaStore.Video`(`Movies/DrawingTogether`) + 공유 인텐트. 최대 변 480, fps 12, 긴 녹화는 프레임 간격 가속. 재생 화면 "내보내기" + 진행률 오버레이. **실기기 검증 필요(코덱 기기차).**
 - [x] **완료 stroke 비트맵 캐시(성능)** — `CanvasState.contentRevision`(완료 stroke 추가/제거/Clear/snapshot/배경 변경 시 증가) + `DrawingCanvas` 가 `remember(contentRevision, size, density)` 로 완료 stroke 를 투명 비트맵에 캐시(`renderCommittedStrokes`). 색·도구 변경·진행 중 stroke 프레임엔 `drawImage(cached)` 재사용 → recompose 마다 전체 벡터 재그리던 멈칫 해소. 배경은 라이브(트레이싱 알파).
 
 **반응형 가로 모드 + 회전**
