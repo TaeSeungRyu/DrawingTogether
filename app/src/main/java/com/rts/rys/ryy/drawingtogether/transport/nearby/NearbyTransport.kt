@@ -39,9 +39,11 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 
-// Phase 4-A: 두 모드를 SERVICE_ID + Strategy 로 격리. 같은 모드끼리만 발견된다.
-// Duo  = 1:1 함께 모드 (P2P_POINT_TO_POINT)
-// Party = 1:N 모임 모드 (P2P_STAR, 호스트 + 최대 3 조인자)
+// Phase 4-A: 각 모드를 SERVICE_ID + Strategy 로 격리. 같은 모드끼리만 발견된다.
+// Duo       = 1:1 함께 모드 (P2P_POINT_TO_POINT)
+// Party     = 1:N 모임 모드 (P2P_STAR, 호스트 + 최대 3 조인자, mesh 가시성)
+// Classroom = 1:N 교실 모드 (P2P_STAR, 호스트 중심 — 조인자끼리 안 보임). serviceId 가 달라
+//             교실 모드 기기끼리만 발견·연결된다(모임/함께 기기는 미발견). doc/classroom-mode.md.
 // 호스트가 받을 수 있는 최대 조인자 수. 호스트 자기 + 3 = 4명.
 private const val PARTY_MAX_JOINERS = 3
 
@@ -54,6 +56,14 @@ enum class TransportMode(val serviceId: String, val strategy: Strategy) {
         serviceId = "com.rts.rys.ryy.drawingtogether.party",
         strategy = Strategy.P2P_STAR,
     ),
+    Classroom(
+        serviceId = "com.rts.rys.ryy.drawingtogether.classroom",
+        strategy = Strategy.P2P_STAR,
+    );
+
+    // 호스트–조인자(스타) 모드인지. 호스트 인원 제한·광고 유지·PartyStart 지각입장 등
+    // 스타 공통 메커니즘은 Party/Classroom 둘 다에 적용된다.
+    val isStar: Boolean get() = strategy == Strategy.P2P_STAR
 }
 
 // Nearby Connections 기반 Transport 구현.
@@ -231,9 +241,9 @@ class NearbyTransport(
 
     private val lifecycleCallback = object : ConnectionLifecycleCallback() {
         override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {
-            // Phase 4-H: Party 호스트가 이미 3명을 받았으면 자동 reject — 다이얼로그도 안 띄움.
+            // Phase 4-H: 스타(Party/Classroom) 호스트가 이미 3명을 받았으면 자동 reject — 다이얼로그도 안 띄움.
             // P2P_STAR + 자기 = 4명 한도. Duo / 조인자는 영향 없음.
-            val partyHostFull = mode == TransportMode.Party &&
+            val partyHostFull = mode.isStar &&
                 localRole == Role.Host &&
                 _connectedPeers.value.size >= PARTY_MAX_JOINERS
             if (partyHostFull) {
@@ -255,9 +265,9 @@ class NearbyTransport(
                     _connectedPeers.value = _connectedPeers.value
                         .filter { it.endpointId != endpointId } +
                         ConnectedPeer(endpointId = endpointId, nick = nick)
-                    // Party 모드 호스트는 광고 유지 — 추가 조인자 (최대 3명) 수용.
-                    // Duo 호스트 / 모든 조인자 / Party 조인자는 첫 연결 성립 시 광고·검색 중단.
-                    val keepAdvertising = mode == TransportMode.Party && localRole == Role.Host
+                    // 스타(Party/Classroom) 호스트는 광고 유지 — 추가 조인자 (최대 3명) 수용.
+                    // Duo 호스트 / 모든 조인자 / 스타 조인자는 첫 연결 성립 시 광고·검색 중단.
+                    val keepAdvertising = mode.isStar && localRole == Role.Host
                     if (!keepAdvertising) client.stopAdvertising()
                     client.stopDiscovery()
                     _discovered.value = emptyList()

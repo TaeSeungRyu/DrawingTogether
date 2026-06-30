@@ -248,7 +248,7 @@ class SessionManager private constructor(
     // broadcast 송신 + partyStarted 플래그 박음. 그 후 "방 열기" 로 들어오는 새 조인자에게는
     // maybeFinishHandshake 가 자동으로 unicast 한다.
     fun broadcastPartyStart() {
-        if (mode != TransportMode.Party) return
+        if (!mode.isStar) return
         partyStarted = true
         scope.launch {
             runCatching { transport.send(Frame.PartyStart) }
@@ -289,9 +289,9 @@ class SessionManager private constructor(
             }
             TransportState.Idle -> {
                 // 연결됐다가 끊긴 경우만 Disconnected 알림. Pairing 진행 중 Idle은 무시.
-                // 모임 모드 호스트는 마지막 조인자가 끊겨도 sessionState 유지 — 방을 지키는
+                // 스타(모임/교실) 호스트는 마지막 조인자가 끊겨도 sessionState 유지 — 방을 지키는
                 // 자연스러운 상태. ("방 열기" / 동기화 버튼 유지)
-                val partyHost = mode == TransportMode.Party &&
+                val partyHost = mode.isStar &&
                     transport.localRole == Role.Host
                 if (!partyHost &&
                     (_state.value is SessionState.Connected ||
@@ -547,12 +547,10 @@ class SessionManager private constructor(
                 val leftHello = handshakes[endpointId]?.remoteHello
                 handshakes.remove(endpointId)
                 publishRemotePeers()
-                // Phase 4-F: 호스트면 다른 조인자들에게 PeerLeft 알림. onDisconnected 가 곧 자동
-                // 발화하지만 그땐 handshakes 가 이미 비어있어 syncHandshakesWithPeers 가 PeerLeft 를
-                // 송신하지 않으므로 여기서 명시 송신.
-                val partyHost = mode == TransportMode.Party &&
-                    transport.localRole == Role.Host
-                if (partyHost && leftHello != null) {
+                // PeerLeft 알림은 "모두가 모두를 보는" Party(mesh) 전용 — 교실은 조인자끼리 안 보임.
+                // onDisconnected 가 곧 자동 발화하지만 그땐 handshakes 가 이미 비어있어
+                // syncHandshakesWithPeers 가 PeerLeft 를 송신하지 않으므로 여기서 명시 송신.
+                if (mode == TransportMode.Party && transport.localRole == Role.Host && leftHello != null) {
                     val survivors = handshakes.keys.toList()
                     scope.launch {
                         survivors.forEach { survivor ->
@@ -563,10 +561,10 @@ class SessionManager private constructor(
                     }
                 }
                 if (handshakes.isEmpty()) {
-                    // 마지막 피어 BYE. 모임 모드 호스트는 "혼자 방을 지키는" 상태로 두어야
-                    // "방 열기" 와 동기화 버튼 등 호스트 UI 가 유지된다. 그 외(Duo / Party 조인자)
-                    // 는 진짜 끊긴 거라 Failed.
-                    if (!partyHost) {
+                    // 마지막 피어 BYE. 스타(모임/교실) 호스트는 "혼자 방을 지키는" 상태로 두어야
+                    // "방 열기" 와 호스트 UI 가 유지된다. 그 외(Duo / 스타 조인자)는 진짜 끊긴 거라 Failed.
+                    val isStarHost = mode.isStar && transport.localRole == Role.Host
+                    if (!isStarHost) {
                         _state.value = SessionState.Failed("peer-bye: ${frame.reason}")
                     }
                 }
@@ -607,10 +605,14 @@ class SessionManager private constructor(
         if (_state.value !is SessionState.Connected) {
             _state.value = SessionState.Connected(remoteNick = finishedHello.nick)
         }
-        if (mode == TransportMode.Party && transport.localRole == Role.Host) {
-            announcePeerJoined(newlyJoinedEndpoint = endpointId, newlyJoinedHello = finishedHello)
+        if (mode.isStar && transport.localRole == Role.Host) {
+            // 멤버십 양방향 알림(PeerJoined)은 "모두가 모두를 보는" Party 전용.
+            // 교실 모드(Classroom)는 조인자끼리 안 보이므로 호출하지 않는다 — 호스트만 목록을 가진다.
+            if (mode == TransportMode.Party) {
+                announcePeerJoined(newlyJoinedEndpoint = endpointId, newlyJoinedHello = finishedHello)
+            }
             // 호스트가 이미 Draw 진입한 상태에서 새 조인자 합류 ("방 열기" 케이스) — 그 조인자
-            // 만 PartyStart 못 받아 대기 화면 멈춤. unicast 로 즉시 진입시킨다.
+            // 만 PartyStart 못 받아 대기 화면 멈춤. unicast 로 즉시 진입시킨다. (스타 공통)
             if (partyStarted) {
                 scope.launch {
                     runCatching { transport.sendTo(endpointId, Frame.PartyStart) }
@@ -721,10 +723,12 @@ class SessionManager private constructor(
         private const val KEY_NICK = "nick"
         private const val KEY_PEER_ID = "peer_id"
 
-        // Phase 4-D: 모드별 별도 싱글톤. 두 인스턴스는 prefs (peerId/nick) 만 공유하고
+        // Phase 4-D: 모드별 별도 싱글톤. 인스턴스들은 prefs (peerId/nick) 만 공유하고
         // transport 와 핸드셰이크 상태는 완전 격리. 사용자 요구 "1:1 은 1:1 만, 1:N 은 1:N 만".
+        // 교실 모드(Classroom)도 모임 모드(Party)와 별개 인스턴스 — 세션 상태가 섞이지 않는다.
         @Volatile private var duoInstance: SessionManager? = null
         @Volatile private var partyInstance: SessionManager? = null
+        @Volatile private var classroomInstance: SessionManager? = null
 
         fun get(
             context: Context,
@@ -735,6 +739,9 @@ class SessionManager private constructor(
             }
             TransportMode.Party -> partyInstance ?: synchronized(this) {
                 partyInstance ?: build(context, mode).also { partyInstance = it }
+            }
+            TransportMode.Classroom -> classroomInstance ?: synchronized(this) {
+                classroomInstance ?: build(context, mode).also { classroomInstance = it }
             }
         }
 

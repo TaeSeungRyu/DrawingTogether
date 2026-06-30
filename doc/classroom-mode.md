@@ -72,6 +72,16 @@
   - 조인자 "가져오기" → 호스트 현재 내용(사진 포함) 자기 캔버스에 적용.
   - **회귀**: 모임 모드(Party)가 기존과 100% 동일(모두-미니뷰, PartyPicker 동기화). 함께(Duo)·싱글 무영향.
 
+## 8. 작업 단계 (구현 순서)
+
+한 번에 다 하지 않고, **각 단계가 독립 빌드·1커밋·리뷰 가능**하도록 나눈다. 앞 단계는 보이지 않는 배관(회귀 위험 최소), 뒤로 갈수록 화면이 붙는다. 실기 테스트는 3단계부터 의미 있음.
+
+- **1단계 — 전송·세션 기반 (보이지 않음)**: `TransportMode.Classroom`(고유 serviceId, P2P_STAR) + `isStar` 헬퍼. 스타 공통(호스트 4인 제한·광고 유지·PartyStart 지각입장)을 `isStar`로 확장(`announcePeerJoined`는 Party 전용 유지). `SessionManager.classroomInstance` 싱글톤. → 컴파일 OK, Party/Duo/싱글 무변화, 교실 진입 불가. 검증: 빌드.
+- **2단계 — 페어링 재사용**: `PartyPairingScreen`에 `mode` 파라미터(기본 Party) → 기존 호출 무변경. 검증: 빌드.
+- **3단계 — 진입점 + 최소 캔버스**: `DrawMode.Classroom`, 홈 "교실 모드" 버튼, `classroom-pairing` 라우트, `draw/Classroom`. `DrawingScreen` Classroom 분기(전송 매핑·PerPeer) + 최소 `ClassroomCanvasArea`(자기 캔버스만, 보조 패널 placeholder). 검증: 실기 — 교실끼리만 발견·연결·자기 그리기.
+- **4단계 — 조인자 UI**: `ClassroomCanvasArea` 조인자 분기 — 호스트 라이브 뷰 + "가져오기"(`SnapshotReq` target=host). 검증: 실기 — 호스트 라이브 보기·가져오기.
+- **5단계 — 호스트 UI**: `ClassroomCanvasArea` 호스트 분기 — "참여자 보기" 버튼 → 모달 이름 목록 → 선택 1명 라이브. 검증: 실기 — 호스트가 조인자 라이브 보기 + 조인자끼리 안 보임 + 모임 모드 회귀.
+
 ## 부록: 모임 모드와의 차이
 
 | 항목 | 모임 모드 (Party, 기존) | 교실 모드 (Classroom, 신규) |
