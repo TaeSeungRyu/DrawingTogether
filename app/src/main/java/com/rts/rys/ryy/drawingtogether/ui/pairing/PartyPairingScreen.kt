@@ -181,6 +181,7 @@ fun PartyPairingScreen(
                 )
                 PartyRole.Host -> HostBody(
                     connectedCount = connectedPeers.size,
+                    maxJoiners = mode.maxJoiners,
                     connectedNicks = connectedPeers.map { it.nick },
                     canStart = connectedPeers.isNotEmpty(),
                     onStartClick = {
@@ -351,12 +352,13 @@ private fun ColumnScope.RolePicker(
 @Composable
 private fun ColumnScope.HostBody(
     connectedCount: Int,
+    maxJoiners: Int,
     connectedNicks: List<String>,
     canStart: Boolean,
     onStartClick: () -> Unit,
 ) {
     Text(
-        text = "내가 호스트 — 조인자 기다리는 중 ($connectedCount/3)",
+        text = "내가 호스트 — 조인자 기다리는 중 ($connectedCount/$maxJoiners)",
         style = MaterialTheme.typography.titleSmall,
         fontWeight = FontWeight.SemiBold,
     )
