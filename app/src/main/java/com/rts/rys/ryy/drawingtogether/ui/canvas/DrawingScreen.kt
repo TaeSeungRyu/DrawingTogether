@@ -9,6 +9,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -56,6 +57,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalConfiguration
@@ -1387,8 +1389,27 @@ private fun ClassroomCanvasArea(
         }
     }
     if (isHost) {
-        // 4단계: 호스트는 메인 캔버스만. 참여자 보기 UI 는 5단계.
-        main(modifier)
+        // 호스트: 메인 캔버스 전체 + "참여자 보기" 버튼(우상단). 버튼 → 모달에서 이름 선택 → 라이브.
+        var showViewer by remember { mutableStateOf(false) }
+        Box(modifier = modifier) {
+            main(Modifier.fillMaxSize())
+            CuteToolButton(
+                text = "참여자 보기",
+                onClick = { showViewer = true },
+                container = MaterialTheme.colorScheme.tertiary,
+                content = MaterialTheme.colorScheme.onTertiary,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp),
+            )
+        }
+        if (showViewer) {
+            ClassroomPeerViewerDialog(
+                vm = vm,
+                peers = peers,
+                onDismiss = { showViewer = false },
+            )
+        }
         return
     }
     // 조인자: 메인(3f) + 호스트 라이브 뷰 패널(1f).
@@ -1445,4 +1466,76 @@ private fun JoinerClassroomPanel(
             EmptyMiniSlot(modifier = Modifier.fillMaxWidth().weight(1f))
         }
     }
+}
+
+// 호스트의 "참여자 보기" 모달 — 이름 칩 목록에서 한 명 선택 → 그 조인자의 라이브 캔버스 표시.
+@Composable
+private fun ClassroomPeerViewerDialog(
+    vm: DrawingViewModel,
+    peers: List<com.rts.rys.ryy.drawingtogether.session.RemotePeerInfo>,
+    onDismiss: () -> Unit,
+) {
+    var selectedPeerId by remember {
+        mutableStateOf<com.rts.rys.ryy.drawingtogether.drawing.model.PeerId?>(null)
+    }
+    val selected = peers.firstOrNull { it.peerId == selectedPeerId } ?: peers.firstOrNull()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("참여자 보기") },
+        text = {
+            Column {
+                if (peers.isEmpty()) {
+                    Text("아직 참여자가 없어요.", style = MaterialTheme.typography.bodyMedium)
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        peers.forEach { peer ->
+                            PeerNameChip(
+                                nick = peer.nick,
+                                selected = peer.peerId == selected?.peerId,
+                                onClick = { selectedPeerId = peer.peerId },
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    if (selected != null) {
+                        MiniCanvas(
+                            nick = selected.nick,
+                            state = vm.peerCanvases.getOrPut(selected.peerId) {
+                                com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState()
+                            },
+                            modifier = Modifier.fillMaxWidth().aspectRatio(1f),
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("닫기") }
+        },
+    )
+}
+
+// 참여자 이름 칩 — 선택 시 배경 강조. 호스트 "참여자 보기" 모달에서 대상 선택용.
+@Composable
+private fun PeerNameChip(nick: String, selected: Boolean, onClick: () -> Unit) {
+    val container = if (selected) MaterialTheme.colorScheme.primary
+    else MaterialTheme.colorScheme.surfaceVariant
+    val content = if (selected) MaterialTheme.colorScheme.onPrimary
+    else MaterialTheme.colorScheme.onSurfaceVariant
+    Text(
+        text = nick,
+        style = MaterialTheme.typography.labelMedium,
+        color = content,
+        maxLines = 1,
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(container)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+    )
 }
