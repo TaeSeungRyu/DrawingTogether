@@ -391,6 +391,14 @@ fun DrawingScreen(
     val myNick by session.nick.collectAsState()
     val canvasSelfNick = if (sessionState is SessionState.Connected) myNick.ifBlank { null } else null
 
+    // 교실 모드 사진 공유 정책(역할 기반): 호스트 사진은 비공개라 broadcast 안 함(조인자는 "가져오기"
+    // 로만 받음). 조인자 사진은 공유 — 스타 구조상 호스트에게만 가서 호스트의 "참여자 보기"에 표시되고
+    // 다른 조인자에겐 안 간다. 함께/모임 모드는 기존대로 공유. 호출 시점에 localRole 을 읽어 판단.
+    val suppressBgShare: () -> Boolean = {
+        mode == DrawMode.Classroom &&
+            session.transport.localRole == com.rts.rys.ryy.drawingtogether.transport.Role.Host
+    }
+
     // "저장 시 배경 합치기" 토글 변경 — 저장 다이얼로그에서 호출. 공유 캔버스인 함께 모드(Duo)
     // 에서만 동기화. 모임/교실은 각자 독립 캔버스·저장이므로 broadcast 하면 안 됨(남의 설정 덮어씀).
     val onMergeChange: (Boolean) -> Unit = { value ->
@@ -680,8 +688,8 @@ fun DrawingScreen(
                 }.onSuccess { image ->
                     vm.setBackground(image)
                     Toast.makeText(context, ASPECT_TOAST_TEXT, Toast.LENGTH_SHORT).show()
-                    // 교실 모드는 사진 자동 broadcast 안 함 — 호스트 사진은 조인자가 "가져오기" 로만 받는다.
-                    if (mode != DrawMode.Classroom) shareBackgroundToPeer(context, session, image)
+                    // 교실 호스트만 사진 broadcast 억제(아래 suppressBgShare). 조인자/그 외 모드는 공유.
+                    if (!suppressBgShare()) shareBackgroundToPeer(context, session, image)
                 }
             }
         }
@@ -701,8 +709,8 @@ fun DrawingScreen(
                 }.onSuccess { image ->
                     vm.setBackground(image)
                     Toast.makeText(context, ASPECT_TOAST_TEXT, Toast.LENGTH_SHORT).show()
-                    // 교실 모드는 사진 자동 broadcast 안 함 (위 갤러리 경로와 동일 정책).
-                    if (mode != DrawMode.Classroom) shareBackgroundToPeer(context, session, image)
+                    // 위 갤러리 경로와 동일 — 교실 호스트만 억제.
+                    if (!suppressBgShare()) shareBackgroundToPeer(context, session, image)
                 }
             }
         }
@@ -783,8 +791,8 @@ fun DrawingScreen(
                             label = "제거",
                             onClick = {
                                 vm.setBackground(null)
-                                // 교실 모드는 사진을 broadcast 하지 않으므로 제거도 broadcast 안 함.
-                                if (mode != DrawMode.Classroom &&
+                                // 사진을 공유하는 주체만 제거도 broadcast(교실 호스트는 공유 안 하므로 제거도 안 함).
+                                if (!suppressBgShare() &&
                                     session.state.value is SessionState.Connected) {
                                     scope.launch {
                                         runCatching { session.transport.send(Frame.PhotoRemove()) }
