@@ -481,12 +481,15 @@ fun DrawingScreen(
     // 발생분만 오므로, 합류 전 호스트 그림·사진이 안 보이던 갭을 메운다.
     if (mode == DrawMode.Classroom) {
         LaunchedEffect(session) {
-            val sent = mutableSetOf<PeerId>()
+            // endpointId 기준 추적: 나갔다 빠르게 재입장하면 같은 peerId 라도 새 endpoint 가 부여되므로,
+            // peerId 로 추적하면 (remotePeers 가 부재 상태를 안 거치고 conflate 될 때) 재전송을 건너뛸 수
+            // 있다. endpointId(= 연결 단위)로 추적하면 새 연결마다 반드시 1회 초기 전송.
+            val sentEndpoints = mutableSetOf<String>()
             session.remotePeers.collect { peers ->
                 if (session.transport.localRole ==
                     com.rts.rys.ryy.drawingtogether.transport.Role.Host) {
                     peers.forEach { peer ->
-                        if (peer.endpointId.isNotEmpty() && sent.add(peer.peerId)) {
+                        if (peer.endpointId.isNotEmpty() && sentEndpoints.add(peer.endpointId)) {
                             sendHostCanvasToJoiner(
                                 context = context,
                                 session = session,
@@ -499,8 +502,8 @@ fun DrawingScreen(
                         }
                     }
                 }
-                // 떠난 조인자는 재입장 시 다시 보내도록 기록에서 제거.
-                sent.retainAll(peers.mapTo(mutableSetOf()) { it.peerId })
+                // 끊긴 endpoint 는 기록에서 제거(재연결 시 새 endpoint 로 다시 전송됨).
+                sentEndpoints.retainAll(peers.mapTo(mutableSetOf()) { it.endpointId })
             }
         }
     }
