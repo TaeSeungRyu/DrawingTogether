@@ -70,9 +70,13 @@ fun PartyPairingScreen(
     onBack: () -> Unit,
     onStart: () -> Unit,
     modifier: Modifier = Modifier,
+    // 스타(1:N) 페어링 공용 화면. 모임(Party)·교실(Classroom) 둘 다 이걸 쓴다.
+    // 기본값 Party 라 기존 호출부(AppNavGraph 의 모임 모드)는 변경 없이 동작.
+    mode: TransportMode = TransportMode.Party,
 ) {
     val context = LocalContext.current
-    val session = remember { SessionManager.get(context, TransportMode.Party) }
+    val session = remember(mode) { SessionManager.get(context, mode) }
+    val modeLabel = if (mode == TransportMode.Classroom) "교실" else "모임"
     val scope = rememberCoroutineScope()
 
     val sessionState by session.state.collectAsState()
@@ -134,7 +138,7 @@ fun PartyPairingScreen(
 
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text("모임 모드") },
+            title = { Text("$modeLabel 모드") },
             navigationIcon = {
                 IconButton(onClick = {
                     session.disconnect()
@@ -170,6 +174,7 @@ fun PartyPairingScreen(
             when (role) {
                 PartyRole.NotPicked -> RolePicker(
                     enabled = permissionsGranted && nick.isNotBlank(),
+                    modeLabel = modeLabel,
                     onHost = { role = PartyRole.Host },
                     onJoiner = { role = PartyRole.Joiner },
                 )
@@ -284,6 +289,7 @@ fun PartyPairingScreen(
 @Composable
 private fun ColumnScope.RolePicker(
     enabled: Boolean,
+    modeLabel: String,
     onHost: () -> Unit,
     onJoiner: () -> Unit,
 ) {
@@ -305,7 +311,7 @@ private fun ColumnScope.RolePicker(
         ),
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("호스트 (내가 모임 시작)", style = MaterialTheme.typography.titleMedium)
+            Text("호스트 (내가 $modeLabel 시작)", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(2.dp))
             Text("최대 3명까지 받기", style = MaterialTheme.typography.bodySmall)
         }
@@ -325,7 +331,7 @@ private fun ColumnScope.RolePicker(
         ),
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("조인 (다른 모임 참여)", style = MaterialTheme.typography.titleMedium)
+            Text("조인 (다른 $modeLabel 참여)", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(2.dp))
             Text("호스트 검색해서 들어가기", style = MaterialTheme.typography.bodySmall)
         }
@@ -334,7 +340,7 @@ private fun ColumnScope.RolePicker(
     Spacer(modifier = Modifier.height(16.dp))
 
     Text(
-        text = "💡 모임 내 1대는 반드시 호스트여야 합니다. 나머지는 조인.",
+        text = "💡 $modeLabel 내 1대는 반드시 호스트여야 합니다. 나머지는 조인.",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
