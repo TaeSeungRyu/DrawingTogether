@@ -245,35 +245,50 @@ private suspend fun respondToSnapshotRequest(
     background: BackgroundImage?,
 ) {
     if (session.state.value !is SessionState.Connected) return
+    // 요청자가 직접 연결된 피어면 그 endpoint 로 unicast 한다. broadcast 용 sendFile 은 하나의
+    // Payload(pfd) 를 여러 endpoint 에 재사용하는데, Nearby 파일 payload 의 pfd 는 1회 소비라
+    // 첫 endpoint 만 파일을 받는 버그가 있다(여러 조인자 중 한 명만 "가져오기" 동작). 응답은
+    // 요청자 1명 대상이므로 unicast(sendFileTo, 호출마다 pfd 새로 염)면 모든 조인자가 각자 정상 수신.
+    // 직접 연결이 아닌 경우(모임 조인자↔조인자)는 기존 broadcast → 호스트 relay 경로 유지.
+    val directEndpoint = session.remotePeers.value
+        .firstOrNull { it.peerId.value == targetPeerId && it.endpointId.isNotEmpty() }
+        ?.endpointId
     runCatching {
-        // 1) strokes + 스티커 + 텍스트 → FILE + Snapshot 메타
         val strokesUri = canvasToCacheUri(context, strokes, stickers, texts)
-        val strokesPayloadId = session.transport.sendFile(strokesUri)
-        session.transport.send(
-            Frame.Snapshot(
-                strokesPayloadId = strokesPayloadId,
-                hasPhoto = background != null,
-                targetPeerId = targetPeerId,
+        val photoUri = if (background != null) bitmapToCacheUri(context, background.bitmap) else null
+        val photoByteSize = photoUri?.let {
+            context.contentResolver.openAssetFileDescriptor(it, "r")?.use { fd -> fd.length } ?: 0L
+        } ?: 0L
+
+        if (directEndpoint != null) {
+            val strokesPid = session.transport.sendFileTo(directEndpoint, strokesUri)
+            session.transport.sendTo(
+                directEndpoint,
+                Frame.Snapshot(strokesPid, hasPhoto = background != null, targetPeerId = targetPeerId),
             )
-        )
-        if (background != null) {
-            val uri = bitmapToCacheUri(context, background.bitmap)
-            val payloadId = session.transport.sendFile(uri)
-            session.transport.send(
-                Frame.PhotoMeta(
-                    payloadId = payloadId,
-                    byteSize = context.contentResolver
-                        .openAssetFileDescriptor(uri, "r")
-                        ?.use { it.length }
-                        ?: 0L,
-                    widthPx = background.widthPx,
-                    heightPx = background.heightPx,
-                    mime = "image/jpeg",
-                    targetPeerId = targetPeerId,
+            if (background != null && photoUri != null) {
+                val photoPid = session.transport.sendFileTo(directEndpoint, photoUri)
+                session.transport.sendTo(
+                    directEndpoint,
+                    Frame.PhotoMeta(photoPid, photoByteSize, background.widthPx, background.heightPx, "image/jpeg", targetPeerId),
                 )
-            )
+            } else {
+                session.transport.sendTo(directEndpoint, Frame.PhotoRemove(targetPeerId = targetPeerId))
+            }
         } else {
-            session.transport.send(Frame.PhotoRemove(targetPeerId = targetPeerId))
+            // 직접 연결 안 됨(모임 조인자↔조인자) → broadcast 후 호스트 relay.
+            val strokesPid = session.transport.sendFile(strokesUri)
+            session.transport.send(
+                Frame.Snapshot(strokesPid, hasPhoto = background != null, targetPeerId = targetPeerId),
+            )
+            if (background != null && photoUri != null) {
+                val photoPid = session.transport.sendFile(photoUri)
+                session.transport.send(
+                    Frame.PhotoMeta(photoPid, photoByteSize, background.widthPx, background.heightPx, "image/jpeg", targetPeerId),
+                )
+            } else {
+                session.transport.send(Frame.PhotoRemove(targetPeerId = targetPeerId))
+            }
         }
     }
 }
