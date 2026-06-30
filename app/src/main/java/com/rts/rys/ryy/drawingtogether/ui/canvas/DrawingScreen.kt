@@ -293,6 +293,26 @@ private suspend fun respondToSnapshotRequest(
     }
 }
 
+// 교실 호스트가 새 조인자에게 현재 캔버스(strokes/스티커/텍스트, 사진 제외)를 1회 unicast.
+// target="" 라 받는 쪽은 sender=host 로 라우팅 → 그 조인자의 방장 라이브뷰(peerCanvases[host])에 적용
+// (메인 아님). 사진은 비공개 정책이라 보내지 않는다. 빈 캔버스면 보낼 것 없으므로 생략.
+private suspend fun sendHostStrokesToJoiner(
+    context: android.content.Context,
+    session: SessionManager,
+    endpointId: String,
+    strokes: List<com.rts.rys.ryy.drawingtogether.drawing.model.Stroke>,
+    stickers: List<com.rts.rys.ryy.drawingtogether.drawing.model.Sticker>,
+    texts: List<com.rts.rys.ryy.drawingtogether.drawing.model.TextElement>,
+) {
+    if (session.state.value !is SessionState.Connected) return
+    if (strokes.isEmpty() && stickers.isEmpty() && texts.isEmpty()) return
+    runCatching {
+        val uri = canvasToCacheUri(context, strokes, stickers, texts)
+        val pid = session.transport.sendFileTo(endpointId, uri)
+        session.transport.sendTo(endpointId, Frame.Snapshot(pid, hasPhoto = false, targetPeerId = ""))
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DrawingScreen(
@@ -437,6 +457,34 @@ fun DrawingScreen(
                 vm.peerCanvases.keys.toList().forEach { id ->
                     if (id !in active) vm.peerCanvases.remove(id)
                 }
+            }
+        }
+    }
+
+    // 교실 호스트: 새로 합류한 조인자에게 현재 내 캔버스(strokes-only, 사진 제외)를 1회 보내
+    // 그 조인자의 "방장 라이브뷰"(peerCanvases[host])를 초기 채운다. 라이브 이벤트는 합류 후
+    // 발생분만 오므로, 합류 전 호스트 그림이 안 보이던 갭을 메운다. 사진은 비공개라 미포함.
+    if (mode == DrawMode.Classroom) {
+        LaunchedEffect(session) {
+            val sent = mutableSetOf<PeerId>()
+            session.remotePeers.collect { peers ->
+                if (session.transport.localRole ==
+                    com.rts.rys.ryy.drawingtogether.transport.Role.Host) {
+                    peers.forEach { peer ->
+                        if (peer.endpointId.isNotEmpty() && sent.add(peer.peerId)) {
+                            sendHostStrokesToJoiner(
+                                context = context,
+                                session = session,
+                                endpointId = peer.endpointId,
+                                strokes = vm.canvas.strokes.toList(),
+                                stickers = vm.canvas.stickers.toList(),
+                                texts = vm.canvas.texts.toList(),
+                            )
+                        }
+                    }
+                }
+                // 떠난 조인자는 재입장 시 다시 보내도록 기록에서 제거.
+                sent.retainAll(peers.mapTo(mutableSetOf()) { it.peerId })
             }
         }
     }
