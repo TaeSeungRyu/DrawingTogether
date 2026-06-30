@@ -7,6 +7,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.rts.rys.ryy.drawingtogether.transport.nearby.TransportMode
 import com.rts.rys.ryy.drawingtogether.ui.canvas.DrawingScreen
 import com.rts.rys.ryy.drawingtogether.ui.home.HomeScreen
 import com.rts.rys.ryy.drawingtogether.ui.pairing.PairingScreen
@@ -16,11 +17,12 @@ import com.rts.rys.ryy.drawingtogether.ui.splash.SplashScreen
 import com.rts.rys.ryy.drawingtogether.ui.timelapse.TimelapseGalleryScreen
 import com.rts.rys.ryy.drawingtogether.ui.timelapse.TimelapsePlayerScreen
 
-// Phase 4-D: Draw 화면이 셋 중 하나의 모드로 진입한다.
-// - Single  : 네트워크 없음, 혼자 그리기
-// - Duo     : 1:1 함께 모드 (공유 캔버스)
-// - Party   : 1:N 모임 모드 (자기 캔버스 + 미니 뷰)
-enum class DrawMode { Single, Duo, Party }
+// Draw 화면이 진입하는 모드.
+// - Single    : 네트워크 없음, 혼자 그리기
+// - Duo       : 1:1 함께 모드 (공유 캔버스)
+// - Party     : 1:N 모임 모드 (자기 캔버스 + 모두-미니 뷰, mesh)
+// - Classroom : 1:N 교실 모드 (호스트 중심 — 조인자끼리 안 보임). doc/classroom-mode.md
+enum class DrawMode { Single, Duo, Party, Classroom }
 
 object Routes {
     const val Splash = "splash"
@@ -33,6 +35,7 @@ object Routes {
     const val Pairing = "pairing"
     const val PairingArg = "autoHost"
     const val PartyPairing = "party-pairing"  // 모임 모드 (1:N) 페어링
+    const val ClassroomPairing = "classroom-pairing"  // 교실 모드 (1:N) 페어링
     const val Preview = "preview"             // path 인자: workId
     const val PreviewArg = "workId"
     const val Timelapses = "timelapses"       // 타임랩스 갤러리
@@ -64,6 +67,7 @@ fun AppNavGraph(modifier: Modifier = Modifier) {
                 onSingleMode = { nav.navigate(drawRoute(DrawMode.Single)) },
                 onDuoMode = { nav.navigate(pairingRoute(autoHost = false)) },
                 onPartyMode = { nav.navigate(Routes.PartyPairing) },
+                onClassroomMode = { nav.navigate(Routes.ClassroomPairing) },
                 onWorkClick = { workId ->
                     nav.navigate("${Routes.Preview}/$workId")
                 },
@@ -88,6 +92,7 @@ fun AppNavGraph(modifier: Modifier = Modifier) {
                     // 페어링 화면에서 다시 한 번 호스트 버튼을 탭하지 않아도 된다.
                     val target = when (mode) {
                         DrawMode.Party -> Routes.PartyPairing
+                        DrawMode.Classroom -> Routes.ClassroomPairing
                         else -> pairingRoute(autoHost = true)
                     }
                     nav.navigate(target)
@@ -124,6 +129,22 @@ fun AppNavGraph(modifier: Modifier = Modifier) {
                     if (!popped) {
                         nav.navigate(target) {
                             popUpTo(Routes.PartyPairing) { inclusive = true }
+                        }
+                    }
+                },
+            )
+        }
+        composable(Routes.ClassroomPairing) {
+            // 교실 모드 — 같은 페어링 화면을 Classroom 전송 모드로 재사용(2단계에서 mode 파라미터화).
+            PartyPairingScreen(
+                mode = TransportMode.Classroom,
+                onBack = { nav.popBackStack() },
+                onStart = {
+                    val target = drawRoute(DrawMode.Classroom)
+                    val popped = nav.popBackStack(target, inclusive = false)
+                    if (!popped) {
+                        nav.navigate(target) {
+                            popUpTo(Routes.ClassroomPairing) { inclusive = true }
                         }
                     }
                 },

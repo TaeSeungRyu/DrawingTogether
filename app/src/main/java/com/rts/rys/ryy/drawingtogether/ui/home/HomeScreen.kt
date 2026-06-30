@@ -49,6 +49,7 @@ fun HomeScreen(
     onSingleMode: () -> Unit,
     onDuoMode: () -> Unit,
     onPartyMode: () -> Unit,
+    onClassroomMode: () -> Unit,
     onWorkClick: (String) -> Unit,
     onTimelapses: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -176,6 +177,27 @@ fun HomeScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
+        // 교실 모드 — 호스트 중심(교사–학생). 모임 모드와 같은 "연결" 군이지만 호스트만 전체를 봄.
+        Button(
+            onClick = onClassroomMode,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(72.dp),
+            shape = MaterialTheme.shapes.extraLarge,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+            ),
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("교실 모드", style = MaterialTheme.typography.titleLarge)
+                Spacer(modifier = Modifier.height(2.dp))
+                Text("최대 4명, 방장 중심 (교사–학생)", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
         // 최근 작업 — 라벤더(tertiary). 보조 액션이지만 같은 시각 무게.
         Button(
             onClick = { modalOpen = true },
@@ -242,10 +264,11 @@ fun HomeScreen(
             val submit = submit@{
                 val trimmed = input.trim()
                 if (trimmed.isEmpty()) return@submit
-                // Duo + Party 인스턴스 양쪽 setNick — prefs 는 공유되지만 in-memory StateFlow
-                // 는 인스턴스별 분리. 다음 진입 시 stale 값 회피.
+                // Duo + Party + Classroom 인스턴스 모두 setNick — prefs 는 공유되지만 in-memory
+                // StateFlow 는 인스턴스별 분리. 다음 진입 시 stale 값 회피.
                 duoSession.setNick(trimmed)
                 SessionManager.get(context, TransportMode.Party).setNick(trimmed)
+                SessionManager.get(context, TransportMode.Classroom).setNick(trimmed)
                 nickDialogOpen = false
             }
             AlertDialog(

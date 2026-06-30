@@ -365,6 +365,7 @@ fun DrawingScreen(
     // Pairing 을 거치지 않으니 transport 가 idle 이라 무해.
     val transportMode = when (mode) {
         DrawMode.Party -> TransportMode.Party
+        DrawMode.Classroom -> TransportMode.Classroom
         else -> TransportMode.Duo
     }
     val session = remember(transportMode) { SessionManager.get(context, transportMode) }
@@ -390,11 +391,11 @@ fun DrawingScreen(
         vm.setAuthor(PeerId(session.peerId))
     }
 
-    // Phase 4-C: 모임 모드는 인바운드 stroke 을 peer 별 캔버스로 라우팅. 그 외는 Shared 유지.
+    // 모임/교실 모드는 인바운드 stroke 을 peer 별 캔버스로 라우팅. 그 외는 Shared 유지.
     LaunchedEffect(mode) {
         vm.setRouting(
             when (mode) {
-                DrawMode.Party -> CanvasRouting.PerPeer
+                DrawMode.Party, DrawMode.Classroom -> CanvasRouting.PerPeer
                 else -> CanvasRouting.Shared
             }
         )
