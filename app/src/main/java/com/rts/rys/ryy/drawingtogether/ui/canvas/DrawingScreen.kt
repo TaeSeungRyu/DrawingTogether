@@ -447,19 +447,23 @@ fun DrawingScreen(
     // 작업하다가 도구바 "방 열기" 로 새 조인자를 받는 흐름을 쓴다.
     LaunchedEffect(sessionState) {
         if (sessionState is SessionState.Failed) {
-            val role = session.transport.localRole
-            val isPartyHost = mode == DrawMode.Party &&
-                role == com.rts.rys.ryy.drawingtogether.transport.Role.Host
-            // 모임 호스트: 마지막 조인자가 나가도 알림 없이 방 유지("방 열기"로 재모집).
-            if (isPartyHost) return@LaunchedEffect
+            // 싱글 모드는 Duo SessionManager 싱글톤을 공유만 하고 네트워크는 안 쓴다. 직전 함께/모임
+            // 세션이 Failed 로 남아 있어도 싱글에선 어떤 끊김 알림도 띄우면 안 된다.
+            if (mode == DrawMode.Single) return@LaunchedEffect
 
-            // 모임 조인자: 유일한 연결(호스트)이 끊긴 것 = 모임 종료. 재연결 대신 홈 복귀.
-            val isPartyJoiner = mode == DrawMode.Party &&
+            val role = session.transport.localRole
+            // 스타(모임/교실) 호스트: 마지막 조인자가 나가도 알림 없이 방 유지("방 열기"로 재모집).
+            val isStarHost = (mode == DrawMode.Party || mode == DrawMode.Classroom) &&
+                role == com.rts.rys.ryy.drawingtogether.transport.Role.Host
+            if (isStarHost) return@LaunchedEffect
+
+            // 스타(모임/교실) 조인자: 유일한 연결(호스트)이 끊긴 것 = 종료. 재연결 대신 홈 복귀.
+            val isStarJoiner = (mode == DrawMode.Party || mode == DrawMode.Classroom) &&
                 role == com.rts.rys.ryy.drawingtogether.transport.Role.Joiner
-            if (isPartyJoiner) {
+            if (isStarJoiner) {
                 Toast.makeText(
                     context,
-                    "방장이 나가 모임이 종료됐어요.",
+                    "방장이 나가 종료됐어요.",
                     Toast.LENGTH_LONG,
                 ).show()
                 onExitToHome()
