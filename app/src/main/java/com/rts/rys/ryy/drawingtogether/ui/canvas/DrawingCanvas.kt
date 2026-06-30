@@ -77,6 +77,8 @@ fun DrawingCanvas(
     // 텍스트 콜백 — 텍스트 모드에서만 호출. 빈 곳 탭 → 그 위치에 입력 시트 요청, X 핸들 → 삭제.
     onRequestText: (Float, Float) -> Unit = { _, _ -> },
     onRemoveText: (TextId) -> Unit = {},
+    // 입력 시트가 열린 동안 텍스트가 들어갈 정규화 좌표(0..1). non-null 이면 그 위치에 캐럿 마커를 그린다.
+    pendingTextPoint: Pair<Float, Float>? = null,
 ) {
     val density = LocalDensity.current.density
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
@@ -239,7 +241,40 @@ fun DrawingCanvas(
         eyedropperPos?.let { pos ->
             drawEyedropperCursor(center = pos, density = density)
         }
+        // 9. 텍스트 입력 위치 마커 (입력 시트가 열린 동안) — 텍스트가 들어갈 자리에 I-beam 캐럿.
+        pendingTextPoint?.let { (nx, ny) ->
+            drawTextPlacementMarker(
+                center = Offset(nx * canvasSize.width, ny * canvasSize.height),
+                canvasSize = canvasSize,
+                density = density,
+                color = selectionColor,
+            )
+        }
     }
+}
+
+// 텍스트 입력 위치 마커 — 중심(cx,cy)에 세로 I-beam 캐럿(위·아래 가로 세리프 포함).
+// 텍스트가 중앙 정렬로 이 지점에 들어감을 알린다. 어떤 배경에서도 보이게 흰 외곽선 위 색 캐럿.
+private fun DrawScope.drawTextPlacementMarker(
+    center: Offset,
+    canvasSize: IntSize,
+    density: Float,
+    color: Color,
+) {
+    val shortSide = min(canvasSize.width, canvasSize.height).toFloat()
+    // 기본 텍스트 크기(보통, sizeFrac=0.06) 높이에 맞춘 캐럿.
+    val half = (shortSide * 0.06f).coerceAtLeast(8f * density) / 2f
+    val serif = 6f * density
+    val top = center.y - half
+    val bottom = center.y + half
+
+    fun ibeam(c: Color, w: Float) {
+        drawLine(c, Offset(center.x, top), Offset(center.x, bottom), strokeWidth = w, cap = StrokeCap.Round)
+        drawLine(c, Offset(center.x - serif, top), Offset(center.x + serif, top), strokeWidth = w, cap = StrokeCap.Round)
+        drawLine(c, Offset(center.x - serif, bottom), Offset(center.x + serif, bottom), strokeWidth = w, cap = StrokeCap.Round)
+    }
+    ibeam(Color.White.copy(alpha = 0.9f), 4f * density)
+    ibeam(color, 2f * density)
 }
 
 // 스포이드 조준 십자 — 중앙에 빈 틈을 둔 십자 + 링. 어떤 배경에서도 보이게 흰 외곽선 위에

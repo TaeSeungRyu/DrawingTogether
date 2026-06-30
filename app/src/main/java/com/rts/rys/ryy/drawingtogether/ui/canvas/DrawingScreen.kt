@@ -796,6 +796,7 @@ fun DrawingScreen(
                     selfNick = canvasSelfNick,
                     modifier = m.background(MaterialTheme.colorScheme.surfaceVariant),
                     onRequestText = { nx, ny -> pendingTextPoint = nx to ny },
+                    pendingTextPoint = pendingTextPoint,
                 )
             } else {
                 Box(
@@ -806,6 +807,7 @@ fun DrawingScreen(
                         vm = vm,
                         selfNick = canvasSelfNick,
                         onRequestText = { nx, ny -> pendingTextPoint = nx to ny },
+                        pendingTextPoint = pendingTextPoint,
                     )
                 }
             }
@@ -1135,6 +1137,7 @@ private fun MyCanvasContent(
     vm: DrawingViewModel,
     selfNick: String? = null,
     onRequestText: (Float, Float) -> Unit = { _, _ -> },
+    pendingTextPoint: Pair<Float, Float>? = null,
 ) {
     val bg = vm.canvas.background
     val density = LocalDensity.current.density
@@ -1168,6 +1171,7 @@ private fun MyCanvasContent(
             onRemoveSticker = vm::removeSticker,
             onRequestText = onRequestText,
             onRemoveText = vm::removeText,
+            pendingTextPoint = pendingTextPoint,
         )
         // 내 닉네임 — 우측 상단 반투명 칩. 사진/그림 위에서도 읽히게 surface 배경 + 회색 글자.
         // pointerInput 없으므로 그리기 터치는 아래 캔버스가 받음.
@@ -1245,6 +1249,7 @@ private fun PartyCanvasArea(
     selfNick: String? = null,
     modifier: Modifier = Modifier,
     onRequestText: (Float, Float) -> Unit = { _, _ -> },
+    pendingTextPoint: Pair<Float, Float>? = null,
 ) {
     if (isLandscape) {
         Row(modifier = modifier) {
@@ -1254,7 +1259,7 @@ private fun PartyCanvasArea(
                     .fillMaxHeight(),
                 contentAlignment = Alignment.Center,
             ) {
-                MyCanvasContent(vm = vm, selfNick = selfNick, onRequestText = onRequestText)
+                MyCanvasContent(vm = vm, selfNick = selfNick, onRequestText = onRequestText, pendingTextPoint = pendingTextPoint)
             }
             Column(
                 modifier = Modifier
@@ -1278,7 +1283,7 @@ private fun PartyCanvasArea(
                     .fillMaxWidth(),
                 contentAlignment = Alignment.Center,
             ) {
-                MyCanvasContent(vm = vm, selfNick = selfNick, onRequestText = onRequestText)
+                MyCanvasContent(vm = vm, selfNick = selfNick, onRequestText = onRequestText, pendingTextPoint = pendingTextPoint)
             }
             Row(
                 modifier = Modifier
