@@ -493,7 +493,11 @@ fun DrawingScreen(
     //  - sender 미상 (안전망): 자기 메인 fallback.
     LaunchedEffect(vm, session) {
         session.incomingBackground.collect { change ->
-            val partyTargetCanvas = if (mode == DrawMode.Party) {
+            // 모임/교실 모드: sender 가 박힌 배경은 그 발신자의 peerCanvases(라이브뷰)에, sender=null
+            // (내 가져오기 응답)은 자기 메인에. 교실에서 sender 라우팅을 안 하면 호스트가 조인자 A에게
+            // 보낸 사진을 broadcast 로 받은 조인자 B 의 메인이 덮어써지는 버그가 생긴다.
+            val perPeerMode = mode == DrawMode.Party || mode == DrawMode.Classroom
+            val partyTargetCanvas = if (perPeerMode) {
                 change.senderPeerId?.let { id ->
                     vm.peerCanvases.getOrPut(id) {
                         com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState()
@@ -560,6 +564,20 @@ fun DrawingScreen(
     //      sender != null (broadcast) → peerCanvases[sender] 적용 (그 peer 미니뷰 동기화)
     LaunchedEffect(vm, session) {
         session.incomingSnapshot.collect { event ->
+            // 교실 모드(호스트 중심): sender 라우팅하되 재broadcast 는 안 함(조인자끼리 안 보임).
+            //  - sender == null: 내 "가져오기" 응답 → 자기 메인에 적용.
+            //  - sender != null: 호스트/조인자 라이브뷰 → peerCanvases[sender] 에 적용.
+            if (mode == DrawMode.Classroom) {
+                val sender = event.senderPeerId
+                if (sender == null) {
+                    vm.applyRemoteSnapshot(event.strokes, event.stickers, event.texts)
+                } else {
+                    vm.peerCanvases.getOrPut(sender) {
+                        com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState()
+                    }.applySnapshot(event.strokes, event.stickers, event.texts)
+                }
+                return@collect
+            }
             if (mode != DrawMode.Party) {
                 vm.applyRemoteSnapshot(event.strokes, event.stickers, event.texts)
                 return@collect
@@ -787,6 +805,8 @@ fun DrawingScreen(
         val peers by session.remotePeers.collectAsState()
         val isPartyHost = mode == DrawMode.Party &&
             session.transport.localRole == com.rts.rys.ryy.drawingtogether.transport.Role.Host
+        val isClassroomHost = mode == DrawMode.Classroom &&
+            session.transport.localRole == com.rts.rys.ryy.drawingtogether.transport.Role.Host
 
         val canvasArea: @Composable (Modifier) -> Unit = { m ->
             if (mode == DrawMode.Party) {
@@ -798,6 +818,18 @@ fun DrawingScreen(
                     modifier = m.background(MaterialTheme.colorScheme.surfaceVariant),
                     onRequestText = { nx, ny -> pendingTextPoint = nx to ny },
                     pendingTextPoint = pendingTextPoint,
+                )
+            } else if (mode == DrawMode.Classroom) {
+                ClassroomCanvasArea(
+                    vm = vm,
+                    peers = peers,
+                    isLandscape = isLandscape,
+                    isHost = isClassroomHost,
+                    selfNick = canvasSelfNick,
+                    modifier = m.background(MaterialTheme.colorScheme.surfaceVariant),
+                    onRequestText = { nx, ny -> pendingTextPoint = nx to ny },
+                    pendingTextPoint = pendingTextPoint,
+                    onPullFromHost = { host -> syncStep = SyncStep.PartyConfirm(host) },
                 )
             } else {
                 Box(
@@ -1325,6 +1357,92 @@ private fun PartyMiniSlots(
             )
         } else {
             EmptyMiniSlot(modifier = slotModifier)
+        }
+    }
+}
+
+// 교실 모드 캔버스 영역 — 호스트 중심. 메인은 항상 자기 캔버스.
+// - 조인자: 메인 + 호스트 라이브 뷰 1개 + "가져오기" 버튼(보조 패널). 다른 조인자는 보이지 않음.
+// - 호스트: (4단계) 메인만. (5단계에서 "참여자 보기" 버튼 + 모달 추가)
+@Composable
+private fun ClassroomCanvasArea(
+    vm: DrawingViewModel,
+    peers: List<com.rts.rys.ryy.drawingtogether.session.RemotePeerInfo>,
+    isLandscape: Boolean,
+    isHost: Boolean,
+    selfNick: String? = null,
+    modifier: Modifier = Modifier,
+    onRequestText: (Float, Float) -> Unit = { _, _ -> },
+    pendingTextPoint: Pair<Float, Float>? = null,
+    onPullFromHost: (com.rts.rys.ryy.drawingtogether.session.RemotePeerInfo) -> Unit = {},
+) {
+    val main: @Composable (Modifier) -> Unit = { mm ->
+        Box(modifier = mm, contentAlignment = Alignment.Center) {
+            MyCanvasContent(
+                vm = vm,
+                selfNick = selfNick,
+                onRequestText = onRequestText,
+                pendingTextPoint = pendingTextPoint,
+            )
+        }
+    }
+    if (isHost) {
+        // 4단계: 호스트는 메인 캔버스만. 참여자 보기 UI 는 5단계.
+        main(modifier)
+        return
+    }
+    // 조인자: 메인(3f) + 호스트 라이브 뷰 패널(1f).
+    val host = peers.firstOrNull()
+    val panel: @Composable (Modifier) -> Unit = { mm ->
+        JoinerClassroomPanel(vm = vm, host = host, onPull = onPullFromHost, modifier = mm)
+    }
+    if (isLandscape) {
+        Row(modifier = modifier) {
+            main(Modifier.weight(3f).fillMaxHeight())
+            panel(Modifier.weight(1f).fillMaxHeight())
+        }
+    } else {
+        Column(modifier = modifier) {
+            main(Modifier.weight(3f).fillMaxWidth())
+            panel(Modifier.weight(1f).fillMaxWidth())
+        }
+    }
+}
+
+// 조인자 보조 패널 — 호스트(방장) 라이브 뷰 1개 + 가져오기 버튼. 다른 조인자는 표시 안 함.
+@Composable
+private fun JoinerClassroomPanel(
+    vm: DrawingViewModel,
+    host: com.rts.rys.ryy.drawingtogether.session.RemotePeerInfo?,
+    onPull: (com.rts.rys.ryy.drawingtogether.session.RemotePeerInfo) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.padding(4.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = if (host != null) "방장: ${host.nick}" else "방장 연결 대기…",
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
+                modifier = Modifier.weight(1f),
+            )
+            if (host != null) {
+                TextButton(onClick = { onPull(host) }) { Text("가져오기") }
+            }
+        }
+        if (host != null) {
+            MiniCanvas(
+                nick = host.nick,
+                state = vm.peerCanvases.getOrPut(host.peerId) {
+                    com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState()
+                },
+                modifier = Modifier.fillMaxWidth().weight(1f),
+            )
+        } else {
+            EmptyMiniSlot(modifier = Modifier.fillMaxWidth().weight(1f))
         }
     }
 }
