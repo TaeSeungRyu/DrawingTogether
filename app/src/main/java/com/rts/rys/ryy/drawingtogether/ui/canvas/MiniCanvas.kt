@@ -34,7 +34,8 @@ import com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState
 //   나타남 (정책: 발신자 peerCanvases.background 에 적용됨).
 // - 닉네임 라벨 상단
 // - 빈 캔버스에는 placeholder 텍스트
-// - 슬롯 안에 1:1 정사각형 letterbox — 자기 캔버스와 같은 비율이라 stroke 좌표 동일 모양.
+// - letterbox 비율은 그 peer 의 사진 배경 비율을 따른다(사진 없으면 1:1). 정규화 좌표라
+//   비율이 실제 캔버스와 같아야 stroke·사진이 왜곡 없이 동일 모양으로 보인다.
 @Composable
 fun MiniCanvas(
     nick: String,
@@ -57,14 +58,14 @@ fun MiniCanvas(
                 .fillMaxWidth()
                 .padding(horizontal = 4.dp, vertical = 2.dp),
         )
-        // 슬롯 영역을 가득 채우는 Box. 그 안에 1:1 letterbox 가 중앙 정렬.
+        // 슬롯 영역을 가득 채우는 Box. 그 안에 그 peer 의 사진 비율(없으면 1:1) letterbox 가 중앙 정렬.
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center,
         ) {
             Box(
                 modifier = Modifier
-                    .aspectRatio(1f)
+                    .aspectRatio(state.background?.aspectRatio ?: 1f)
                     .background(Color.White),
                 contentAlignment = Alignment.Center,
             ) {
