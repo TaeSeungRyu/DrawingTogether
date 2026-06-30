@@ -550,8 +550,9 @@ fun DrawingScreen(
                     else vm.setBackground(null)
                 }
             }
-            // 모임 모드 동기화 응답의 배경 부분 도착. sender=null = 동기화 응답(자기 메인 적용).
-            if (mode == DrawMode.Party && change.senderPeerId == null) {
+            // 모임/교실 "가져오기" 응답의 배경 부분 도착. sender=null = 내 가져오기 응답(자기 메인 적용).
+            // strokes 까지 도착하면 내 캔버스를 다시 송신해 상대/호스트가 보는 내 뷰를 갱신.
+            if ((mode == DrawMode.Party || mode == DrawMode.Classroom) && change.senderPeerId == null) {
                 syncGotBackground = true
                 if (syncGotStrokes) {
                     syncGotStrokes = false
@@ -596,27 +597,19 @@ fun DrawingScreen(
     //      sender != null (broadcast) → peerCanvases[sender] 적용 (그 peer 미니뷰 동기화)
     LaunchedEffect(vm, session) {
         session.incomingSnapshot.collect { event ->
-            // 교실 모드(호스트 중심): sender 라우팅하되 재broadcast 는 안 함(조인자끼리 안 보임).
-            //  - sender == null: 내 "가져오기" 응답 → 자기 메인에 적용.
-            //  - sender != null: 호스트/조인자 라이브뷰 → peerCanvases[sender] 에 적용.
-            if (mode == DrawMode.Classroom) {
-                val sender = event.senderPeerId
-                if (sender == null) {
-                    vm.applyRemoteSnapshot(event.strokes, event.stickers, event.texts)
-                } else {
-                    vm.peerCanvases.getOrPut(sender) {
-                        com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState()
-                    }.applySnapshot(event.strokes, event.stickers, event.texts)
-                }
-                return@collect
-            }
-            if (mode != DrawMode.Party) {
+            // Duo/Single: 항상 자기 메인 캔버스에 덮어쓰기.
+            if (mode != DrawMode.Party && mode != DrawMode.Classroom) {
                 vm.applyRemoteSnapshot(event.strokes, event.stickers, event.texts)
                 return@collect
             }
+            // 모임/교실: sender 라우팅.
+            //  - sender == null: 내 "가져오기" 응답 → 자기 메인. strokes+사진 둘 다 도착하면 내 캔버스를
+            //    다시 송신(broadcastMyCanvasAsPeer)해 상대/호스트가 보는 내 뷰를 갱신. applySnapshot 은
+            //    이벤트를 안 내보내므로 이 재송신이 없으면 호스트의 조인자 라이브뷰가 pull 전 상태로 남는다.
+            //    (모임=전체 broadcast, 교실 조인자=호스트에게만 — 스타 구조상 자동.)
+            //  - sender != null: 호스트/조인자 라이브뷰 → peerCanvases[sender] 에 적용.
             val sender = event.senderPeerId
             if (sender == null) {
-                // 동기화 응답의 strokes 부분. 배경까지 도착하면 broadcast.
                 vm.applyRemoteSnapshot(event.strokes, event.stickers, event.texts)
                 syncGotStrokes = true
                 if (syncGotBackground) {
@@ -632,10 +625,9 @@ fun DrawingScreen(
                     )
                 }
             } else {
-                val peerCanvas = vm.peerCanvases.getOrPut(sender) {
+                vm.peerCanvases.getOrPut(sender) {
                     com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState()
-                }
-                peerCanvas.applySnapshot(event.strokes, event.stickers, event.texts)
+                }.applySnapshot(event.strokes, event.stickers, event.texts)
             }
         }
     }
