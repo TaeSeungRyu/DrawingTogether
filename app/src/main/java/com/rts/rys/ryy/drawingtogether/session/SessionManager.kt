@@ -715,6 +715,14 @@ class SessionManager private constructor(
         handshakes.clear()
         indirectPeers.clear()
         partyStarted = false
+        // 진행 중이던 FILE/메타 매칭 상태를 비운다. 안 비우면 끊겼다 재연결한 뒤 "가져오기"
+        // 응답(Snapshot/PhotoMeta + FILE)이 직전 세션의 잔여 pending 과 엉켜 적용이 누락될 수 있다.
+        pendingPhotoMeta.clear()
+        pendingPhotoMetaSender.clear()
+        pendingSnapshotMeta.clear()
+        pendingSnapshotMetaSender.clear()
+        pendingFiles.clear()
+        pendingRelays.clear()
         publishRemotePeers()
     }
 

@@ -875,8 +875,9 @@ fun DrawingScreen(
                 onSelectSymmetry = vm::selectSymmetry,
                 smoothing = vm.smoothing,
                 onCycleSmoothing = vm::cycleSmoothing,
-                // 동기화 버튼은 Connected 일 때만 노출. 모드별 다이얼로그 분기.
-                onSync = if (sessionState is SessionState.Connected) {
+                // 도구바 동기화 버튼 — 함께(Duo)·모임(Party) 전용. 교실(Classroom)은 호스트가
+                // 가져올 필요 없고 조인자는 캔버스 패널의 "가져오기" 버튼을 쓰므로 노출 안 함.
+                onSync = if (sessionState is SessionState.Connected && mode != DrawMode.Classroom) {
                     {
                         syncStep = if (mode == DrawMode.Party) SyncStep.PartyPicker
                         else SyncStep.DuoConfirm
@@ -1438,6 +1439,7 @@ private fun JoinerClassroomPanel(
     onPull: (com.rts.rys.ryy.drawingtogether.session.RemotePeerInfo) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var showBig by remember { mutableStateOf(false) }
     Column(modifier = modifier.padding(4.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
@@ -1445,7 +1447,7 @@ private fun JoinerClassroomPanel(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
-                text = if (host != null) "방장: ${host.nick}" else "방장 연결 대기…",
+                text = if (host != null) "방장: ${host.nick} (탭하면 크게)" else "방장 연결 대기…",
                 style = MaterialTheme.typography.labelMedium,
                 maxLines = 1,
                 modifier = Modifier.weight(1f),
@@ -1455,17 +1457,53 @@ private fun JoinerClassroomPanel(
             }
         }
         if (host != null) {
+            // 탭하면 큰 모달로 방장 라이브 화면을 본다(인라인 뷰는 작으므로).
             MiniCanvas(
                 nick = host.nick,
                 state = vm.peerCanvases.getOrPut(host.peerId) {
                     com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState()
                 },
-                modifier = Modifier.fillMaxWidth().weight(1f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .clickable { showBig = true },
             )
         } else {
             EmptyMiniSlot(modifier = Modifier.fillMaxWidth().weight(1f))
         }
     }
+    if (showBig && host != null) {
+        ClassroomLiveViewDialog(
+            vm = vm,
+            peer = host,
+            onDismiss = { showBig = false },
+        )
+    }
+}
+
+// 한 피어의 라이브 캔버스를 큰 모달로 보여준다. 조인자→방장 보기, 호스트→선택 조인자 보기 공용.
+@Composable
+private fun ClassroomLiveViewDialog(
+    vm: DrawingViewModel,
+    peer: com.rts.rys.ryy.drawingtogether.session.RemotePeerInfo,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(peer.nick) },
+        text = {
+            MiniCanvas(
+                nick = peer.nick,
+                state = vm.peerCanvases.getOrPut(peer.peerId) {
+                    com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState()
+                },
+                modifier = Modifier.fillMaxWidth().aspectRatio(1f),
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("닫기") }
+        },
+    )
 }
 
 // 호스트의 "참여자 보기" 모달 — 이름 칩 목록에서 한 명 선택 → 그 조인자의 라이브 캔버스 표시.
