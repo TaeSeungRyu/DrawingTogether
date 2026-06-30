@@ -118,20 +118,26 @@ private suspend fun shareBackgroundToPeer(
     if (session.state.value !is SessionState.Connected) return
     runCatching {
         val cacheUri = bitmapToCacheUri(context, image.bitmap)
-        val payloadId = session.transport.sendFile(cacheUri)
         val byteSize = context.contentResolver
             .openAssetFileDescriptor(cacheUri, "r")
             ?.use { it.length }
             ?: 0L
-        session.transport.send(
-            Frame.PhotoMeta(
-                payloadId = payloadId,
-                byteSize = byteSize,
-                widthPx = image.widthPx,
-                heightPx = image.heightPx,
-                mime = "image/jpeg",
+        // 연결된 각 피어에게 개별 전송. 파일 payload(pfd)는 1회 소비라 하나의 payload 를 여러
+        // endpoint 에 재사용하면 첫 endpoint 만 받는다(Nearby). endpoint 마다 sendFileTo 로 새로 보낸다.
+        // (호스트→여러 조인자 사진이 한 명만 받던 버그 해소. Duo/조인자는 대상 1명이라 동일 동작.)
+        session.transport.connectedPeers.value.forEach { peer ->
+            val pid = session.transport.sendFileTo(peer.endpointId, cacheUri)
+            session.transport.sendTo(
+                peer.endpointId,
+                Frame.PhotoMeta(
+                    payloadId = pid,
+                    byteSize = byteSize,
+                    widthPx = image.widthPx,
+                    heightPx = image.heightPx,
+                    mime = "image/jpeg",
+                ),
             )
-        )
+        }
     }
 }
 
@@ -293,23 +299,40 @@ private suspend fun respondToSnapshotRequest(
     }
 }
 
-// 교실 호스트가 새 조인자에게 현재 캔버스(strokes/스티커/텍스트, 사진 제외)를 1회 unicast.
+// 교실 호스트가 새 조인자에게 현재 캔버스(strokes/스티커/텍스트 + 사진)를 1회 unicast.
 // target="" 라 받는 쪽은 sender=host 로 라우팅 → 그 조인자의 방장 라이브뷰(peerCanvases[host])에 적용
-// (메인 아님). 사진은 비공개 정책이라 보내지 않는다. 빈 캔버스면 보낼 것 없으므로 생략.
-private suspend fun sendHostStrokesToJoiner(
+// (메인 아님). 합류 전 호스트가 그려둔 그림·사진까지 방장 뷰에 채운다. 빈 캔버스면 생략.
+private suspend fun sendHostCanvasToJoiner(
     context: android.content.Context,
     session: SessionManager,
     endpointId: String,
     strokes: List<com.rts.rys.ryy.drawingtogether.drawing.model.Stroke>,
     stickers: List<com.rts.rys.ryy.drawingtogether.drawing.model.Sticker>,
     texts: List<com.rts.rys.ryy.drawingtogether.drawing.model.TextElement>,
+    background: BackgroundImage?,
 ) {
     if (session.state.value !is SessionState.Connected) return
-    if (strokes.isEmpty() && stickers.isEmpty() && texts.isEmpty()) return
+    val hasContent = strokes.isNotEmpty() || stickers.isNotEmpty() || texts.isNotEmpty()
+    if (!hasContent && background == null) return
     runCatching {
-        val uri = canvasToCacheUri(context, strokes, stickers, texts)
-        val pid = session.transport.sendFileTo(endpointId, uri)
-        session.transport.sendTo(endpointId, Frame.Snapshot(pid, hasPhoto = false, targetPeerId = ""))
+        if (hasContent) {
+            val uri = canvasToCacheUri(context, strokes, stickers, texts)
+            val pid = session.transport.sendFileTo(endpointId, uri)
+            session.transport.sendTo(
+                endpointId,
+                Frame.Snapshot(pid, hasPhoto = background != null, targetPeerId = ""),
+            )
+        }
+        if (background != null) {
+            val photoUri = bitmapToCacheUri(context, background.bitmap)
+            val photoPid = session.transport.sendFileTo(endpointId, photoUri)
+            val byteSize = context.contentResolver
+                .openAssetFileDescriptor(photoUri, "r")?.use { it.length } ?: 0L
+            session.transport.sendTo(
+                endpointId,
+                Frame.PhotoMeta(photoPid, byteSize, background.widthPx, background.heightPx, "image/jpeg", ""),
+            )
+        }
     }
 }
 
@@ -411,14 +434,6 @@ fun DrawingScreen(
     val myNick by session.nick.collectAsState()
     val canvasSelfNick = if (sessionState is SessionState.Connected) myNick.ifBlank { null } else null
 
-    // 교실 모드 사진 공유 정책(역할 기반): 호스트 사진은 비공개라 broadcast 안 함(조인자는 "가져오기"
-    // 로만 받음). 조인자 사진은 공유 — 스타 구조상 호스트에게만 가서 호스트의 "참여자 보기"에 표시되고
-    // 다른 조인자에겐 안 간다. 함께/모임 모드는 기존대로 공유. 호출 시점에 localRole 을 읽어 판단.
-    val suppressBgShare: () -> Boolean = {
-        mode == DrawMode.Classroom &&
-            session.transport.localRole == com.rts.rys.ryy.drawingtogether.transport.Role.Host
-    }
-
     // "저장 시 배경 합치기" 토글 변경 — 저장 다이얼로그에서 호출. 공유 캔버스인 함께 모드(Duo)
     // 에서만 동기화. 모임/교실은 각자 독립 캔버스·저장이므로 broadcast 하면 안 됨(남의 설정 덮어씀).
     val onMergeChange: (Boolean) -> Unit = { value ->
@@ -461,9 +476,9 @@ fun DrawingScreen(
         }
     }
 
-    // 교실 호스트: 새로 합류한 조인자에게 현재 내 캔버스(strokes-only, 사진 제외)를 1회 보내
+    // 교실 호스트: 새로 합류한 조인자에게 현재 내 캔버스(strokes/스티커/텍스트 + 사진)를 1회 보내
     // 그 조인자의 "방장 라이브뷰"(peerCanvases[host])를 초기 채운다. 라이브 이벤트는 합류 후
-    // 발생분만 오므로, 합류 전 호스트 그림이 안 보이던 갭을 메운다. 사진은 비공개라 미포함.
+    // 발생분만 오므로, 합류 전 호스트 그림·사진이 안 보이던 갭을 메운다.
     if (mode == DrawMode.Classroom) {
         LaunchedEffect(session) {
             val sent = mutableSetOf<PeerId>()
@@ -472,13 +487,14 @@ fun DrawingScreen(
                     com.rts.rys.ryy.drawingtogether.transport.Role.Host) {
                     peers.forEach { peer ->
                         if (peer.endpointId.isNotEmpty() && sent.add(peer.peerId)) {
-                            sendHostStrokesToJoiner(
+                            sendHostCanvasToJoiner(
                                 context = context,
                                 session = session,
                                 endpointId = peer.endpointId,
                                 strokes = vm.canvas.strokes.toList(),
                                 stickers = vm.canvas.stickers.toList(),
                                 texts = vm.canvas.texts.toList(),
+                                background = vm.canvas.background,
                             )
                         }
                     }
@@ -728,8 +744,9 @@ fun DrawingScreen(
                 }.onSuccess { image ->
                     vm.setBackground(image)
                     Toast.makeText(context, ASPECT_TOAST_TEXT, Toast.LENGTH_SHORT).show()
-                    // 교실 호스트만 사진 broadcast 억제(아래 suppressBgShare). 조인자/그 외 모드는 공유.
-                    if (!suppressBgShare()) shareBackgroundToPeer(context, session, image)
+                    // 모든 연결 모드에서 사진 공유. 교실은 호스트→전 조인자, 조인자→호스트(다른
+                    // 조인자엔 relay 안 됨). 호스트/조인자 모두 상대 화면에 사진이 보여야 한다.
+                    shareBackgroundToPeer(context, session, image)
                 }
             }
         }
@@ -749,8 +766,8 @@ fun DrawingScreen(
                 }.onSuccess { image ->
                     vm.setBackground(image)
                     Toast.makeText(context, ASPECT_TOAST_TEXT, Toast.LENGTH_SHORT).show()
-                    // 위 갤러리 경로와 동일 — 교실 호스트만 억제.
-                    if (!suppressBgShare()) shareBackgroundToPeer(context, session, image)
+                    // 위 갤러리 경로와 동일 — 모든 연결 모드에서 공유.
+                    shareBackgroundToPeer(context, session, image)
                 }
             }
         }
@@ -831,9 +848,8 @@ fun DrawingScreen(
                             label = "제거",
                             onClick = {
                                 vm.setBackground(null)
-                                // 사진을 공유하는 주체만 제거도 broadcast(교실 호스트는 공유 안 하므로 제거도 안 함).
-                                if (!suppressBgShare() &&
-                                    session.state.value is SessionState.Connected) {
+                                // 사진 제거도 상대에게 알림(교실: 호스트→조인자 또는 조인자→호스트).
+                                if (session.state.value is SessionState.Connected) {
                                     scope.launch {
                                         runCatching { session.transport.send(Frame.PhotoRemove()) }
                                     }
