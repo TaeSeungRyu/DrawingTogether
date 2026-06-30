@@ -7,6 +7,7 @@ import com.rts.rys.ryy.drawingtogether.drawing.model.DrawingEvent
 import com.rts.rys.ryy.drawingtogether.drawing.model.PeerId
 import com.rts.rys.ryy.drawingtogether.drawing.model.Sticker
 import com.rts.rys.ryy.drawingtogether.drawing.model.Stroke
+import com.rts.rys.ryy.drawingtogether.drawing.model.TextElement
 import com.rts.rys.ryy.drawingtogether.transport.ConnectedPeer
 import com.rts.rys.ryy.drawingtogether.transport.FileTransferEvent
 import com.rts.rys.ryy.drawingtogether.transport.Frame
@@ -75,6 +76,7 @@ data class IncomingSnapshotEvent(
     val senderPeerId: PeerId?,
     val strokes: List<Stroke>,
     val stickers: List<Sticker> = emptyList(),
+    val texts: List<TextElement> = emptyList(),
 )
 
 // 프로세스 전역 싱글톤. WorkStore와 동일한 패턴.
@@ -587,7 +589,7 @@ class SessionManager private constructor(
                 } ?: return@launch
                 val snapshot = FrameCodec.decodeCanvas(bytes)
                 _incomingSnapshot.tryEmit(
-                    IncomingSnapshotEvent(senderPeerId, snapshot.strokes, snapshot.stickers)
+                    IncomingSnapshotEvent(senderPeerId, snapshot.strokes, snapshot.stickers, snapshot.texts)
                 )
             }
         }

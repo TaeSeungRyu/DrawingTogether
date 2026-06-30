@@ -11,12 +11,15 @@ import com.rts.rys.ryy.drawingtogether.drawing.model.Sticker
 import com.rts.rys.ryy.drawingtogether.drawing.model.StickerId
 import com.rts.rys.ryy.drawingtogether.drawing.model.Stroke
 import com.rts.rys.ryy.drawingtogether.drawing.model.StrokeId
+import com.rts.rys.ryy.drawingtogether.drawing.model.TextElement
+import com.rts.rys.ryy.drawingtogether.drawing.model.TextId
 
-// 통합 undo 스택 항목 — stroke 와 스티커를 시간순으로 한 스택에 섞어 담아 "되돌리기" 가
+// 통합 undo 스택 항목 — stroke·스티커·텍스트를 시간순으로 한 스택에 섞어 담아 "되돌리기" 가
 // 종류 구분 없이 최근 *추가* 동작을 취소하게 한다.
 sealed interface UndoItem {
     data class StrokeRef(val id: StrokeId) : UndoItem
     data class StickerRef(val id: StickerId) : UndoItem
+    data class TextRef(val id: TextId) : UndoItem
 }
 
 // 모든 드로잉 이벤트(로컬 + 향후 원격)가 apply()를 통해 적용되는 캔버스 상태 컨테이너.
@@ -31,6 +34,10 @@ class CanvasState {
     // 배치된 스티커. stroke 와 별도 리스트지만 같은 정규화 좌표계를 쓴다.
     private val _stickers = mutableStateListOf<Sticker>()
     val stickers: List<Sticker> get() = _stickers
+
+    // 배치된 텍스트. 불변 요소 — 추가/삭제만 있고 변형 없음.
+    private val _texts = mutableStateListOf<TextElement>()
+    val texts: List<TextElement> get() = _texts
 
     // 완료된 *추가* 동작의 시간순 스택. "되돌리기" 버튼이 마지막 항목을 pop.
     // stroke·스티커를 섞어 담는 통합 undo — "함께 그리기" 모드라 자기/상대 구분 없이 모두 들어감.
@@ -78,17 +85,24 @@ class CanvasState {
     // 외부에서 들어온 snapshot 으로 stroke + 스티커를 전부 교체. "동기화" 버튼 응답을 받을 때 사용.
     // 일반 DrawingEvent 흐름과 달리 out-of-band — outboundEvents 로 흘려보내지 않으므로
     // 받는 쪽 단방향 적용용. 모든 상태를 비우고 받은 데이터로 재구성.
-    fun applySnapshot(strokes: List<Stroke>, stickers: List<Sticker> = emptyList()) {
+    fun applySnapshot(
+        strokes: List<Stroke>,
+        stickers: List<Sticker> = emptyList(),
+        texts: List<TextElement> = emptyList(),
+    ) {
         _strokes.clear()
         _openStrokes.clear()
         _stickers.clear()
+        _texts.clear()
         _undoStack.clear()
         _strokes.addAll(strokes)
         _stickers.addAll(stickers)
+        _texts.addAll(texts)
         // collaborative undo — 받은 stroke 들 시간순으로 undoStack 에 push.
-        // 스티커는 추가 순서를 알 수 없으니 stroke 뒤에 이어 push (대략적 시간순).
+        // 스티커·텍스트는 추가 순서를 알 수 없으니 stroke 뒤에 이어 push (대략적 시간순).
         strokes.forEach { _undoStack.add(UndoItem.StrokeRef(it.id)) }
         stickers.forEach { _undoStack.add(UndoItem.StickerRef(it.id)) }
+        texts.forEach { _undoStack.add(UndoItem.TextRef(it.id)) }
         bumpRevision()
     }
 
@@ -98,6 +112,7 @@ class CanvasState {
         _strokes.clear()
         _openStrokes.clear()
         _stickers.clear()
+        _texts.clear()
         _undoStack.clear()
         _background = null
         _backgroundColor = 0xFFFFFFFF.toInt()
@@ -130,6 +145,7 @@ class CanvasState {
                 _strokes.clear()
                 _openStrokes.clear()
                 _stickers.clear()
+                _texts.clear()
                 _undoStack.clear()
                 bumpRevision()
             }
@@ -174,6 +190,27 @@ class CanvasState {
                 if (index >= 0) {
                     _stickers.removeAt(index)
                     _undoStack.remove(UndoItem.StickerRef(event.stickerId))
+                }
+            }
+            is DrawingEvent.PlaceText -> {
+                _texts.add(
+                    TextElement(
+                        id = event.textId,
+                        authorId = event.authorId,
+                        text = event.text,
+                        cx = event.cx,
+                        cy = event.cy,
+                        sizeFrac = event.sizeFrac,
+                        colorArgb = event.colorArgb,
+                    )
+                )
+                _undoStack.add(UndoItem.TextRef(event.textId))
+            }
+            is DrawingEvent.RemoveText -> {
+                val index = _texts.indexOfFirst { it.id == event.textId }
+                if (index >= 0) {
+                    _texts.removeAt(index)
+                    _undoStack.remove(UndoItem.TextRef(event.textId))
                 }
             }
         }

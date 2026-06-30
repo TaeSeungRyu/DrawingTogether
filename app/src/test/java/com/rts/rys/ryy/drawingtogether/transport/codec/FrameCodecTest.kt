@@ -11,6 +11,8 @@ import com.rts.rys.ryy.drawingtogether.drawing.model.StickerId
 import com.rts.rys.ryy.drawingtogether.drawing.model.StickerKey
 import com.rts.rys.ryy.drawingtogether.drawing.model.Stroke
 import com.rts.rys.ryy.drawingtogether.drawing.model.StrokeId
+import com.rts.rys.ryy.drawingtogether.drawing.model.TextElement
+import com.rts.rys.ryy.drawingtogether.drawing.model.TextId
 import com.rts.rys.ryy.drawingtogether.drawing.model.ToolKind
 import com.rts.rys.ryy.drawingtogether.drawing.model.ToolSettings
 import com.rts.rys.ryy.drawingtogether.transport.Frame
@@ -216,6 +218,17 @@ class FrameCodecTest {
                     cy = 0.6f,
                     scale = 0.2f,
                     rotationDeg = 30f,
+                ),
+            ),
+            texts = listOf(
+                TextElement(
+                    id = TextId("t1"),
+                    authorId = PeerId.Local,
+                    text = "안녕\nworld",
+                    cx = 0.4f,
+                    cy = 0.7f,
+                    sizeFrac = 0.06f,
+                    colorArgb = 0xFF00AA00.toInt(),
                 ),
             ),
         )

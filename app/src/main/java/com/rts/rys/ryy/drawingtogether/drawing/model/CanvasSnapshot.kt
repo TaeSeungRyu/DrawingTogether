@@ -8,4 +8,5 @@ import kotlinx.serialization.Serializable
 data class CanvasSnapshot(
     val strokes: List<Stroke>,
     val stickers: List<Sticker> = emptyList(),
+    val texts: List<TextElement> = emptyList(),
 )

@@ -21,6 +21,8 @@ import com.rts.rys.ryy.drawingtogether.drawing.model.StickerId
 import com.rts.rys.ryy.drawingtogether.drawing.model.StickerKey
 import com.rts.rys.ryy.drawingtogether.drawing.model.Stroke
 import com.rts.rys.ryy.drawingtogether.drawing.model.StrokeId
+import com.rts.rys.ryy.drawingtogether.drawing.model.TextElement
+import com.rts.rys.ryy.drawingtogether.drawing.model.TextId
 import com.rts.rys.ryy.drawingtogether.drawing.model.ToolKind
 import com.rts.rys.ryy.drawingtogether.drawing.model.ToolSettings
 import com.rts.rys.ryy.drawingtogether.photo.EdgeDetector
@@ -96,6 +98,7 @@ class DrawingViewModel : ViewModel() {
     fun startRecording() = recorder.start(
         initialStrokes = canvas.strokes.toList(),
         initialStickers = canvas.stickers.toList(),
+        initialTexts = canvas.texts.toList(),
         initialBgColor = canvas.backgroundColor,
         initialBgPhoto = canvas.background?.bitmap,
     )
@@ -212,9 +215,13 @@ class DrawingViewModel : ViewModel() {
         }
     }
 
-    // "동기화" — 상대 캔버스 snapshot 으로 내 stroke + 스티커를 전부 교체. 사진 배경은 별도 경로.
-    fun applyRemoteSnapshot(strokes: List<Stroke>, stickers: List<Sticker> = emptyList()) {
-        canvas.applySnapshot(strokes, stickers)
+    // "동기화" — 상대 캔버스 snapshot 으로 내 stroke + 스티커 + 텍스트를 전부 교체. 사진 배경은 별도 경로.
+    fun applyRemoteSnapshot(
+        strokes: List<Stroke>,
+        stickers: List<Sticker> = emptyList(),
+        texts: List<TextElement> = emptyList(),
+    ) {
+        canvas.applySnapshot(strokes, stickers, texts)
     }
 
     fun selectColor(argb: Int) {
@@ -229,6 +236,11 @@ class DrawingViewModel : ViewModel() {
     // 펜 자유 곡선 모드로 전환 — 도형/스티커/지우개에서 빠져나옴. 붓 종류·색은 유지.
     fun selectPenFreehand() {
         tool = tool.copy(kind = ToolKind.Pen, shape = ShapeMode.None)
+    }
+
+    // 텍스트 모드로 전환 — 빈 곳을 탭하면 입력 시트가 뜨고, 확인 시 그 위치에 굳는다.
+    fun selectText() {
+        tool = tool.copy(kind = ToolKind.Text)
     }
 
     // 지우개 버튼은 토글 — 지우개 상태에서 다시 누르면 펜으로 돌아온다.
@@ -364,6 +376,7 @@ class DrawingViewModel : ViewModel() {
         when (val item = canvas.lastUndoable() ?: return) {
             is UndoItem.StrokeRef -> emit(DrawingEvent.Undo(nextSeq(), author, item.id))
             is UndoItem.StickerRef -> emit(DrawingEvent.RemoveSticker(nextSeq(), author, item.id))
+            is UndoItem.TextRef -> emit(DrawingEvent.RemoveText(nextSeq(), author, item.id))
         }
     }
 
@@ -392,6 +405,22 @@ class DrawingViewModel : ViewModel() {
 
     fun removeSticker(id: StickerId) {
         emit(DrawingEvent.RemoveSticker(nextSeq(), author, id))
+    }
+
+    // 텍스트 배치 — 입력 시트 확인 시 1회 발행. 빈 문자열은 무시. 색은 시트에서 정한 값.
+    fun placeText(cx: Float, cy: Float, text: String, sizeFrac: Float, colorArgb: Int) {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return
+        emit(
+            DrawingEvent.PlaceText(
+                nextSeq(), author, TextId.random(),
+                text = trimmed, cx = cx, cy = cy, sizeFrac = sizeFrac, colorArgb = colorArgb,
+            )
+        )
+    }
+
+    fun removeText(id: TextId) {
+        emit(DrawingEvent.RemoveText(nextSeq(), author, id))
     }
 
     fun clearAll() {

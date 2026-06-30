@@ -52,6 +52,7 @@ import com.rts.rys.ryy.drawingtogether.drawing.model.BackgroundImage
 import com.rts.rys.ryy.drawingtogether.drawing.model.Timelapse
 import com.rts.rys.ryy.drawingtogether.drawing.model.TimelapseOp
 import com.rts.rys.ryy.drawingtogether.ui.canvas.drawSticker
+import com.rts.rys.ryy.drawingtogether.ui.canvas.drawText
 import com.rts.rys.ryy.drawingtogether.ui.canvas.drawStroke
 import com.rts.rys.ryy.drawingtogether.works.TimelapseStore
 import com.rts.rys.ryy.drawingtogether.works.TimelapseVideoExporter
@@ -267,6 +268,7 @@ private fun ReplayCanvas(canvas: CanvasState, modifier: Modifier = Modifier) {
                 canvas.strokes.forEach { drawStroke(it, size, density) }
                 canvas.openStrokes.values.forEach { drawStroke(it, size, density) }
                 canvas.stickers.forEach { drawSticker(it, size) }
+                canvas.texts.forEach { drawText(it, size) }
             }
         }
     }

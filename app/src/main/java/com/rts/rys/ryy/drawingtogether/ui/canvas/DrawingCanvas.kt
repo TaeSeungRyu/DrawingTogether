@@ -35,6 +35,8 @@ import com.rts.rys.ryy.drawingtogether.drawing.model.Point as DrawPoint
 import com.rts.rys.ryy.drawingtogether.drawing.model.Sticker
 import com.rts.rys.ryy.drawingtogether.drawing.model.StickerId
 import com.rts.rys.ryy.drawingtogether.drawing.model.StrokeId
+import com.rts.rys.ryy.drawingtogether.drawing.model.TextElement
+import com.rts.rys.ryy.drawingtogether.drawing.model.TextId
 import com.rts.rys.ryy.drawingtogether.drawing.model.ToolKind
 import com.rts.rys.ryy.drawingtogether.drawing.model.ToolSettings
 import kotlin.math.atan2
@@ -72,6 +74,9 @@ fun DrawingCanvas(
     onTransformStickerLocal: (StickerId, Float, Float, Float, Float) -> Unit = { _, _, _, _, _ -> },
     onCommitStickerTransform: (StickerId, Float, Float, Float, Float) -> Unit = { _, _, _, _, _ -> },
     onRemoveSticker: (StickerId) -> Unit = {},
+    // 텍스트 콜백 — 텍스트 모드에서만 호출. 빈 곳 탭 → 그 위치에 입력 시트 요청, X 핸들 → 삭제.
+    onRequestText: (Float, Float) -> Unit = { _, _ -> },
+    onRemoveText: (TextId) -> Unit = {},
 ) {
     val density = LocalDensity.current.density
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
@@ -81,9 +86,12 @@ fun DrawingCanvas(
     var selectedStickerId by remember { mutableStateOf<StickerId?>(null) }
     // 스포이드 조준 위치 — 누르는 동안만 non-null. 십자 커서를 그 위치에 그린다.
     var eyedropperPos by remember { mutableStateOf<Offset?>(null) }
+    // 선택된 텍스트. 텍스트 모드에서만 의미 — 선택 시 삭제(X) 핸들이 뜬다.
+    var selectedTextId by remember { mutableStateOf<TextId?>(null) }
     val selectionColor = MaterialTheme.colorScheme.primary
     val isSticker = tool.kind == ToolKind.Sticker
     val isEyedropper = tool.kind == ToolKind.Eyedropper
+    val isText = tool.kind == ToolKind.Text
 
     // 완료된 stroke 비트맵 캐시 — contentRevision(완료 stroke 추가/제거/Clear/snapshot) 또는 캔버스
     // 크기가 바뀔 때만 다시 렌더. 색·도구 변경이나 진행 중 stroke 프레임에선 캐시를 그대로 재사용해
@@ -111,6 +119,15 @@ fun DrawingCanvas(
                         onTransformLocal = onTransformStickerLocal,
                         onCommit = onCommitStickerTransform,
                         onRemove = onRemoveSticker,
+                    )
+                } else if (isText) {
+                    textGestures(
+                        texts = { state.texts },
+                        density = density,
+                        selectedId = { selectedTextId },
+                        setSelected = { selectedTextId = it },
+                        onRequestText = onRequestText,
+                        onRemove = onRemoveText,
                     )
                 } else if (isEyedropper) {
                     // 스포이드 — 누른 채 드래그하면 조준 십자가 따라오고, 떼는 순간 그 지점 색을 집는다.
@@ -200,12 +217,19 @@ fun DrawingCanvas(
         state.openStrokes.values.forEach { drawStroke(it, canvasSize, density) }
         // 4. 스티커 (stroke 위)
         state.stickers.forEach { drawSticker(it, canvasSize) }
+        // 4.5 텍스트 (스티커 위)
+        state.texts.forEach { drawText(it, canvasSize) }
         // 5. 안내선 (stroke/스티커 위, 커서 아래)
         drawGuides(canvasSize, density, guideCross, guideGridCells)
         // 6. 스티커 선택 핸들 (스티커 모드 + 선택됨)
         if (isSticker) {
             val sel = state.stickers.firstOrNull { it.id == selectedStickerId }
             if (sel != null) drawStickerSelection(sel, canvasSize, density, selectionColor)
+        }
+        // 6.5 텍스트 선택 핸들 (텍스트 모드 + 선택됨)
+        if (isText) {
+            val sel = state.texts.firstOrNull { it.id == selectedTextId }
+            if (sel != null) drawTextSelection(sel, canvasSize, density, selectionColor)
         }
         // 7. 커서 인디케이터 (그리기 모드)
         cursor?.let { pos ->
@@ -465,6 +489,90 @@ private fun DrawScope.drawStickerSelection(
         drawLine(Color.White, Offset(x - d, y - d), Offset(x + d, y + d), strokeWidth = line * 1.3f)
         drawLine(Color.White, Offset(x - d, y + d), Offset(x + d, y - d), strokeWidth = line * 1.3f)
     }
+}
+
+// 텍스트 편집 제스처 루프. 불변·삭제전용이라 이동/크기 변경 없음. 한 번의 down→up 마다:
+//  - 선택된 텍스트의 X 핸들 → 삭제
+//  - 다른 텍스트 본체 → 선택(X 핸들 표시)
+//  - 빈 곳 → 그 위치에 입력 시트 요청 (실제 배치는 시트 확인 후)
+private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.textGestures(
+    texts: () -> List<TextElement>,
+    density: Float,
+    selectedId: () -> TextId?,
+    setSelected: (TextId?) -> Unit,
+    onRequestText: (Float, Float) -> Unit,
+    onRemove: (TextId) -> Unit,
+) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        down.consume()
+        val w = size.width.toFloat().coerceAtLeast(1f)
+        val h = size.height.toFloat().coerceAtLeast(1f)
+        val handleRadius = 18f * density
+        val list = texts()
+
+        // 1. 선택된 텍스트의 X 핸들(우상단) 검사.
+        val selected = list.firstOrNull { it.id == selectedId() }
+        if (selected != null) {
+            val (halfW, halfH) = textHalfSizePx(selected, size)
+            val handleX = selected.cx * w + halfW
+            val handleY = selected.cy * h - halfH
+            if (hypot(down.position.x - handleX, down.position.y - handleY) <= handleRadius) {
+                onRemove(selected.id)
+                setSelected(null)
+                drainGesture()
+                return@awaitEachGesture
+            }
+        }
+
+        // 2. 본체 hit-test (위에 그려진 것 우선 = 역순).
+        val hit = list.lastOrNull { t ->
+            val (halfW, halfH) = textHalfSizePx(t, size)
+            val lx = down.position.x - t.cx * w
+            val ly = down.position.y - t.cy * h
+            kotlin.math.abs(lx) <= halfW && kotlin.math.abs(ly) <= halfH
+        }
+        if (hit != null) {
+            setSelected(hit.id)
+        } else {
+            // 빈 곳 → 입력 시트 요청. 선택 해제.
+            setSelected(null)
+            val cx = (down.position.x / w).coerceIn(0f, 1f)
+            val cy = (down.position.y / h).coerceIn(0f, 1f)
+            onRequestText(cx, cy)
+        }
+        drainGesture()
+    }
+}
+
+// 텍스트 선택 오버레이 — 바운딩 박스 + 우상단 삭제(X) 핸들. 회전 없음.
+private fun DrawScope.drawTextSelection(
+    text: TextElement,
+    canvasSize: IntSize,
+    density: Float,
+    color: Color,
+) {
+    if (canvasSize.width <= 0 || canvasSize.height <= 0) return
+    val (halfW, halfH) = textHalfSizePx(text, canvasSize)
+    val cx = text.cx * canvasSize.width
+    val cy = text.cy * canvasSize.height
+    val handleR = 12f * density
+    val line = 1.5f * density
+    val pad = 6f * density
+
+    drawRect(
+        color = color,
+        topLeft = Offset(cx - halfW - pad, cy - halfH - pad),
+        size = Size((halfW + pad) * 2f, (halfH + pad) * 2f),
+        style = DrawStroke(width = line),
+    )
+    // 삭제 핸들 (우상단) + ×.
+    val hx = cx + halfW + pad
+    val hy = cy - halfH - pad
+    drawCircle(color = Color(0xFFE53935), radius = handleR, center = Offset(hx, hy))
+    val d = handleR * 0.45f
+    drawLine(Color.White, Offset(hx - d, hy - d), Offset(hx + d, hy + d), strokeWidth = line * 1.3f)
+    drawLine(Color.White, Offset(hx - d, hy + d), Offset(hx + d, hy - d), strokeWidth = line * 1.3f)
 }
 
 // 안내선 오버레이 — 격자(gridCells×gridCells 칸) + 중앙 십자선. 독립 토글.

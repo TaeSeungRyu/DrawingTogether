@@ -29,6 +29,7 @@ sealed interface TimelapseOp {
     data class Snapshot(
         val strokes: List<Stroke>,
         val stickers: List<Sticker>,
+        val texts: List<TextElement> = emptyList(),
     ) : TimelapseOp
 }
 

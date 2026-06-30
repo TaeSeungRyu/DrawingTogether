@@ -89,4 +89,28 @@ sealed interface DrawingEvent {
         override val authorId: PeerId,
         val stickerId: StickerId,
     ) : DrawingEvent
+
+    // 텍스트 배치 — 입력 시트 확인 시 1회 발행. 불변 요소라 이후 수정/이동 이벤트는 없다.
+    // 통합 undo 스택에 push 된다.
+    @Serializable
+    @SerialName("place_text")
+    data class PlaceText(
+        override val seq: Long,
+        override val authorId: PeerId,
+        val textId: TextId,
+        val text: String,
+        val cx: Float,
+        val cy: Float,
+        val sizeFrac: Float,
+        val colorArgb: Int,
+    ) : DrawingEvent
+
+    // 텍스트 삭제 — X 핸들 또는 통합 undo(텍스트가 마지막 추가물일 때)로 발생.
+    @Serializable
+    @SerialName("remove_text")
+    data class RemoveText(
+        override val seq: Long,
+        override val authorId: PeerId,
+        val textId: TextId,
+    ) : DrawingEvent
 }

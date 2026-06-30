@@ -31,7 +31,7 @@ class TimelapsePlayer(
             is TimelapseOp.Draw -> canvas.apply(op.event)
             is TimelapseOp.BackgroundColor -> canvas.setBackgroundColor(op.argb)
             is TimelapseOp.BackgroundPhoto -> canvas.setBackground(op.ref?.let(loadBackground))
-            is TimelapseOp.Snapshot -> canvas.applySnapshot(op.strokes, op.stickers)
+            is TimelapseOp.Snapshot -> canvas.applySnapshot(op.strokes, op.stickers, op.texts)
         }
     }
 

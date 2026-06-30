@@ -52,6 +52,7 @@ fun Toolbar(
     onShape: (ShapeMode) -> Unit,
     onToggleFill: () -> Unit,
     onSticker: (StickerKey) -> Unit,
+    onText: () -> Unit,
     onPen: () -> Unit,
     onStrokeWidth: (Float) -> Unit,
     onUndo: () -> Unit,
@@ -153,6 +154,18 @@ fun Toolbar(
                     StickerPreview(
                         key = tool.stickerKey ?: StickerKey.Heart,
                         modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                ToolIconButton(
+                    label = "텍스트",
+                    selected = tool.kind == ToolKind.Text,
+                    onClick = onText,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(
+                        text = "T",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 ToolIconButton(

@@ -8,6 +8,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import com.rts.rys.ryy.drawingtogether.drawing.model.DrawingEvent
 import com.rts.rys.ryy.drawingtogether.drawing.model.Sticker
 import com.rts.rys.ryy.drawingtogether.drawing.model.Stroke
+import com.rts.rys.ryy.drawingtogether.drawing.model.TextElement
 import com.rts.rys.ryy.drawingtogether.drawing.model.TimelapseEntry
 import com.rts.rys.ryy.drawingtogether.drawing.model.TimelapseOp
 
@@ -34,6 +35,7 @@ class TimelapseRecorder {
     fun start(
         initialStrokes: List<Stroke> = emptyList(),
         initialStickers: List<Sticker> = emptyList(),
+        initialTexts: List<TextElement> = emptyList(),
         initialBgColor: Int = 0xFFFFFFFF.toInt(),
         initialBgPhoto: ImageBitmap? = null,
     ) {
@@ -47,8 +49,8 @@ class TimelapseRecorder {
             backgrounds.add(initialBgPhoto)
             entries.add(TimelapseEntry(0L, TimelapseOp.BackgroundPhoto("bg-0")))
         }
-        if (initialStrokes.isNotEmpty() || initialStickers.isNotEmpty()) {
-            entries.add(TimelapseEntry(0L, TimelapseOp.Snapshot(initialStrokes, initialStickers)))
+        if (initialStrokes.isNotEmpty() || initialStickers.isNotEmpty() || initialTexts.isNotEmpty()) {
+            entries.add(TimelapseEntry(0L, TimelapseOp.Snapshot(initialStrokes, initialStickers, initialTexts)))
         }
     }
 

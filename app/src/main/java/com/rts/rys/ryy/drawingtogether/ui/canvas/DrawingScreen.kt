@@ -158,13 +158,14 @@ private suspend fun canvasToCacheUri(
     context: android.content.Context,
     strokes: List<com.rts.rys.ryy.drawingtogether.drawing.model.Stroke>,
     stickers: List<com.rts.rys.ryy.drawingtogether.drawing.model.Sticker>,
+    texts: List<com.rts.rys.ryy.drawingtogether.drawing.model.TextElement>,
 ): android.net.Uri = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
     val dir = java.io.File(context.cacheDir, "snapshots").apply { mkdirs() }
     val file = java.io.File(dir, "canvas_${System.currentTimeMillis()}.cbor")
     file.outputStream().use { out ->
         out.write(
             com.rts.rys.ryy.drawingtogether.transport.codec.FrameCodec.encodeCanvas(
-                com.rts.rys.ryy.drawingtogether.drawing.model.CanvasSnapshot(strokes, stickers)
+                com.rts.rys.ryy.drawingtogether.drawing.model.CanvasSnapshot(strokes, stickers, texts)
             )
         )
     }
@@ -184,11 +185,12 @@ private suspend fun broadcastMyCanvasAsPeer(
     session: SessionManager,
     strokes: List<com.rts.rys.ryy.drawingtogether.drawing.model.Stroke>,
     stickers: List<com.rts.rys.ryy.drawingtogether.drawing.model.Sticker>,
+    texts: List<com.rts.rys.ryy.drawingtogether.drawing.model.TextElement>,
     background: BackgroundImage?,
 ) {
     if (session.state.value !is SessionState.Connected) return
     runCatching {
-        val strokesUri = canvasToCacheUri(context, strokes, stickers)
+        val strokesUri = canvasToCacheUri(context, strokes, stickers, texts)
         val strokesPayloadId = session.transport.sendFile(strokesUri)
         session.transport.send(
             Frame.Snapshot(
@@ -237,12 +239,13 @@ private suspend fun respondToSnapshotRequest(
     targetPeerId: String,
     strokes: List<com.rts.rys.ryy.drawingtogether.drawing.model.Stroke>,
     stickers: List<com.rts.rys.ryy.drawingtogether.drawing.model.Sticker>,
+    texts: List<com.rts.rys.ryy.drawingtogether.drawing.model.TextElement>,
     background: BackgroundImage?,
 ) {
     if (session.state.value !is SessionState.Connected) return
     runCatching {
-        // 1) strokes + 스티커 → FILE + Snapshot 메타
-        val strokesUri = canvasToCacheUri(context, strokes, stickers)
+        // 1) strokes + 스티커 + 텍스트 → FILE + Snapshot 메타
+        val strokesUri = canvasToCacheUri(context, strokes, stickers, texts)
         val strokesPayloadId = session.transport.sendFile(strokesUri)
         session.transport.send(
             Frame.Snapshot(
@@ -292,6 +295,8 @@ fun DrawingScreen(
     var showBgColorPicker by remember { mutableStateOf(false) }
     // 기록 중 뒤로가기 시 저장/폐기 확인.
     var showRecordBackConfirm by remember { mutableStateOf(false) }
+    // 텍스트 입력 시트 — 캔버스 빈 곳 탭 시 그 정규화 좌표(nx,ny)를 담아 연다. null = 닫힘.
+    var pendingTextPoint by remember { mutableStateOf<Pair<Float, Float>?>(null) }
 
     // 타임랩스 저장 — 인메모리 로그 + 종료 상태 썸네일을 TimelapseStore 에 기록.
     // 썸네일(PngComposer)·디스크 쓰기는 백그라운드에서 — 메인 스레드 프리징(종료 시 멈춤) 방지.
@@ -300,13 +305,14 @@ fun DrawingScreen(
         val recorded = vm.finishRecording() ?: return@saveTimelapse
         val strokesCopy = vm.canvas.strokes.toList()
         val stickersCopy = vm.canvas.stickers.toList()
+        val textsCopy = vm.canvas.texts.toList()
         val bg = vm.canvas.background
         val bgColor = vm.canvas.backgroundColor
         scope.launch {
             val ok = runCatching {
                 val thumb = withContext(Dispatchers.Default) {
                     val snap = CanvasState().apply {
-                        applySnapshot(strokesCopy, stickersCopy)
+                        applySnapshot(strokesCopy, stickersCopy, textsCopy)
                         setBackground(bg)
                         setBackgroundColor(bgColor)
                     }
@@ -518,6 +524,7 @@ fun DrawingScreen(
                         session = session,
                         strokes = vm.canvas.strokes.toList(),
                         stickers = vm.canvas.stickers.toList(),
+                        texts = vm.canvas.texts.toList(),
                         background = vm.canvas.background,
                     )
                 }
@@ -540,6 +547,7 @@ fun DrawingScreen(
                 targetPeerId = request.requesterPeerId.value,
                 strokes = vm.canvas.strokes.toList(),
                 stickers = vm.canvas.stickers.toList(),
+                texts = vm.canvas.texts.toList(),
                 background = vm.canvas.background,
             )
         }
@@ -552,13 +560,13 @@ fun DrawingScreen(
     LaunchedEffect(vm, session) {
         session.incomingSnapshot.collect { event ->
             if (mode != DrawMode.Party) {
-                vm.applyRemoteSnapshot(event.strokes, event.stickers)
+                vm.applyRemoteSnapshot(event.strokes, event.stickers, event.texts)
                 return@collect
             }
             val sender = event.senderPeerId
             if (sender == null) {
                 // 동기화 응답의 strokes 부분. 배경까지 도착하면 broadcast.
-                vm.applyRemoteSnapshot(event.strokes, event.stickers)
+                vm.applyRemoteSnapshot(event.strokes, event.stickers, event.texts)
                 syncGotStrokes = true
                 if (syncGotBackground) {
                     syncGotStrokes = false
@@ -568,6 +576,7 @@ fun DrawingScreen(
                         session = session,
                         strokes = vm.canvas.strokes.toList(),
                         stickers = vm.canvas.stickers.toList(),
+                        texts = vm.canvas.texts.toList(),
                         background = vm.canvas.background,
                     )
                 }
@@ -575,7 +584,7 @@ fun DrawingScreen(
                 val peerCanvas = vm.peerCanvases.getOrPut(sender) {
                     com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState()
                 }
-                peerCanvas.applySnapshot(event.strokes, event.stickers)
+                peerCanvas.applySnapshot(event.strokes, event.stickers, event.texts)
             }
         }
     }
@@ -786,13 +795,18 @@ fun DrawingScreen(
                     isLandscape = isLandscape,
                     selfNick = canvasSelfNick,
                     modifier = m.background(MaterialTheme.colorScheme.surfaceVariant),
+                    onRequestText = { nx, ny -> pendingTextPoint = nx to ny },
                 )
             } else {
                 Box(
                     modifier = m.background(MaterialTheme.colorScheme.surfaceVariant),
                     contentAlignment = Alignment.Center,
                 ) {
-                    MyCanvasContent(vm = vm, selfNick = canvasSelfNick)
+                    MyCanvasContent(
+                        vm = vm,
+                        selfNick = canvasSelfNick,
+                        onRequestText = { nx, ny -> pendingTextPoint = nx to ny },
+                    )
                 }
             }
         }
@@ -811,6 +825,7 @@ fun DrawingScreen(
                 onShape = vm::setShape,
                 onToggleFill = vm::toggleFill,
                 onSticker = vm::selectSticker,
+                onText = vm::selectText,
                 onPen = vm::selectPenFreehand,
                 onStrokeWidth = vm::setStrokeWidth,
                 onUndo = vm::undoLastLocal,
@@ -1015,6 +1030,17 @@ fun DrawingScreen(
         )
     }
 
+    // 텍스트 입력 시트 — 확인 시 탭 위치에 현재 펜 색으로 텍스트를 굳힌다.
+    pendingTextPoint?.let { (nx, ny) ->
+        TextInputSheet(
+            onConfirm = { text, sizeFrac ->
+                vm.placeText(nx, ny, text, sizeFrac, vm.tool.colorArgb)
+                pendingTextPoint = null
+            },
+            onDismiss = { pendingTextPoint = null },
+        )
+    }
+
     if (showRecordBackConfirm) {
         AlertDialog(
             onDismissRequest = { showRecordBackConfirm = false },
@@ -1105,7 +1131,11 @@ fun DrawingScreen(
 // (트레이드오프: 자기 캔버스 비율과 미니 뷰 슬롯 비율이 다르면 같은 stroke 가 모양이 약간
 // 다르게 보임. 사진 비율 letterbox 의 자연스러움을 우선.)
 @Composable
-private fun MyCanvasContent(vm: DrawingViewModel, selfNick: String? = null) {
+private fun MyCanvasContent(
+    vm: DrawingViewModel,
+    selfNick: String? = null,
+    onRequestText: (Float, Float) -> Unit = { _, _ -> },
+) {
     val bg = vm.canvas.background
     val density = LocalDensity.current.density
     val context = LocalContext.current
@@ -1136,6 +1166,8 @@ private fun MyCanvasContent(vm: DrawingViewModel, selfNick: String? = null) {
             onTransformStickerLocal = vm::transformStickerLocal,
             onCommitStickerTransform = vm::commitStickerTransform,
             onRemoveSticker = vm::removeSticker,
+            onRequestText = onRequestText,
+            onRemoveText = vm::removeText,
         )
         // 내 닉네임 — 우측 상단 반투명 칩. 사진/그림 위에서도 읽히게 surface 배경 + 회색 글자.
         // pointerInput 없으므로 그리기 터치는 아래 캔버스가 받음.
@@ -1212,6 +1244,7 @@ private fun PartyCanvasArea(
     isLandscape: Boolean,
     selfNick: String? = null,
     modifier: Modifier = Modifier,
+    onRequestText: (Float, Float) -> Unit = { _, _ -> },
 ) {
     if (isLandscape) {
         Row(modifier = modifier) {
@@ -1221,7 +1254,7 @@ private fun PartyCanvasArea(
                     .fillMaxHeight(),
                 contentAlignment = Alignment.Center,
             ) {
-                MyCanvasContent(vm = vm, selfNick = selfNick)
+                MyCanvasContent(vm = vm, selfNick = selfNick, onRequestText = onRequestText)
             }
             Column(
                 modifier = Modifier
@@ -1245,7 +1278,7 @@ private fun PartyCanvasArea(
                     .fillMaxWidth(),
                 contentAlignment = Alignment.Center,
             ) {
-                MyCanvasContent(vm = vm, selfNick = selfNick)
+                MyCanvasContent(vm = vm, selfNick = selfNick, onRequestText = onRequestText)
             }
             Row(
                 modifier = Modifier

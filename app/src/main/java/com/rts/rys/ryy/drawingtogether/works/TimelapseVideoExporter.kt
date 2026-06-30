@@ -27,6 +27,7 @@ import com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState
 import com.rts.rys.ryy.drawingtogether.drawing.model.BackgroundImage
 import com.rts.rys.ryy.drawingtogether.drawing.model.TimelapseOp
 import com.rts.rys.ryy.drawingtogether.ui.canvas.drawSticker
+import com.rts.rys.ryy.drawingtogether.ui.canvas.drawText
 import com.rts.rys.ryy.drawingtogether.ui.canvas.drawStroke
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -213,7 +214,7 @@ object TimelapseVideoExporter {
             is TimelapseOp.Draw -> canvas.apply(op.event)
             is TimelapseOp.BackgroundColor -> canvas.setBackgroundColor(op.argb)
             is TimelapseOp.BackgroundPhoto -> canvas.setBackground(op.ref?.let(bgMap::get))
-            is TimelapseOp.Snapshot -> canvas.applySnapshot(op.strokes, op.stickers)
+            is TimelapseOp.Snapshot -> canvas.applySnapshot(op.strokes, op.stickers, op.texts)
         }
     }
 
@@ -236,6 +237,7 @@ object TimelapseVideoExporter {
             // 진행 중 stroke 도 그려야 "그려지는 과정"이 보인다(이게 빠지면 획이 끝날 때 통째로 팝업).
             state.openStrokes.values.forEach { drawStroke(it, size, density) }
             state.stickers.forEach { drawSticker(it, size) }
+            state.texts.forEach { drawText(it, size) }
         }
         return image.asAndroidBitmap()
     }

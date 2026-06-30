@@ -6,6 +6,7 @@ import com.rts.rys.ryy.drawingtogether.drawing.model.Point
 import com.rts.rys.ryy.drawingtogether.drawing.model.StickerId
 import com.rts.rys.ryy.drawingtogether.drawing.model.StickerKey
 import com.rts.rys.ryy.drawingtogether.drawing.model.StrokeId
+import com.rts.rys.ryy.drawingtogether.drawing.model.TextId
 import com.rts.rys.ryy.drawingtogether.drawing.model.ToolKind
 import com.rts.rys.ryy.drawingtogether.drawing.model.ToolSettings
 import org.junit.Assert.assertEquals
@@ -216,5 +217,56 @@ class CanvasStateTest {
         assertTrue(state.stickers.isEmpty())
         assertTrue(state.strokes.isEmpty())
         assertFalse(state.canUndo)
+    }
+
+    private fun placeText(id: TextId, text: String = "hi", cx: Float = 0.5f, cy: Float = 0.5f) =
+        DrawingEvent.PlaceText(next(), local, id, text, cx, cy, 0.06f, 0xFF000000.toInt())
+
+    @Test
+    fun `PlaceText adds text and pushes onto undo stack`() {
+        val state = CanvasState()
+        val t = TextId("t1")
+
+        state.apply(placeText(t, "안녕"))
+
+        assertEquals(1, state.texts.size)
+        assertEquals("안녕", state.texts[0].text)
+        assertEquals(UndoItem.TextRef(t), state.lastUndoable())
+    }
+
+    @Test
+    fun `RemoveText drops text and undo ref`() {
+        val state = CanvasState()
+        val t = TextId("t1")
+        state.apply(placeText(t))
+
+        state.apply(DrawingEvent.RemoveText(next(), local, t))
+
+        assertTrue(state.texts.isEmpty())
+        assertFalse(state.canUndo)
+    }
+
+    @Test
+    fun `Clear wipes texts too`() {
+        val state = CanvasState()
+        state.apply(placeText(TextId("t1")))
+
+        state.apply(DrawingEvent.Clear(next(), local))
+
+        assertTrue(state.texts.isEmpty())
+        assertFalse(state.canUndo)
+    }
+
+    @Test
+    fun `applySnapshot restores texts and undo refs`() {
+        val state = CanvasState()
+        state.apply(placeText(TextId("t1")))
+
+        val texts = state.texts.toList()
+        val fresh = CanvasState()
+        fresh.applySnapshot(strokes = emptyList(), stickers = emptyList(), texts = texts)
+
+        assertEquals(1, fresh.texts.size)
+        assertEquals(UndoItem.TextRef(TextId("t1")), fresh.lastUndoable())
     }
 }
