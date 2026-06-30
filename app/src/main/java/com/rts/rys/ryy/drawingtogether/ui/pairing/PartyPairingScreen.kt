@@ -175,6 +175,7 @@ fun PartyPairingScreen(
                 PartyRole.NotPicked -> RolePicker(
                     enabled = permissionsGranted && nick.isNotBlank(),
                     modeLabel = modeLabel,
+                    maxJoiners = mode.maxJoiners,
                     onHost = { role = PartyRole.Host },
                     onJoiner = { role = PartyRole.Joiner },
                 )
@@ -290,6 +291,7 @@ fun PartyPairingScreen(
 private fun ColumnScope.RolePicker(
     enabled: Boolean,
     modeLabel: String,
+    maxJoiners: Int,
     onHost: () -> Unit,
     onJoiner: () -> Unit,
 ) {
@@ -313,7 +315,7 @@ private fun ColumnScope.RolePicker(
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text("호스트 (내가 $modeLabel 시작)", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(2.dp))
-            Text("최대 3명까지 받기", style = MaterialTheme.typography.bodySmall)
+            Text("최대 ${maxJoiners}명까지 받기", style = MaterialTheme.typography.bodySmall)
         }
     }
 

@@ -192,7 +192,7 @@ fun HomeScreen(
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("교실 모드", style = MaterialTheme.typography.titleLarge)
                 Spacer(modifier = Modifier.height(2.dp))
-                Text("최대 4명, 방장 중심 (교사–학생)", style = MaterialTheme.typography.bodySmall)
+                Text("최대 10명, 방장 중심 (교사–학생)", style = MaterialTheme.typography.bodySmall)
             }
         }
 
