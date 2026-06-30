@@ -391,10 +391,11 @@ fun DrawingScreen(
     val myNick by session.nick.collectAsState()
     val canvasSelfNick = if (sessionState is SessionState.Connected) myNick.ifBlank { null } else null
 
-    // "저장 시 배경 합치기" 토글 변경 — 저장 다이얼로그에서 호출. 함께 모드(Duo) 연결 중이면 동기화.
+    // "저장 시 배경 합치기" 토글 변경 — 저장 다이얼로그에서 호출. 공유 캔버스인 함께 모드(Duo)
+    // 에서만 동기화. 모임/교실은 각자 독립 캔버스·저장이므로 broadcast 하면 안 됨(남의 설정 덮어씀).
     val onMergeChange: (Boolean) -> Unit = { value ->
         vm.setMergeBackgroundOnSave(value)
-        if (mode != DrawMode.Party && session.state.value is SessionState.Connected) {
+        if (mode == DrawMode.Duo && session.state.value is SessionState.Connected) {
             scope.launch {
                 runCatching { session.transport.send(Frame.MergeBackground(value)) }
             }
@@ -679,7 +680,8 @@ fun DrawingScreen(
                 }.onSuccess { image ->
                     vm.setBackground(image)
                     Toast.makeText(context, ASPECT_TOAST_TEXT, Toast.LENGTH_SHORT).show()
-                    shareBackgroundToPeer(context, session, image)
+                    // 교실 모드는 사진 자동 broadcast 안 함 — 호스트 사진은 조인자가 "가져오기" 로만 받는다.
+                    if (mode != DrawMode.Classroom) shareBackgroundToPeer(context, session, image)
                 }
             }
         }
@@ -699,7 +701,8 @@ fun DrawingScreen(
                 }.onSuccess { image ->
                     vm.setBackground(image)
                     Toast.makeText(context, ASPECT_TOAST_TEXT, Toast.LENGTH_SHORT).show()
-                    shareBackgroundToPeer(context, session, image)
+                    // 교실 모드는 사진 자동 broadcast 안 함 (위 갤러리 경로와 동일 정책).
+                    if (mode != DrawMode.Classroom) shareBackgroundToPeer(context, session, image)
                 }
             }
         }
@@ -780,7 +783,9 @@ fun DrawingScreen(
                             label = "제거",
                             onClick = {
                                 vm.setBackground(null)
-                                if (session.state.value is SessionState.Connected) {
+                                // 교실 모드는 사진을 broadcast 하지 않으므로 제거도 broadcast 안 함.
+                                if (mode != DrawMode.Classroom &&
+                                    session.state.value is SessionState.Connected) {
                                     scope.launch {
                                         runCatching { session.transport.send(Frame.PhotoRemove()) }
                                     }
