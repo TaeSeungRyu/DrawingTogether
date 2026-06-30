@@ -115,7 +115,9 @@ class SessionManager private constructor(
     // "동기화" — 상대가 내 캔버스 상태를 요청. DrawingScreen 이 canvas 의 strokes/photo 로 응답.
     // Phase 4-G: requesterPeerId 동반 — 모임 모드 응답 시 target 박아 호스트 relay 거치게 한다.
     // Duo (1:1) 는 requester 무시하고 broadcast 응답.
-    data class SnapshotRequest(val requesterPeerId: PeerId)
+    // forLiveView=true: 교실 조인자가 방장 라이브뷰 채우기용으로 요청(응답은 그 조인자의
+    // peerCanvases[host] 로). false: "가져오기"(응답을 요청자 메인에 덮어쓰기).
+    data class SnapshotRequest(val requesterPeerId: PeerId, val forLiveView: Boolean = false)
     private val _snapshotRequests = MutableSharedFlow<SnapshotRequest>(extraBufferCapacity = 4)
     val snapshotRequests: SharedFlow<SnapshotRequest> = _snapshotRequests.asSharedFlow()
 
@@ -476,7 +478,9 @@ class SessionManager private constructor(
                 // requesterPeerId 가 없으면 (Duo broadcast) 그냥 broadcast 요청. 모임 모드는
                 // requester 박혀서 응답 시 target 으로 사용.
                 val requester = PeerId(frame.requesterPeerId)
-                _snapshotRequests.tryEmit(SnapshotRequest(requesterPeerId = requester))
+                _snapshotRequests.tryEmit(
+                    SnapshotRequest(requesterPeerId = requester, forLiveView = frame.forLiveView)
+                )
             }
             is Frame.Snapshot -> {
                 // target!=self → unicast relay (호스트 거쳐 가는 동기화 응답).

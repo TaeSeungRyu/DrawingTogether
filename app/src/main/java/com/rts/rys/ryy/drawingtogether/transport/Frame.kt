@@ -28,11 +28,15 @@ sealed class Frame {
     // "동기화" 버튼 — 내 캔버스를 상대 캔버스로 덮어쓰기 위해 상대에게 현재 상태 요청.
     // Phase 4-G: targetPeerId 가 비어있으면 broadcast (Duo 1:1 호환). 명시되면 호스트가
     // 그 peerId 의 조인자에게 relay (sendTo). 응답도 같은 라우팅.
+    // forLiveView=true: 교실 조인자가 방장 라이브뷰(peerCanvases[host])를 채우려는 요청.
+    // 응답은 target="" 로 와서 받는 쪽이 sender=host 로 라우팅(메인 아님). false(기본)는 "가져오기"
+    // (응답을 자기 메인에 덮어쓰기).
     @Serializable
     @SerialName("snapshot_req")
     data class SnapshotReq(
         val targetPeerId: String = "",
         val requesterPeerId: String = "",
+        val forLiveView: Boolean = false,
     ) : Frame()
 
     // SnapshotReq 응답. strokes 는 별도 FILE 페이로드로 송신 (BYTES 32KB 한도 회피).

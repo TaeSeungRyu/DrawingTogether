@@ -476,34 +476,32 @@ fun DrawingScreen(
         }
     }
 
-    // 교실 호스트: 새로 합류한 조인자에게 현재 내 캔버스(strokes/스티커/텍스트 + 사진)를 1회 보내
-    // 그 조인자의 "방장 라이브뷰"(peerCanvases[host])를 초기 채운다. 라이브 이벤트는 합류 후
-    // 발생분만 오므로, 합류 전 호스트 그림·사진이 안 보이던 갭을 메운다.
+    // 교실 조인자: 방장이 remotePeers 에 처음 등장하면 "라이브뷰용 스냅샷"을 요청(pull)해 합류 전
+    // 호스트 그림·사진까지 방장 라이브뷰(peerCanvases[host])를 채운다. 호스트 push 대신 pull 인 이유는,
+    // 재입장 시 새 화면의 incomingSnapshot collector 구독 전에 push 가 도착하면(replay=0 SharedFlow)
+    // 이벤트가 버려지기 때문. 요청은 collector 세팅 후 보내므로 응답 수신이 보장된다.
     if (mode == DrawMode.Classroom) {
         LaunchedEffect(session) {
-            // endpointId 기준 추적: 나갔다 빠르게 재입장하면 같은 peerId 라도 새 endpoint 가 부여되므로,
-            // peerId 로 추적하면 (remotePeers 가 부재 상태를 안 거치고 conflate 될 때) 재전송을 건너뛸 수
-            // 있다. endpointId(= 연결 단위)로 추적하면 새 연결마다 반드시 1회 초기 전송.
-            val sentEndpoints = mutableSetOf<String>()
+            var requestedHost: PeerId? = null
             session.remotePeers.collect { peers ->
-                if (session.transport.localRole ==
-                    com.rts.rys.ryy.drawingtogether.transport.Role.Host) {
-                    peers.forEach { peer ->
-                        if (peer.endpointId.isNotEmpty() && sentEndpoints.add(peer.endpointId)) {
-                            sendHostCanvasToJoiner(
-                                context = context,
-                                session = session,
-                                endpointId = peer.endpointId,
-                                strokes = vm.canvas.strokes.toList(),
-                                stickers = vm.canvas.stickers.toList(),
-                                texts = vm.canvas.texts.toList(),
-                                background = vm.canvas.background,
+                if (session.transport.localRole !=
+                    com.rts.rys.ryy.drawingtogether.transport.Role.Joiner
+                ) return@collect
+                val host = peers.firstOrNull { it.endpointId.isNotEmpty() }
+                if (host != null && requestedHost != host.peerId) {
+                    requestedHost = host.peerId
+                    runCatching {
+                        session.transport.send(
+                            Frame.SnapshotReq(
+                                targetPeerId = host.peerId.value,
+                                requesterPeerId = session.peerId,
+                                forLiveView = true,
                             )
-                        }
+                        )
                     }
+                } else if (host == null) {
+                    requestedHost = null
                 }
-                // 끊긴 endpoint 는 기록에서 제거(재연결 시 새 endpoint 로 다시 전송됨).
-                sentEndpoints.retainAll(peers.mapTo(mutableSetOf()) { it.endpointId })
             }
         }
     }
@@ -642,19 +640,36 @@ fun DrawingScreen(
         }
     }
 
-    // "동기화" — 상대가 내 캔버스 상태를 요청 (SnapshotReq). 현재 strokes + photo 로 응답.
-    // Phase 4-G: requester peerId 가 동반 → 응답 frame 에 박아 호스트 relay 가 라우팅 가능.
+    // 상대가 내 캔버스 상태를 요청 (SnapshotReq). 현재 strokes + photo 로 응답.
+    //  - forLiveView=true (교실 조인자의 방장 라이브뷰 채우기): 요청자에게 target="" 로 보내
+    //    그 조인자의 peerCanvases[host] 에 적용(메인 아님). 요청자가 화면 준비 후 요청하므로 레이스 없음.
+    //  - forLiveView=false ("가져오기"): target=requester 로 보내 요청자 메인에 덮어쓰기.
     LaunchedEffect(vm, session) {
         session.snapshotRequests.collect { request ->
-            respondToSnapshotRequest(
-                context = context,
-                session = session,
-                targetPeerId = request.requesterPeerId.value,
-                strokes = vm.canvas.strokes.toList(),
-                stickers = vm.canvas.stickers.toList(),
-                texts = vm.canvas.texts.toList(),
-                background = vm.canvas.background,
-            )
+            val requesterEndpoint = session.remotePeers.value
+                .firstOrNull { it.peerId.value == request.requesterPeerId.value && it.endpointId.isNotEmpty() }
+                ?.endpointId
+            if (request.forLiveView && requesterEndpoint != null) {
+                sendHostCanvasToJoiner(
+                    context = context,
+                    session = session,
+                    endpointId = requesterEndpoint,
+                    strokes = vm.canvas.strokes.toList(),
+                    stickers = vm.canvas.stickers.toList(),
+                    texts = vm.canvas.texts.toList(),
+                    background = vm.canvas.background,
+                )
+            } else {
+                respondToSnapshotRequest(
+                    context = context,
+                    session = session,
+                    targetPeerId = request.requesterPeerId.value,
+                    strokes = vm.canvas.strokes.toList(),
+                    stickers = vm.canvas.stickers.toList(),
+                    texts = vm.canvas.texts.toList(),
+                    background = vm.canvas.background,
+                )
+            }
         }
     }
     // 원격 stroke 통째 도착. 모드별 라우팅:

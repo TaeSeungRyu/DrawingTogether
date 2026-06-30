@@ -64,7 +64,7 @@
 
 ## 6. 미해결 / 후속 (모임 모드와 동일 한계)
 
-1. ~~**조인자 호스트뷰 초기 채움**~~ ✅ 해결 — 새 조인자 합류 시 호스트가 현재 캔버스(그림 + 사진)를 그 조인자에게 unicast(`sendHostCanvasToJoiner`, target="" → 받는 쪽 `peerCanvases[host]` 에 적용)해 합류 전 호스트 그림·사진까지 방장 라이브뷰에 표시.
+1. ~~**조인자 호스트뷰 초기 채움**~~ ✅ 해결 — **pull 방식**: 조인자가 방장을 처음 인식하면 `SnapshotReq(forLiveView=true)` 를 보내고, 호스트가 현재 캔버스(그림 + 사진)를 `sendHostCanvasToJoiner`(target="" → 받는 쪽 `peerCanvases[host]`)로 응답 → 합류 전 호스트 그림·사진까지 방장 라이브뷰에 표시. (호스트 push 는 재입장 시 새 화면의 collector 구독 전 도착하면 replay=0 SharedFlow 라 유실되므로, collector 준비 후 요청하는 pull 로 전환.)
 2. ~~**호스트 사진 배경 라이브 표시**~~ ✅ 해결 — 호스트 사진을 전 조인자에게 라이브 표시(방장 뷰). 사진 공유는 `shareBackgroundToPeer` 가 연결된 각 endpoint 에 개별 전송(단일-pfd 버그 회피 — 여러 조인자 모두 수신). 미니/모달 뷰 비율도 그 사진을 따름. (호스트 사진 비공개 정책은 폐기 — 스펙상 조인자는 방장 내용을 봐야 함.)
 3. ~~**pull 후 호스트의 조인자뷰 staleness**~~ ✅ 해결 — 조인자가 가져오기를 적용한 직후(strokes+사진 모두 도착 시) 자기 캔버스를 호스트에게 다시 송신(`broadcastMyCanvasAsPeer`, 스타 구조상 호스트에게만)해 호스트의 조인자 라이브뷰를 갱신.
 
