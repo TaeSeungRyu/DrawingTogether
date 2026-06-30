@@ -419,7 +419,9 @@ fun DrawingScreen(
     }
 
     // 끊긴 피어의 미니 캔버스 정리 — remotePeers 에 없는 PeerId 의 캔버스 데이터 제거.
-    if (mode == DrawMode.Party) {
+    // 모임/교실 공통: 조인자가 방을 나가면 그 사람의 그림(호스트가 보던 라이브 뷰)이 사라져야 하고,
+    // 같은 사람이 다시 들어오면 빈 캔버스에서 시작한다(나가기 전 데이터가 남으면 안 됨).
+    if (mode == DrawMode.Party || mode == DrawMode.Classroom) {
         LaunchedEffect(session) {
             session.remotePeers.collect { peers ->
                 val active = peers.map { it.peerId }.toSet()
