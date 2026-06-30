@@ -882,7 +882,7 @@ fun DrawingScreen(
                         else SyncStep.DuoConfirm
                     }
                 } else null,
-                onOpenRoom = if (isPartyHost) {
+                onOpenRoom = if (isPartyHost || isClassroomHost) {
                     {
                         scope.launch {
                             runCatching { session.transport.startAdvertising() }
@@ -1021,11 +1021,11 @@ fun DrawingScreen(
         }
     }
 
-    // 모임 모드 호스트가 "방 열기" 로 광고를 다시 켰을 때 새 조인자의 토큰 컨펌 다이얼로그.
+    // 모임/교실 모드 호스트가 "방 열기" 로 광고를 다시 켰을 때 새 조인자의 토큰 컨펌 다이얼로그.
     // PartyPairingScreen 의 동일 흐름을 Draw 단계에서도 노출 — 새 조인자가 자연스럽게 합류.
     val pendingConn by session.transport.pending.collectAsState()
     val p = pendingConn
-    if (p != null && mode == DrawMode.Party) {
+    if (p != null && (mode == DrawMode.Party || mode == DrawMode.Classroom)) {
         AlertDialog(
             onDismissRequest = {
                 scope.launch { session.transport.rejectPending() }
