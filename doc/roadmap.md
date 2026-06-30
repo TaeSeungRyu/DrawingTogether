@@ -185,7 +185,8 @@
 - [x] **선 곡선 평활화(렌더)** — 자유 곡선을 직선 폴리라인이 아니라 인접 점 중간점-2차 베지어로 그려 꺾임을 둥글게(`buildFreehandPath`). 색·굵기가 구간별인 무지개·붓펜은 `forEachSmoothPiece`+`drawSmoothPiece`. 화면·PNG 공유. 손떨림 보정(입력)과 별개 단계.
 - [x] **스포이드(색 추출)** — `ToolKind.Eyedropper` + 색 팔레트 스포이드 버튼(`EyedropperButton`). 누른 채 드래그하면 조준 십자(`drawEyedropperCursor`)가 따라오고 떼는 순간 그 지점 색을 집음(손가락 가림 보정). `PngComposer` 로 사진+stroke+스티커 합성 비트맵을 만들어 픽셀을 읽음(`CanvasColorSampler`, "보이는 색=집히는 색", alpha 불투명 강제). 집으면 `selectColor` 로 펜 복귀. 로컬 설정.
 - [x] **최근 색 / 색 팔레트 저장** — 색을 쓸 때마다 `UserPaletteRepo.addRecent`(최신 앞, 중복 제거, 최대 8개, prefs 영속). 색 팔레트 줄에 프리셋과 구분선으로 나눠 표시(`ColorDot`/`PaletteDivider`, 프리셋 중복 제외). 프리셋/커스텀/스포이드 모든 선택 경로가 기록됨. 로컬 설정.
-- [x] **트레이싱 보조 — 반투명** — 사진 배경 표시 알파 순환(원본/연하게/아주 연하게, `TraceOpacity`). TopAppBar 트레이싱 버튼(`TraceGlyph`, 사진 있을 때만). `DrawingCanvas` 가 `drawImage(alpha=)` 로 표시만 적용 — 저장(`mergeBackgroundOnSave`)·동기화엔 미반영(직교). 엣지 검출 오버레이는 P3 잔여.
+- [x] **트레이싱 보조 — 반투명 + 외곽선(엣지 검출)** — 사진 배경 표시 알파 순환(원본/연하게/아주 연하게/외곽선, `TraceOpacity`). TopAppBar 트레이싱 버튼(`TraceGlyph`, 사진 있을 때만). 반투명은 `drawImage(alpha=)` 로 표시만 적용. 외곽선은 `photo/EdgeDetector`(Sobel)로 사진에서 라인만 추출한 투명 오버레이를 사진 대신 표시(`DrawingViewModel.edgeOverlay`, viewModelScope+Default 로 사진당 1회 계산·캐시). 저장(`mergeBackgroundOnSave`)·동기화엔 미반영(직교).
+- [x] **텍스트 넣기(불변·삭제전용)** — 스티커형 배치 요소(`TextElement`: 정규화 cx/cy + sizeFrac + 색). `ToolKind.Text` → 빈 곳 탭 → 바텀시트(`TextInputSheet`, IME + 크기 프리셋)에서 입력·확인 시 그 위치에 굳음(탭한 자리에 I-beam 캐럿 표시). **입력 종료 = 수정·이동 불가, 삭제만**(탭 선택 후 X, 또는 통합 undo). `PlaceText`/`RemoveText` 2종 이벤트 → 멀티 동기화 자동. `TextRenderer`(네이티브 Paint, 줄바꿈·중앙정렬) 화면·PNG·미니뷰·타임랩스 공유. 색=현재 펜 색. 폰트는 기기 기본(벡터 아님 — 기기 간 동일 보장은 약함).
 - [x] **도형 채우기 토글** — `ToolSettings.fill`. `StrokeRenderer.drawShapeForm` 이 fill 이면 `Fill` DrawStyle, 아니면 외곽선 `Stroke`. 화면·PNG·동기화 자동 공유. 도형 드롭다운(`ShapeDropdownButton`) 하단에 "채우기" 토글.
 - [x] **배경색 선택** — `CanvasState.backgroundColor`(사진처럼 캔버스 속성, 기본 흰색). `DrawingCanvas` 가 맨 아래 바탕으로 칠하고 `PngComposer` 가 사진 없을 때 흰색 대신 저장. TopAppBar "배경색" 버튼(`BgColorGlyph`) → `ColorPickerSheet`. 현재 로컬 전용(멀티 동기화 미포함 — 와이어 추가는 후속).
 - [x] **대칭(미러) 그리기** — `SymmetryMode`(끔/좌우/상하/4분할). `DrawingViewModel` 이 입력 stroke 의 미러 좌표 stroke 를 독립 `StrokeId` 로 함께 emit(정규화 좌표 반사) → 동기화·저장 자동, 도형·브러시도 그대로 미러. 도구바 "보조" 드롭다운(`GuideDropdownButton`, 안내선+대칭 섹션)에 추가. 한 제스처가 N개 stroke 라 undo 는 미러별 1회씩(향후 묶기 가능).
@@ -209,6 +210,34 @@
 **브랜딩**
 - [x] 앱 아이콘 리디자인 — Candy Pop 코랄 배경 + 코랄/민트/라벤더 세 물감 방울 클러스터(adaptive + monochrome).
 - [x] 런처 이름 한글화 "드로잉 투게더" (앱 실행 중 화면은 영문 "Drawing Together" 유지).
+
+## 교실 모드 (1:N, 호스트 중심) — 완료
+> 기존 **모임 모드(Party, mesh)** 와 **별개인 신규 모드**. "공유 + 분기"로 스타 전송·세션·미니뷰 인프라를 재사용하되 가시성·UI만 분기. 모임 모드 동작은 그대로 보존. 상세·구현 메모: [classroom-mode.md](classroom-mode.md).
+
+**핵심 동작**
+- 호스트(교사): 자기 그림+사진이 전 조인자에게 라이브. "참여자 보기" 버튼 → 모달에서 이름 선택 → 그 조인자를 한 명씩 라이브로 봄.
+- 조인자(학생): 자기 캔버스에 그림. 호스트 그림+사진을 항상 라이브로 봄(보조 뷰, 탭하면 큰 모달) + "가져오기"로 자기 캔버스에 적용. **다른 조인자는 이름·그림 모두 안 보임.**
+- 인원: 호스트 + 최대 9 = 10명(`TransportMode.maxJoiners`). 교실끼리만 발견(고유 serviceId).
+
+**구현 (단계별 커밋)**
+- [x] **1단계 — 전송·세션 기반**: `TransportMode.Classroom`(고유 serviceId, P2P_STAR) + `isStar` 헬퍼. 스타 공통(호스트 인원제한·광고유지·PartyStart 지각입장·혼자 방지키기)을 `isStar`로 확장. mesh 가시성 코드(`relayIfHost` Event·`announcePeerJoined`·`PeerLeft` broadcast)는 Party 전용 유지 → 교실은 조인자끼리 자동 미표시. `classroomInstance` 싱글톤.
+- [x] **2단계 — 페어링 재사용**: `PartyPairingScreen(mode)` 파라미터화 — 교실은 `mode=Classroom`. 문구는 `modeLabel`·`maxJoiners` 로 동적.
+- [x] **3단계 — 진입점**: `DrawMode.Classroom`, 홈 "교실 모드" 버튼, `classroom-pairing` 라우트, `DrawingScreen` Classroom 분기(전송 매핑·PerPeer).
+- [x] **4단계 — 조인자 UI**: `ClassroomCanvasArea` 조인자 분기 — 호스트 라이브 뷰(탭→큰 모달) + "가져오기"(`SnapshotReq` target=host). 가져오기 후 자기 캔버스를 호스트에 재송신해 호스트의 조인자 뷰 갱신.
+- [x] **5단계 — 호스트 UI**: "참여자 보기" 버튼 → 모달 이름 목록 → 선택 1명 라이브.
+- [x] **늦은 참여자(방 열기)**: 호스트가 "그리기 시작" 후에도 새 조인자 수용(`isStar` 광고유지 + 인-Draw 토큰 컨펌 게이트 확장).
+
+**버그 수정 (실기 검증 반영)**
+- [x] 다중 조인자 "가져오기" 단일-pfd 버그 → 응답을 요청자에게 **unicast**(`sendFileTo`).
+- [x] 인원 안내 문구(4명·/3) → `mode.maxJoiners` 동적.
+- [x] 싱글 진입 시 잘못된 재연결 알림(Duo 세션 공유) → `mode==Single` 가드. 끊김 처리 `isStar` 공통화.
+- [x] 조인자 퇴장 시 호스트가 보던 데이터 잔존 → `peerCanvases` 정리 게이트 `Party||Classroom`.
+- [x] 호스트 사진을 조인자 라이브뷰에 표시(비공개 정책 폐기) + `shareBackgroundToPeer` 단일-pfd 수정(endpoint별 개별 전송).
+- [x] 미니/모달 뷰가 그 peer 사진 비율을 따르도록(`MiniCanvas` 고정 1:1 → `background.aspectRatio`) — 가로세로 왜곡 해소.
+- [x] 가져오기 후 호스트의 조인자뷰 staleness → 가져오기 적용 직후 자기 캔버스 재송신.
+- [x] 조인자 방장 라이브뷰 초기 채움 → **pull 방식**(`SnapshotReq(forLiveView=true)` → 호스트가 `sendHostCanvasToJoiner`로 응답, target="" → 조인자 `peerCanvases[host]`). 재입장 시 collector 구독 전 push 유실 문제 해결. endpoint 단위 처리.
+
+**완료 기준**: 교실끼리만 발견·연결. 호스트 그림+사진 라이브, 조인자끼리 격리, "참여자 보기"·"가져오기"·재입장·늦은 참여자 정상. 모임/함께/싱글 회귀 없음. **실기 검증은 사용자가 진행 중.**
 
 ## Phase 6 — 나중에 검토만
 지금 결정하지 않을 것들:
