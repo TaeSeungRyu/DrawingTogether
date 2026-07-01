@@ -192,7 +192,7 @@ fun PairingScreen(
                         MaterialTheme.colorScheme.primary,
                 ),
             ) {
-                Text(if (isAdvertising) "광고 중 — 탭하면 검색으로" else "호스트로 광고시작")
+                Text(if (isAdvertising) "방 여는 중 — 탭하면 검색으로" else "호스트로 방 열기")
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -413,7 +413,7 @@ internal fun EmptyDiscoveryHint(state: TransportState) {
                 CircularProgressIndicator()
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = "검색 중...\n상대 기기에서 \"호스트로 광고시작\"을 누를 때까지 기다리는 중",
+                    text = "검색 중...\n상대 기기에서 \"호스트로 방 열기\"를 누를 때까지 기다리는 중",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
