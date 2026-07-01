@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -47,6 +48,10 @@ import com.rts.rys.ryy.drawingtogether.session.SessionManager
 import com.rts.rys.ryy.drawingtogether.transport.nearby.TransportMode
 import com.rts.rys.ryy.drawingtogether.ui.theme.PastelBlobBackground
 import com.rts.rys.ryy.drawingtogether.works.WorkStore
+
+// 넓은 화면(태블릿/가로)에서 버튼 영역이 끝까지 늘어나지 않도록 하는 최대 폭. 이보다 좁은 화면
+// (대부분의 폰 세로)에선 발동하지 않아 기존과 동일.
+private val MAX_CONTENT_WIDTH = 480.dp
 
 @Composable
 fun HomeScreen(
@@ -222,7 +227,8 @@ fun HomeScreen(
                 .padding(vertical = 4.dp, horizontal = 8.dp),
         )
 
-        // 버튼 영역 — 제목 아래 남은 공간을 모두 차지.
+        // 버튼 영역 — 제목 아래 남은 공간을 모두 차지. 폭은 MAX_CONTENT_WIDTH 로 제한해 넓은 화면
+        // (태블릿/가로)에서 버튼이 끝까지 늘어나지 않고 가운데 모이게 한다(폰 세로에선 제한 미발동).
         //  - 세로: 균등 간격(SpaceEvenly) 으로 영역 전체에 고르게 분산.
         //  - 가로: 높이가 부족하므로 안쪽에서 스크롤 + 고정 간격.
         if (isLandscape) {
@@ -230,6 +236,7 @@ fun HomeScreen(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
+                    .widthIn(max = MAX_CONTENT_WIDTH)
                     .verticalScroll(rememberScrollState())
                     .padding(vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -239,7 +246,8 @@ fun HomeScreen(
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth(),
+                    .fillMaxWidth()
+                    .widthIn(max = MAX_CONTENT_WIDTH),
                 verticalArrangement = Arrangement.SpaceEvenly,
                 content = modeButtons,
             )
