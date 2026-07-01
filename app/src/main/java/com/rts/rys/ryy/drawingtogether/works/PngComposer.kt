@@ -15,6 +15,7 @@ import com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState
 import com.rts.rys.ryy.drawingtogether.ui.canvas.drawSticker
 import com.rts.rys.ryy.drawingtogether.ui.canvas.drawStroke
 import com.rts.rys.ryy.drawingtogether.ui.canvas.drawText
+import kotlin.math.roundToInt
 
 // CanvasState를 단일 비트맵으로 합성. 화면에 보이는 것과 같은 stroke 렌더링 함수를 재사용해
 // "보이는 것 = 저장되는 것"을 보장.
@@ -25,9 +26,19 @@ object PngComposer {
 
     fun compose(state: CanvasState, density: Float, includeBackground: Boolean = true): Bitmap {
         val bg = state.background
-        // 사진 미포함 모드여도 캔버스 크기는 bg 비율을 유지해야 stroke(정규화 좌표) 비율이 맞음.
-        val (w, h) = if (bg != null) bg.widthPx to bg.heightPx
-                     else DEFAULT_BLANK_SIZE to DEFAULT_BLANK_SIZE
+        // 사진 있으면 사진 치수(비율). 없으면 선택한 캔버스 비율로 치수 산출(자유=정사각).
+        // stroke 는 정규화 좌표라 저장 치수의 비율이 화면 캔버스 비율과 같아야 모양이 맞음.
+        val (w, h) = when {
+            bg != null -> bg.widthPx to bg.heightPx
+            else -> {
+                val r = state.aspect.ratio
+                when {
+                    r == null -> DEFAULT_BLANK_SIZE to DEFAULT_BLANK_SIZE
+                    r >= 1f -> DEFAULT_BLANK_SIZE to (DEFAULT_BLANK_SIZE / r).roundToInt()
+                    else -> (DEFAULT_BLANK_SIZE * r).roundToInt() to DEFAULT_BLANK_SIZE
+                }
+            }
+        }
 
         val image = ImageBitmap(w, h)
         val canvas = Canvas(image)

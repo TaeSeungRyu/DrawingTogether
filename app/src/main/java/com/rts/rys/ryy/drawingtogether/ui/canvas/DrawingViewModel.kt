@@ -441,6 +441,11 @@ class DrawingViewModel : ViewModel() {
         recorder.recordBackgroundColor(argb)
     }
 
+    // 빈 캔버스 비율 설정(로컬 전용). 사진이 있으면 사진 비율이 우선이라 표시엔 영향 없음.
+    fun setCanvasAspect(value: com.rts.rys.ryy.drawingtogether.drawing.model.CanvasAspect) {
+        canvas.setCanvasAspect(value)
+    }
+
     fun setMergeBackgroundOnSave(value: Boolean) {
         canvas.setMergeBackgroundOnSave(value)
     }

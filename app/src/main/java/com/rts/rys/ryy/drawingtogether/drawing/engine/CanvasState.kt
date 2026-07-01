@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.rts.rys.ryy.drawingtogether.drawing.model.BackgroundImage
+import com.rts.rys.ryy.drawingtogether.drawing.model.CanvasAspect
 import com.rts.rys.ryy.drawingtogether.drawing.model.DrawingEvent
 import com.rts.rys.ryy.drawingtogether.drawing.model.Sticker
 import com.rts.rys.ryy.drawingtogether.drawing.model.StickerId
@@ -73,6 +74,16 @@ class CanvasState {
         bumpRevision()
     }
 
+    // 빈 캔버스(사진 없음)의 가로세로 비율. 사진이 있으면 사진 비율이 우선(렌더 측에서 분기).
+    // 배경색과 같은 캔버스 속성 — Clear 로 지워지지 않고, apply() 가 아닌 별도 setter. 기본 Free.
+    // 비율 변경 시 캔버스 크기가 바뀌어 비트맵 캐시(remember(canvasSize))가 자동 재계산되므로 bumpRevision 불필요.
+    private var _aspect: CanvasAspect by mutableStateOf(CanvasAspect.Free)
+    val aspect: CanvasAspect get() = _aspect
+
+    fun setCanvasAspect(value: CanvasAspect) {
+        _aspect = value
+    }
+
     // 저장 시 사진 배경을 PNG에 합쳐 굽을지 여부. 토글을 사진 추가보다 먼저 켜둘 수 있도록
     // 배경 유무와 독립적으로 보관. 기본 true — 기존 동작과 호환.
     private var _mergeBackgroundOnSave: Boolean by mutableStateOf(true)
@@ -116,6 +127,7 @@ class CanvasState {
         _undoStack.clear()
         _background = null
         _backgroundColor = 0xFFFFFFFF.toInt()
+        _aspect = CanvasAspect.Free
         bumpRevision()
     }
 

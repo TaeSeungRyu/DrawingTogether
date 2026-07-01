@@ -1,5 +1,6 @@
 package com.rts.rys.ryy.drawingtogether.drawing.engine
 
+import com.rts.rys.ryy.drawingtogether.drawing.model.CanvasAspect
 import com.rts.rys.ryy.drawingtogether.drawing.model.DrawingEvent
 import com.rts.rys.ryy.drawingtogether.drawing.model.PeerId
 import com.rts.rys.ryy.drawingtogether.drawing.model.Point
@@ -268,5 +269,28 @@ class CanvasStateTest {
 
         assertEquals(1, fresh.texts.size)
         assertEquals(UndoItem.TextRef(TextId("t1")), fresh.lastUndoable())
+    }
+
+    @Test
+    fun `canvas aspect defaults to Free and setter updates it`() {
+        val state = CanvasState()
+        assertEquals(CanvasAspect.Free, state.aspect)
+
+        state.setCanvasAspect(CanvasAspect.Portrait9_16)
+        assertEquals(CanvasAspect.Portrait9_16, state.aspect)
+    }
+
+    @Test
+    fun `Clear keeps canvas aspect but reset returns to Free`() {
+        val state = CanvasState()
+        state.setCanvasAspect(CanvasAspect.Landscape16_9)
+
+        // Clear 는 그림만 지우고 캔버스 속성(비율)은 유지.
+        state.apply(DrawingEvent.Clear(next(), local))
+        assertEquals(CanvasAspect.Landscape16_9, state.aspect)
+
+        // reset 은 전체 초기화 — 비율도 Free 로.
+        state.reset()
+        assertEquals(CanvasAspect.Free, state.aspect)
     }
 }

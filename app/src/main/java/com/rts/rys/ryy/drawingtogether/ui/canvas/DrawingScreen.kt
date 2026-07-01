@@ -66,6 +66,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rts.rys.ryy.drawingtogether.drawing.model.BackgroundImage
+import com.rts.rys.ryy.drawingtogether.drawing.model.CanvasAspect
 import com.rts.rys.ryy.drawingtogether.drawing.model.PeerId
 import com.rts.rys.ryy.drawingtogether.photo.CameraCaptureFile
 import com.rts.rys.ryy.drawingtogether.photo.PhotoLoader
@@ -353,6 +354,8 @@ fun DrawingScreen(
     var showSaveDialog by remember { mutableStateOf(false) }
     // 배경색 선택 다이얼로그 표시 여부.
     var showBgColorPicker by remember { mutableStateOf(false) }
+    // 캔버스 비율 선택 시트 표시 여부.
+    var showAspectSheet by remember { mutableStateOf(false) }
     // 기록 중 뒤로가기 시 저장/폐기 확인.
     var showRecordBackConfirm by remember { mutableStateOf(false) }
     // 텍스트 입력 시트 — 캔버스 빈 곳 탭 시 그 정규화 좌표(nx,ny)를 담아 연다. null = 닫힘.
@@ -851,6 +854,19 @@ fun DrawingScreen(
                         container = bgSwatch,
                         content = bgOn,
                     ) { BgColorGlyph(modifier = Modifier.fillMaxSize()) }
+                    // 캔버스 비율 — 사진이 없을 때만(사진 있으면 사진 비율이 결정). 선택 시 라벨/강조 표시.
+                    if (vm.canvas.background == null) {
+                        val aspect = vm.canvas.aspect
+                        val chosen = aspect != CanvasAspect.Free
+                        TopActionButton(
+                            label = if (chosen) aspect.label else "비율",
+                            onClick = { showAspectSheet = true },
+                            container = if (chosen) MaterialTheme.colorScheme.tertiary
+                            else MaterialTheme.colorScheme.tertiaryContainer,
+                            content = if (chosen) MaterialTheme.colorScheme.onTertiary
+                            else MaterialTheme.colorScheme.onTertiaryContainer,
+                        ) { AspectGlyph(modifier = Modifier.fillMaxSize()) }
+                    }
                     if (vm.canvas.background != null) {
                         // 트레이싱 보조 — 사진 표시 농도 순환(원본→연하게→아주 연하게). 표시만, 저장 무관.
                         val tracing = vm.traceOpacity != TraceOpacity.Full
@@ -1176,6 +1192,17 @@ fun DrawingScreen(
         )
     }
 
+    if (showAspectSheet) {
+        AspectRatioSheet(
+            current = vm.canvas.aspect,
+            onSelect = {
+                vm.setCanvasAspect(it)
+                showAspectSheet = false
+            },
+            onDismiss = { showAspectSheet = false },
+        )
+    }
+
     // 텍스트 입력 시트 — 확인 시 탭 위치에 현재 펜 색으로 텍스트를 굳힌다.
     pendingTextPoint?.let { (nx, ny) ->
         TextInputSheet(
@@ -1286,8 +1313,10 @@ private fun MyCanvasContent(
     val bg = vm.canvas.background
     val density = LocalDensity.current.density
     val context = LocalContext.current
-    val sizeModifier = if (bg != null) {
-        Modifier.aspectRatio(bg.aspectRatio)
+    // 사진 있으면 사진 비율, 없으면 선택한 캔버스 비율(자유면 화면 채움).
+    val ratio = bg?.aspectRatio ?: vm.canvas.aspect.ratio
+    val sizeModifier = if (ratio != null) {
+        Modifier.aspectRatio(ratio)
     } else {
         Modifier.fillMaxSize()
     }
