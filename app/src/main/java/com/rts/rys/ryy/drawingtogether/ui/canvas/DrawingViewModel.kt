@@ -222,8 +222,9 @@ class DrawingViewModel : ViewModel() {
         texts: List<TextElement> = emptyList(),
         aspect: com.rts.rys.ryy.drawingtogether.drawing.model.CanvasAspect =
             com.rts.rys.ryy.drawingtogether.drawing.model.CanvasAspect.Free,
+        backgroundColor: Int = 0xFFFFFFFF.toInt(),
     ) {
-        canvas.applySnapshot(strokes, stickers, texts, aspect)
+        canvas.applySnapshot(strokes, stickers, texts, aspect, backgroundColor)
     }
 
     fun selectColor(argb: Int) {

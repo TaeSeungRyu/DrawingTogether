@@ -10,4 +10,5 @@ data class CanvasSnapshot(
     val stickers: List<Sticker> = emptyList(),
     val texts: List<TextElement> = emptyList(),
     val aspect: CanvasAspect = CanvasAspect.Free,
+    val backgroundColor: Int = 0xFFFFFFFF.toInt(),
 )

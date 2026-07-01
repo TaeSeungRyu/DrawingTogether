@@ -66,7 +66,7 @@ fun MiniCanvas(
             Box(
                 modifier = Modifier
                     .aspectRatio(state.background?.aspectRatio ?: state.aspect.ratio ?: 1f)
-                    .background(Color.White),
+                    .background(Color(state.backgroundColor)),
                 contentAlignment = Alignment.Center,
             ) {
                 val density = LocalDensity.current.density

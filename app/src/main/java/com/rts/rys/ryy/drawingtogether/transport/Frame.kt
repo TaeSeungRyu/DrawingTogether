@@ -83,6 +83,12 @@ sealed class Frame {
     @SerialName("canvas_aspect")
     data class CanvasAspectFrame(val aspect: CanvasAspect) : Frame()
 
+    // 캔버스 배경색 변경 동기화. 비율(CanvasAspectFrame)과 동일 라우팅 — 함께=공유 캔버스,
+    // 모임/교실=발신자 peerCanvases(미니뷰). 사진이 있으면 사진이 위에 깔려 표시엔 영향 없음.
+    @Serializable
+    @SerialName("bg_color")
+    data class BackgroundColorFrame(val argb: Int) : Frame()
+
     @Serializable
     @SerialName("ping")
     data class Ping(val ts: Long) : Frame()

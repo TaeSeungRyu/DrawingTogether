@@ -170,13 +170,14 @@ private suspend fun canvasToCacheUri(
     stickers: List<com.rts.rys.ryy.drawingtogether.drawing.model.Sticker>,
     texts: List<com.rts.rys.ryy.drawingtogether.drawing.model.TextElement>,
     aspect: com.rts.rys.ryy.drawingtogether.drawing.model.CanvasAspect,
+    backgroundColor: Int,
 ): android.net.Uri = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
     val dir = java.io.File(context.cacheDir, "snapshots").apply { mkdirs() }
     val file = java.io.File(dir, "canvas_${System.currentTimeMillis()}.cbor")
     file.outputStream().use { out ->
         out.write(
             com.rts.rys.ryy.drawingtogether.transport.codec.FrameCodec.encodeCanvas(
-                com.rts.rys.ryy.drawingtogether.drawing.model.CanvasSnapshot(strokes, stickers, texts, aspect)
+                com.rts.rys.ryy.drawingtogether.drawing.model.CanvasSnapshot(strokes, stickers, texts, aspect, backgroundColor)
             )
         )
     }
@@ -199,10 +200,11 @@ private suspend fun broadcastMyCanvasAsPeer(
     texts: List<com.rts.rys.ryy.drawingtogether.drawing.model.TextElement>,
     background: BackgroundImage?,
     aspect: com.rts.rys.ryy.drawingtogether.drawing.model.CanvasAspect,
+    backgroundColor: Int,
 ) {
     if (session.state.value !is SessionState.Connected) return
     runCatching {
-        val strokesUri = canvasToCacheUri(context, strokes, stickers, texts, aspect)
+        val strokesUri = canvasToCacheUri(context, strokes, stickers, texts, aspect, backgroundColor)
         val strokesPayloadId = session.transport.sendFile(strokesUri)
         session.transport.send(
             Frame.Snapshot(
@@ -254,6 +256,7 @@ private suspend fun respondToSnapshotRequest(
     texts: List<com.rts.rys.ryy.drawingtogether.drawing.model.TextElement>,
     background: BackgroundImage?,
     aspect: com.rts.rys.ryy.drawingtogether.drawing.model.CanvasAspect,
+    backgroundColor: Int,
 ) {
     if (session.state.value !is SessionState.Connected) return
     // 요청자가 직접 연결된 피어면 그 endpoint 로 unicast 한다. broadcast 용 sendFile 은 하나의
@@ -265,7 +268,7 @@ private suspend fun respondToSnapshotRequest(
         .firstOrNull { it.peerId.value == targetPeerId && it.endpointId.isNotEmpty() }
         ?.endpointId
     runCatching {
-        val strokesUri = canvasToCacheUri(context, strokes, stickers, texts, aspect)
+        val strokesUri = canvasToCacheUri(context, strokes, stickers, texts, aspect, backgroundColor)
         val photoUri = if (background != null) bitmapToCacheUri(context, background.bitmap) else null
         val photoByteSize = photoUri?.let {
             context.contentResolver.openAssetFileDescriptor(it, "r")?.use { fd -> fd.length } ?: 0L
@@ -316,13 +319,14 @@ private suspend fun sendHostCanvasToJoiner(
     texts: List<com.rts.rys.ryy.drawingtogether.drawing.model.TextElement>,
     background: BackgroundImage?,
     aspect: com.rts.rys.ryy.drawingtogether.drawing.model.CanvasAspect,
+    backgroundColor: Int,
 ) {
     if (session.state.value !is SessionState.Connected) return
     val hasContent = strokes.isNotEmpty() || stickers.isNotEmpty() || texts.isNotEmpty()
     if (!hasContent && background == null) return
     runCatching {
         if (hasContent) {
-            val uri = canvasToCacheUri(context, strokes, stickers, texts, aspect)
+            val uri = canvasToCacheUri(context, strokes, stickers, texts, aspect, backgroundColor)
             val pid = session.transport.sendFileTo(endpointId, uri)
             session.transport.sendTo(
                 endpointId,
@@ -638,6 +642,7 @@ fun DrawingScreen(
                         texts = vm.canvas.texts.toList(),
                         background = vm.canvas.background,
                         aspect = vm.canvas.aspect,
+                        backgroundColor = vm.canvas.backgroundColor,
                     )
                 }
             }
@@ -665,6 +670,22 @@ fun DrawingScreen(
         }
     }
 
+    // 원격 배경색 변경 — 비율과 동일 라우팅.
+    LaunchedEffect(vm, session) {
+        session.incomingBackgroundColor.collect { event ->
+            if (mode == DrawMode.Party || mode == DrawMode.Classroom) {
+                val sender = event.senderPeerId
+                if (sender != null) {
+                    vm.peerCanvases.getOrPut(sender) {
+                        com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState()
+                    }.setBackgroundColor(event.argb)
+                }
+            } else {
+                vm.canvas.setBackgroundColor(event.argb)
+            }
+        }
+    }
+
     // 상대가 내 캔버스 상태를 요청 (SnapshotReq). 현재 strokes + photo 로 응답.
     //  - forLiveView=true (교실 조인자의 방장 라이브뷰 채우기): 요청자에게 target="" 로 보내
     //    그 조인자의 peerCanvases[host] 에 적용(메인 아님). 요청자가 화면 준비 후 요청하므로 레이스 없음.
@@ -684,6 +705,7 @@ fun DrawingScreen(
                     texts = vm.canvas.texts.toList(),
                     background = vm.canvas.background,
                     aspect = vm.canvas.aspect,
+                    backgroundColor = vm.canvas.backgroundColor,
                 )
             } else {
                 respondToSnapshotRequest(
@@ -695,6 +717,7 @@ fun DrawingScreen(
                     texts = vm.canvas.texts.toList(),
                     background = vm.canvas.background,
                     aspect = vm.canvas.aspect,
+                    backgroundColor = vm.canvas.backgroundColor,
                 )
             }
         }
@@ -708,7 +731,7 @@ fun DrawingScreen(
         session.incomingSnapshot.collect { event ->
             // Duo/Single: 항상 자기 메인 캔버스에 덮어쓰기.
             if (mode != DrawMode.Party && mode != DrawMode.Classroom) {
-                vm.applyRemoteSnapshot(event.strokes, event.stickers, event.texts, event.aspect)
+                vm.applyRemoteSnapshot(event.strokes, event.stickers, event.texts, event.aspect, event.backgroundColor)
                 return@collect
             }
             // 모임/교실: sender 라우팅.
@@ -719,7 +742,7 @@ fun DrawingScreen(
             //  - sender != null: 호스트/조인자 라이브뷰 → peerCanvases[sender] 에 적용.
             val sender = event.senderPeerId
             if (sender == null) {
-                vm.applyRemoteSnapshot(event.strokes, event.stickers, event.texts, event.aspect)
+                vm.applyRemoteSnapshot(event.strokes, event.stickers, event.texts, event.aspect, event.backgroundColor)
                 syncGotStrokes = true
                 if (syncGotBackground) {
                     syncGotStrokes = false
@@ -732,12 +755,13 @@ fun DrawingScreen(
                         texts = vm.canvas.texts.toList(),
                         background = vm.canvas.background,
                         aspect = vm.canvas.aspect,
+                        backgroundColor = vm.canvas.backgroundColor,
                     )
                 }
             } else {
                 vm.peerCanvases.getOrPut(sender) {
                     com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState()
-                }.applySnapshot(event.strokes, event.stickers, event.texts, event.aspect)
+                }.applySnapshot(event.strokes, event.stickers, event.texts, event.aspect, event.backgroundColor)
             }
         }
     }
@@ -1212,6 +1236,12 @@ fun DrawingScreen(
             onConfirm = { argb ->
                 vm.setBackgroundColor(argb)
                 showBgColorPicker = false
+                // 연결돼 있으면 배경색 변경을 상대에게 전송(비율 동기화와 동일 라우팅).
+                if (session.state.value is SessionState.Connected) {
+                    scope.launch {
+                        runCatching { session.transport.send(Frame.BackgroundColorFrame(argb)) }
+                    }
+                }
             },
             onDismiss = { showBgColorPicker = false },
         )

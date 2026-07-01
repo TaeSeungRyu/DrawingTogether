@@ -79,12 +79,19 @@ data class IncomingSnapshotEvent(
     val texts: List<TextElement> = emptyList(),
     val aspect: com.rts.rys.ryy.drawingtogether.drawing.model.CanvasAspect =
         com.rts.rys.ryy.drawingtogether.drawing.model.CanvasAspect.Free,
+    val backgroundColor: Int = 0xFFFFFFFF.toInt(),
 )
 
 // 원격에서 도착한 캔버스 비율 변경. senderPeerId = 발신자(모임/교실 미니뷰 라우팅용). 함께 모드는 무시.
 data class IncomingCanvasAspect(
     val senderPeerId: PeerId?,
     val aspect: com.rts.rys.ryy.drawingtogether.drawing.model.CanvasAspect,
+)
+
+// 원격에서 도착한 캔버스 배경색 변경. senderPeerId = 발신자(모임/교실 미니뷰 라우팅용).
+data class IncomingBackgroundColor(
+    val senderPeerId: PeerId?,
+    val argb: Int,
 )
 
 // 프로세스 전역 싱글톤. WorkStore와 동일한 패턴.
@@ -120,6 +127,10 @@ class SessionManager private constructor(
     // 원격 캔버스 비율 변경.
     private val _incomingCanvasAspect = MutableSharedFlow<IncomingCanvasAspect>(extraBufferCapacity = 4)
     val incomingCanvasAspect: SharedFlow<IncomingCanvasAspect> = _incomingCanvasAspect.asSharedFlow()
+
+    // 원격 캔버스 배경색 변경.
+    private val _incomingBackgroundColor = MutableSharedFlow<IncomingBackgroundColor>(extraBufferCapacity = 4)
+    val incomingBackgroundColor: SharedFlow<IncomingBackgroundColor> = _incomingBackgroundColor.asSharedFlow()
 
     // 사진 송수신 진행률. transport.fileTransfers 패스스루 — 현재 프로토콜에서 FILE = 사진.
     val photoTransfers: SharedFlow<FileTransferEvent> get() = transport.fileTransfers
@@ -484,6 +495,11 @@ class SessionManager private constructor(
                 // 모임(Party) 호스트는 다른 조인자에게 relay(mesh). 교실/함께는 relay 안 함(relayIfHost 내부 게이트).
                 relayIfHost(endpointId, frame)
             }
+            is Frame.BackgroundColorFrame -> {
+                val sender = handshakes[endpointId]?.remoteHello?.peerId?.let(::PeerId)
+                _incomingBackgroundColor.tryEmit(IncomingBackgroundColor(sender, frame.argb))
+                relayIfHost(endpointId, frame)
+            }
             is Frame.SnapshotReq -> {
                 // Phase 4-G: target!=self 면 호스트 relay. target 비/self 면 자기가 응답.
                 if (shouldRelay(frame.targetPeerId)) {
@@ -609,7 +625,7 @@ class SessionManager private constructor(
                 } ?: return@launch
                 val snapshot = FrameCodec.decodeCanvas(bytes)
                 _incomingSnapshot.tryEmit(
-                    IncomingSnapshotEvent(senderPeerId, snapshot.strokes, snapshot.stickers, snapshot.texts, snapshot.aspect)
+                    IncomingSnapshotEvent(senderPeerId, snapshot.strokes, snapshot.stickers, snapshot.texts, snapshot.aspect, snapshot.backgroundColor)
                 )
             }
         }
