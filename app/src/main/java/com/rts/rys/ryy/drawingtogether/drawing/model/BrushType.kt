@@ -40,7 +40,7 @@ enum class BrushType(
         capStyle = BrushCapStyle.Round,
         alpha = 1.0f,
         widthScale = 0.35f,
-        fixedWidthDp = 1.2f,
+        fixedWidthDp = 0.8f,
     ),
     Ink(
         displayName = "잉크펜",
