@@ -191,18 +191,29 @@ fun Toolbar(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = "굵기 ${tool.strokeWidthDp.toInt()}dp",
-                    style = MaterialTheme.typography.labelMedium,
-                )
-                Slider(
-                    value = tool.strokeWidthDp,
-                    onValueChange = onStrokeWidth,
-                    valueRange = 1f..32f,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 12.dp),
-                )
+                if (tool.brush.fixedWidthDp != null) {
+                    // 세밀붓 등 굵기 고정 붓 — 슬라이더 숨기고 안내만.
+                    Text(
+                        text = "${tool.brush.displayName} · 굵기 고정",
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 12.dp),
+                    )
+                } else {
+                    Text(
+                        text = "굵기 ${tool.strokeWidthDp.toInt()}dp",
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                    Slider(
+                        value = tool.strokeWidthDp,
+                        onValueChange = onStrokeWidth,
+                        valueRange = 1f..32f,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 12.dp),
+                    )
+                }
                 SmoothingChip(smoothing = smoothing, onClick = onCycleSmoothing)
             }
 

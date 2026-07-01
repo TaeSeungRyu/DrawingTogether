@@ -24,6 +24,7 @@ fun PenIllustration(brush: BrushType, modifier: Modifier = Modifier) {
         when (brush) {
             BrushType.Pen -> drawBallpoint(w, h)
             BrushType.Pencil -> drawPencil(w, h)
+            BrushType.Fine -> drawFineliner(w, h)
             BrushType.Ink -> drawInkPen(w, h)
             BrushType.Marker -> drawMarker(w, h)
             BrushType.Highlighter -> drawHighlighter(w, h)
@@ -252,6 +253,45 @@ private fun DrawScope.drawPencil(w: Float, h: Float) {
         close()
     }
     drawPath(tipPath, Color(0xFF263238))
+}
+
+// 세밀붓 — 가늘고 긴 몸통 + 아주 뾰족한 바늘 팁(제도펜 느낌).
+private fun DrawScope.drawFineliner(w: Float, h: Float) {
+    val bodyTop = h * 0.40f
+    val bodyHeight = h * 0.20f
+    val capEnd = w * 0.16f
+    val bodyEnd = w * 0.70f
+    val tipEnd = w * 0.97f
+    val cornerR = CornerRadius(bodyHeight * 0.5f)
+
+    drawRoundRect(
+        color = Color(0xFF455A64),
+        topLeft = Offset(0f, bodyTop),
+        size = Size(capEnd, bodyHeight),
+        cornerRadius = cornerR,
+    )
+    drawRoundRect(
+        color = Color(0xFF263238),
+        topLeft = Offset(capEnd - bodyHeight * 0.2f, bodyTop),
+        size = Size(bodyEnd - (capEnd - bodyHeight * 0.2f), bodyHeight),
+        cornerRadius = cornerR,
+    )
+    // 원뿔형 팁 — 얇게 수렴.
+    val cone = Path().apply {
+        moveTo(bodyEnd, bodyTop)
+        lineTo(w * 0.90f, h * 0.5f)
+        lineTo(bodyEnd, bodyTop + bodyHeight)
+        close()
+    }
+    drawPath(cone, Color(0xFF607D8B))
+    // 바늘 팁 — 아주 가는 선.
+    drawLine(
+        color = Color(0xFF212121),
+        start = Offset(w * 0.90f, h * 0.5f),
+        end = Offset(tipEnd, h * 0.5f),
+        strokeWidth = (h * 0.02f).coerceAtLeast(1.5f),
+        cap = StrokeCap.Round,
+    )
 }
 
 private fun DrawScope.drawInkPen(w: Float, h: Float) {

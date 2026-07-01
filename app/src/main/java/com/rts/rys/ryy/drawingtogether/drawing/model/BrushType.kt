@@ -9,6 +9,8 @@ import kotlinx.serialization.Serializable
 // widthScale:  슬라이더로 정한 strokeWidthDp에 곱해진다. 같은 굵기 설정에서도
 //              연필은 가늘게, 형광펜은 굵게 보이게 함.
 // capStyle:    선의 끝/꺾임 모양. Round = 둥근, Square = 각진.
+// fixedWidthDp: non-null 이면 슬라이더 굵기를 무시하고 이 dp 로 고정 — "세밀붓" 처럼 굵기 선택
+//              불가한 붓용. 이때 widthScale 은 실제 그리기엔 안 쓰이고 미리보기 두께에만 영향.
 @Serializable
 enum class BrushType(
     val displayName: String,
@@ -16,6 +18,7 @@ enum class BrushType(
     val capStyle: BrushCapStyle,
     val alpha: Float,
     val widthScale: Float,
+    val fixedWidthDp: Float? = null,
 ) {
     Pen(
         displayName = "펜",
@@ -30,6 +33,14 @@ enum class BrushType(
         capStyle = BrushCapStyle.Round,
         alpha = 0.85f,
         widthScale = 0.6f,
+    ),
+    Fine(
+        displayName = "세밀붓",
+        description = "굵기 고정된 아주 가는 선",
+        capStyle = BrushCapStyle.Round,
+        alpha = 1.0f,
+        widthScale = 0.35f,
+        fixedWidthDp = 1.2f,
     ),
     Ink(
         displayName = "잉크펜",

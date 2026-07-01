@@ -368,7 +368,7 @@ internal fun colorFor(tool: ToolSettings): Color =
     Color(tool.colorArgb).copy(alpha = tool.brush.alpha)
 
 internal fun strokeWidthPxFor(tool: ToolSettings, density: Float): Float =
-    tool.strokeWidthDp * tool.brush.widthScale * density
+    (tool.brush.fixedWidthDp ?: (tool.strokeWidthDp * tool.brush.widthScale)) * density
 
 internal fun capJoinFor(brush: BrushType): Pair<StrokeCap, StrokeJoin> = when (brush.capStyle) {
     BrushCapStyle.Square -> StrokeCap.Square to StrokeJoin.Miter
