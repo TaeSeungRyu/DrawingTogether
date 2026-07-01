@@ -61,6 +61,13 @@ class WorkStore private constructor(private val worksDir: File) {
         }
     }
 
+    // 저장 작품 삭제 — PNG + meta 를 지우고 인덱스 갱신. 외부 갤러리로 내보낸 사본은 영향 없음.
+    suspend fun delete(id: String) = withContext(Dispatchers.IO) {
+        runCatching { pngFile(id).delete() }
+        runCatching { metaFile(id).delete() }
+        _works.value = loadAll()
+    }
+
     fun pngFile(id: String): File = File(worksDir, "$id.png")
 
     private fun metaFile(id: String): File = File(worksDir, "$id.meta")

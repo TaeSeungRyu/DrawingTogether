@@ -1,7 +1,9 @@
 package com.rts.rys.ryy.drawingtogether.ui.home
 
 import android.graphics.BitmapFactory
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,6 +29,7 @@ import kotlinx.coroutines.withContext
 
 // 저장된 작품 1건의 썸네일 카드. 크기는 호출자가 modifier로 결정.
 // 디코딩은 IO 디스패처에서 sample-size로 다운샘플링.
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun WorkThumbnail(
     work: Work,
@@ -34,6 +37,7 @@ fun WorkThumbnail(
     modifier: Modifier = Modifier,
     cornerRadius: Dp = 12.dp,
     decodeMaxDim: Int = 320,
+    onLongClick: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val file = remember(work.id) { WorkStore.get(context).pngFile(work.id) }
@@ -48,8 +52,7 @@ fun WorkThumbnail(
     }
 
     Card(
-        onClick = onClick,
-        modifier = modifier,
+        modifier = modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick),
         shape = RoundedCornerShape(cornerRadius),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant,

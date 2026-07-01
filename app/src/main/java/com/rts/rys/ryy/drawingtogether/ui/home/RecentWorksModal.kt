@@ -31,19 +31,23 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -51,6 +55,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.rts.rys.ryy.drawingtogether.works.Work
+import com.rts.rys.ryy.drawingtogether.works.WorkStore
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 // 커스텀 bottom 시트 — Material3 ModalBottomSheet 가 가로에서 sheet 를 시스템 영역 안쪽으로
@@ -71,6 +77,10 @@ fun RecentWorksModal(
     val maxGridHeight = minOf(440, (cfg.screenHeightDp * 0.7f).roundToInt()).dp
 
     val density = LocalDensity.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    // 길게 눌러 삭제할 작품 — 확인 다이얼로그로 확정.
+    var pendingDelete by remember { mutableStateOf<Work?>(null) }
     // 아래로 이만큼(px) 넘게 끌면 닫힘.
     val dismissThresholdPx = with(density) { 120.dp.toPx() }
     var dragOffsetY by remember { mutableStateOf(0f) }
@@ -179,6 +189,7 @@ fun RecentWorksModal(
                                         .aspectRatio(1f),
                                     cornerRadius = 12.dp,
                                     decodeMaxDim = 360,
+                                    onLongClick = { pendingDelete = work },
                                 )
                                 if (work.name.isNotBlank()) {
                                     Spacer(modifier = Modifier.height(4.dp))
@@ -199,5 +210,24 @@ fun RecentWorksModal(
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }
+    }
+
+    pendingDelete?.let { work ->
+        val label = work.name.takeIf { it.isNotBlank() } ?: "이 작품"
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("작품 삭제") },
+            text = { Text("\"$label\"을(를) 삭제할까요? 되돌릴 수 없어요. (갤러리로 내보낸 사본은 남습니다.)") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val id = work.id
+                    pendingDelete = null
+                    scope.launch { WorkStore.get(context).delete(id) }
+                }) { Text("삭제") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDelete = null }) { Text("취소") }
+            },
+        )
     }
 }
