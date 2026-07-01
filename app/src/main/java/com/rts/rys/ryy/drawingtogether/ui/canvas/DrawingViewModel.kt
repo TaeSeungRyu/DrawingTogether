@@ -215,13 +215,15 @@ class DrawingViewModel : ViewModel() {
         }
     }
 
-    // "동기화" — 상대 캔버스 snapshot 으로 내 stroke + 스티커 + 텍스트를 전부 교체. 사진 배경은 별도 경로.
+    // "동기화" — 상대 캔버스 snapshot 으로 내 stroke + 스티커 + 텍스트 + 비율을 전부 교체. 사진 배경은 별도 경로.
     fun applyRemoteSnapshot(
         strokes: List<Stroke>,
         stickers: List<Sticker> = emptyList(),
         texts: List<TextElement> = emptyList(),
+        aspect: com.rts.rys.ryy.drawingtogether.drawing.model.CanvasAspect =
+            com.rts.rys.ryy.drawingtogether.drawing.model.CanvasAspect.Free,
     ) {
-        canvas.applySnapshot(strokes, stickers, texts)
+        canvas.applySnapshot(strokes, stickers, texts, aspect)
     }
 
     fun selectColor(argb: Int) {

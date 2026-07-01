@@ -1,5 +1,6 @@
 package com.rts.rys.ryy.drawingtogether.transport
 
+import com.rts.rys.ryy.drawingtogether.drawing.model.CanvasAspect
 import com.rts.rys.ryy.drawingtogether.drawing.model.DrawingEvent
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -75,6 +76,12 @@ sealed class Frame {
     @Serializable
     @SerialName("merge_bg")
     data class MergeBackground(val enabled: Boolean) : Frame()
+
+    // 캔버스 비율 변경 동기화. 함께=공유 캔버스에 적용, 모임/교실=발신자 peerCanvases 에 적용
+    // (받는 쪽이 senderPeerId 로 라우팅). 사진 있으면 사진 비율 우선이라 표시엔 영향 없음.
+    @Serializable
+    @SerialName("canvas_aspect")
+    data class CanvasAspectFrame(val aspect: CanvasAspect) : Frame()
 
     @Serializable
     @SerialName("ping")

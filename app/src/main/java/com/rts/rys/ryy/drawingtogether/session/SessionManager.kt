@@ -77,6 +77,14 @@ data class IncomingSnapshotEvent(
     val strokes: List<Stroke>,
     val stickers: List<Sticker> = emptyList(),
     val texts: List<TextElement> = emptyList(),
+    val aspect: com.rts.rys.ryy.drawingtogether.drawing.model.CanvasAspect =
+        com.rts.rys.ryy.drawingtogether.drawing.model.CanvasAspect.Free,
+)
+
+// 원격에서 도착한 캔버스 비율 변경. senderPeerId = 발신자(모임/교실 미니뷰 라우팅용). 함께 모드는 무시.
+data class IncomingCanvasAspect(
+    val senderPeerId: PeerId?,
+    val aspect: com.rts.rys.ryy.drawingtogether.drawing.model.CanvasAspect,
 )
 
 // 프로세스 전역 싱글톤. WorkStore와 동일한 패턴.
@@ -108,6 +116,10 @@ class SessionManager private constructor(
     // 원격에서 도착한 "저장 시 배경 합치기" 토글 값.
     private val _incomingMergeToggle = MutableSharedFlow<Boolean>(extraBufferCapacity = 4)
     val incomingMergeToggle: SharedFlow<Boolean> = _incomingMergeToggle.asSharedFlow()
+
+    // 원격 캔버스 비율 변경.
+    private val _incomingCanvasAspect = MutableSharedFlow<IncomingCanvasAspect>(extraBufferCapacity = 4)
+    val incomingCanvasAspect: SharedFlow<IncomingCanvasAspect> = _incomingCanvasAspect.asSharedFlow()
 
     // 사진 송수신 진행률. transport.fileTransfers 패스스루 — 현재 프로토콜에서 FILE = 사진.
     val photoTransfers: SharedFlow<FileTransferEvent> get() = transport.fileTransfers
@@ -466,6 +478,12 @@ class SessionManager private constructor(
             is Frame.MergeBackground -> {
                 _incomingMergeToggle.tryEmit(frame.enabled)
             }
+            is Frame.CanvasAspectFrame -> {
+                val sender = handshakes[endpointId]?.remoteHello?.peerId?.let(::PeerId)
+                _incomingCanvasAspect.tryEmit(IncomingCanvasAspect(sender, frame.aspect))
+                // 모임(Party) 호스트는 다른 조인자에게 relay(mesh). 교실/함께는 relay 안 함(relayIfHost 내부 게이트).
+                relayIfHost(endpointId, frame)
+            }
             is Frame.SnapshotReq -> {
                 // Phase 4-G: target!=self 면 호스트 relay. target 비/self 면 자기가 응답.
                 if (shouldRelay(frame.targetPeerId)) {
@@ -591,7 +609,7 @@ class SessionManager private constructor(
                 } ?: return@launch
                 val snapshot = FrameCodec.decodeCanvas(bytes)
                 _incomingSnapshot.tryEmit(
-                    IncomingSnapshotEvent(senderPeerId, snapshot.strokes, snapshot.stickers, snapshot.texts)
+                    IncomingSnapshotEvent(senderPeerId, snapshot.strokes, snapshot.stickers, snapshot.texts, snapshot.aspect)
                 )
             }
         }

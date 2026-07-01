@@ -168,13 +168,14 @@ private suspend fun canvasToCacheUri(
     strokes: List<com.rts.rys.ryy.drawingtogether.drawing.model.Stroke>,
     stickers: List<com.rts.rys.ryy.drawingtogether.drawing.model.Sticker>,
     texts: List<com.rts.rys.ryy.drawingtogether.drawing.model.TextElement>,
+    aspect: com.rts.rys.ryy.drawingtogether.drawing.model.CanvasAspect,
 ): android.net.Uri = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
     val dir = java.io.File(context.cacheDir, "snapshots").apply { mkdirs() }
     val file = java.io.File(dir, "canvas_${System.currentTimeMillis()}.cbor")
     file.outputStream().use { out ->
         out.write(
             com.rts.rys.ryy.drawingtogether.transport.codec.FrameCodec.encodeCanvas(
-                com.rts.rys.ryy.drawingtogether.drawing.model.CanvasSnapshot(strokes, stickers, texts)
+                com.rts.rys.ryy.drawingtogether.drawing.model.CanvasSnapshot(strokes, stickers, texts, aspect)
             )
         )
     }
@@ -196,10 +197,11 @@ private suspend fun broadcastMyCanvasAsPeer(
     stickers: List<com.rts.rys.ryy.drawingtogether.drawing.model.Sticker>,
     texts: List<com.rts.rys.ryy.drawingtogether.drawing.model.TextElement>,
     background: BackgroundImage?,
+    aspect: com.rts.rys.ryy.drawingtogether.drawing.model.CanvasAspect,
 ) {
     if (session.state.value !is SessionState.Connected) return
     runCatching {
-        val strokesUri = canvasToCacheUri(context, strokes, stickers, texts)
+        val strokesUri = canvasToCacheUri(context, strokes, stickers, texts, aspect)
         val strokesPayloadId = session.transport.sendFile(strokesUri)
         session.transport.send(
             Frame.Snapshot(
@@ -250,6 +252,7 @@ private suspend fun respondToSnapshotRequest(
     stickers: List<com.rts.rys.ryy.drawingtogether.drawing.model.Sticker>,
     texts: List<com.rts.rys.ryy.drawingtogether.drawing.model.TextElement>,
     background: BackgroundImage?,
+    aspect: com.rts.rys.ryy.drawingtogether.drawing.model.CanvasAspect,
 ) {
     if (session.state.value !is SessionState.Connected) return
     // 요청자가 직접 연결된 피어면 그 endpoint 로 unicast 한다. broadcast 용 sendFile 은 하나의
@@ -261,7 +264,7 @@ private suspend fun respondToSnapshotRequest(
         .firstOrNull { it.peerId.value == targetPeerId && it.endpointId.isNotEmpty() }
         ?.endpointId
     runCatching {
-        val strokesUri = canvasToCacheUri(context, strokes, stickers, texts)
+        val strokesUri = canvasToCacheUri(context, strokes, stickers, texts, aspect)
         val photoUri = if (background != null) bitmapToCacheUri(context, background.bitmap) else null
         val photoByteSize = photoUri?.let {
             context.contentResolver.openAssetFileDescriptor(it, "r")?.use { fd -> fd.length } ?: 0L
@@ -311,13 +314,14 @@ private suspend fun sendHostCanvasToJoiner(
     stickers: List<com.rts.rys.ryy.drawingtogether.drawing.model.Sticker>,
     texts: List<com.rts.rys.ryy.drawingtogether.drawing.model.TextElement>,
     background: BackgroundImage?,
+    aspect: com.rts.rys.ryy.drawingtogether.drawing.model.CanvasAspect,
 ) {
     if (session.state.value !is SessionState.Connected) return
     val hasContent = strokes.isNotEmpty() || stickers.isNotEmpty() || texts.isNotEmpty()
     if (!hasContent && background == null) return
     runCatching {
         if (hasContent) {
-            val uri = canvasToCacheUri(context, strokes, stickers, texts)
+            val uri = canvasToCacheUri(context, strokes, stickers, texts, aspect)
             val pid = session.transport.sendFileTo(endpointId, uri)
             session.transport.sendTo(
                 endpointId,
@@ -632,6 +636,7 @@ fun DrawingScreen(
                         stickers = vm.canvas.stickers.toList(),
                         texts = vm.canvas.texts.toList(),
                         background = vm.canvas.background,
+                        aspect = vm.canvas.aspect,
                     )
                 }
             }
@@ -640,6 +645,22 @@ fun DrawingScreen(
     LaunchedEffect(vm, session) {
         session.incomingMergeToggle.collect { enabled ->
             vm.setMergeBackgroundOnSave(enabled)
+        }
+    }
+    // 원격 캔버스 비율 변경. 함께(Duo)=공유 캔버스에 적용. 모임/교실=발신자 peerCanvases 에 적용
+    // (그 사람의 미니/라이브뷰가 그 비율로 보이도록).
+    LaunchedEffect(vm, session) {
+        session.incomingCanvasAspect.collect { event ->
+            if (mode == DrawMode.Party || mode == DrawMode.Classroom) {
+                val sender = event.senderPeerId
+                if (sender != null) {
+                    vm.peerCanvases.getOrPut(sender) {
+                        com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState()
+                    }.setCanvasAspect(event.aspect)
+                }
+            } else {
+                vm.canvas.setCanvasAspect(event.aspect)
+            }
         }
     }
 
@@ -661,6 +682,7 @@ fun DrawingScreen(
                     stickers = vm.canvas.stickers.toList(),
                     texts = vm.canvas.texts.toList(),
                     background = vm.canvas.background,
+                    aspect = vm.canvas.aspect,
                 )
             } else {
                 respondToSnapshotRequest(
@@ -671,6 +693,7 @@ fun DrawingScreen(
                     stickers = vm.canvas.stickers.toList(),
                     texts = vm.canvas.texts.toList(),
                     background = vm.canvas.background,
+                    aspect = vm.canvas.aspect,
                 )
             }
         }
@@ -684,7 +707,7 @@ fun DrawingScreen(
         session.incomingSnapshot.collect { event ->
             // Duo/Single: 항상 자기 메인 캔버스에 덮어쓰기.
             if (mode != DrawMode.Party && mode != DrawMode.Classroom) {
-                vm.applyRemoteSnapshot(event.strokes, event.stickers, event.texts)
+                vm.applyRemoteSnapshot(event.strokes, event.stickers, event.texts, event.aspect)
                 return@collect
             }
             // 모임/교실: sender 라우팅.
@@ -695,7 +718,7 @@ fun DrawingScreen(
             //  - sender != null: 호스트/조인자 라이브뷰 → peerCanvases[sender] 에 적용.
             val sender = event.senderPeerId
             if (sender == null) {
-                vm.applyRemoteSnapshot(event.strokes, event.stickers, event.texts)
+                vm.applyRemoteSnapshot(event.strokes, event.stickers, event.texts, event.aspect)
                 syncGotStrokes = true
                 if (syncGotBackground) {
                     syncGotStrokes = false
@@ -707,12 +730,13 @@ fun DrawingScreen(
                         stickers = vm.canvas.stickers.toList(),
                         texts = vm.canvas.texts.toList(),
                         background = vm.canvas.background,
+                        aspect = vm.canvas.aspect,
                     )
                 }
             } else {
                 vm.peerCanvases.getOrPut(sender) {
                     com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState()
-                }.applySnapshot(event.strokes, event.stickers, event.texts)
+                }.applySnapshot(event.strokes, event.stickers, event.texts, event.aspect)
             }
         }
     }
@@ -1195,9 +1219,15 @@ fun DrawingScreen(
     if (showAspectSheet) {
         AspectRatioSheet(
             current = vm.canvas.aspect,
-            onSelect = {
-                vm.setCanvasAspect(it)
+            onSelect = { aspect ->
+                vm.setCanvasAspect(aspect)
                 showAspectSheet = false
+                // 연결돼 있으면 비율 변경을 상대에게 전송(함께=공유 캔버스, 모임/교실=내 미니뷰 반영).
+                if (session.state.value is SessionState.Connected) {
+                    scope.launch {
+                        runCatching { session.transport.send(Frame.CanvasAspectFrame(aspect)) }
+                    }
+                }
             },
             onDismiss = { showAspectSheet = false },
         )

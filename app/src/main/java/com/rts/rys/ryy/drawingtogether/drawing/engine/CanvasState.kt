@@ -100,6 +100,7 @@ class CanvasState {
         strokes: List<Stroke>,
         stickers: List<Sticker> = emptyList(),
         texts: List<TextElement> = emptyList(),
+        aspect: CanvasAspect = _aspect,
     ) {
         _strokes.clear()
         _openStrokes.clear()
@@ -109,6 +110,7 @@ class CanvasState {
         _strokes.addAll(strokes)
         _stickers.addAll(stickers)
         _texts.addAll(texts)
+        _aspect = aspect
         // collaborative undo — 받은 stroke 들 시간순으로 undoStack 에 push.
         // 스티커·텍스트는 추가 순서를 알 수 없으니 stroke 뒤에 이어 push (대략적 시간순).
         strokes.forEach { _undoStack.add(UndoItem.StrokeRef(it.id)) }

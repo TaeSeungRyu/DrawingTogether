@@ -65,7 +65,7 @@ fun MiniCanvas(
         ) {
             Box(
                 modifier = Modifier
-                    .aspectRatio(state.background?.aspectRatio ?: 1f)
+                    .aspectRatio(state.background?.aspectRatio ?: state.aspect.ratio ?: 1f)
                     .background(Color.White),
                 contentAlignment = Alignment.Center,
             ) {

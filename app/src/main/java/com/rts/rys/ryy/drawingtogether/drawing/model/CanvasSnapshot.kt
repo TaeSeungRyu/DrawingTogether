@@ -9,4 +9,5 @@ data class CanvasSnapshot(
     val strokes: List<Stroke>,
     val stickers: List<Sticker> = emptyList(),
     val texts: List<TextElement> = emptyList(),
+    val aspect: CanvasAspect = CanvasAspect.Free,
 )
