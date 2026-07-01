@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -63,6 +64,9 @@ import kotlinx.coroutines.launch
 // - 호스트 최대 3명 reject 정책 미구현
 // - "그리기 시작" 누른 뒤 추가 조인자가 들어오는 케이스 미처리
 private enum class PartyRole { Host, Joiner, NotPicked }
+
+// 넓은 화면(태블릿/가로)에서 콘텐츠가 끝까지 늘어나지 않게 하는 최대 폭. 홈 화면과 동일 기준.
+private val MAX_CONTENT_WIDTH = 480.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -136,7 +140,10 @@ fun PartyPairingScreen(
             }
     }
 
-    Column(modifier = modifier.fillMaxSize()) {
+    Column(
+        modifier = modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
         TopAppBar(
             title = { Text("$modeLabel 모드") },
             navigationIcon = {
@@ -155,6 +162,7 @@ fun PartyPairingScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .widthIn(max = MAX_CONTENT_WIDTH)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp),
         ) {
