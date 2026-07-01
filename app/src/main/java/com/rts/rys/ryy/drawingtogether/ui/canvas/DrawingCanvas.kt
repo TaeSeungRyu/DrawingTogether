@@ -3,11 +3,15 @@ package com.rts.rys.ryy.drawingtogether.ui.canvas
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -79,8 +83,18 @@ fun DrawingCanvas(
     onRemoveText: (TextId) -> Unit = {},
     // 입력 시트가 열린 동안 텍스트가 들어갈 정규화 좌표(0..1). non-null 이면 그 위치에 캐럿 마커를 그린다.
     pendingTextPoint: Pair<Float, Float>? = null,
+    // 줌 뷰포트 — 로컬 표시 전용. scale=1f/offset=Zero 면 기존과 동일(변화 없음).
+    scale: Float = 1f,
+    offset: Offset = Offset.Zero,
+    onViewportChange: (Float, Offset) -> Unit = { _, _ -> },
+    // 그리기 중 두 번째 손가락 감지 → 진행 stroke 취소(줌/이동으로 전환).
+    onStrokeCancel: (StrokeId) -> Unit = {},
 ) {
     val density = LocalDensity.current.density
+    // pointerInput(tool.kind) 은 scale/offset 변화로 재시작하지 않으므로, 제스처 코루틴에서
+    // 항상 최신 뷰포트를 읽도록 rememberUpdatedState 로 감싼다.
+    val scaleState = rememberUpdatedState(scale)
+    val offsetState = rememberUpdatedState(offset)
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
     // 그리는 동안 현재 포인터 위치 — 펜/지우개 두께 미리보기용. 손가락 떼면 null.
     var cursor by remember { mutableStateOf<Offset?>(null) }
@@ -121,6 +135,8 @@ fun DrawingCanvas(
                         onTransformLocal = onTransformStickerLocal,
                         onCommit = onCommitStickerTransform,
                         onRemove = onRemoveSticker,
+                        scale = { scaleState.value },
+                        offset = { offsetState.value },
                     )
                 } else if (isText) {
                     textGestures(
@@ -130,6 +146,8 @@ fun DrawingCanvas(
                         setSelected = { selectedTextId = it },
                         onRequestText = onRequestText,
                         onRemove = onRemoveText,
+                        scale = { scaleState.value },
+                        offset = { offsetState.value },
                     )
                 } else if (isEyedropper) {
                     // 스포이드 — 누른 채 드래그하면 조준 십자가 따라오고, 떼는 순간 그 지점 색을 집는다.
@@ -151,7 +169,8 @@ fun DrawingCanvas(
                             if (!pressed) break
                         }
                         eyedropperPos?.let { p ->
-                            val n = p.toNormalized(size)
+                            // 화면좌표 → 콘텐츠좌표 후 정규화(줌 반영).
+                            val n = p.screenToContent(scaleState.value, offsetState.value).toNormalized(size)
                             onPickColor(n.x, n.y)
                         }
                         eyedropperPos = null
@@ -159,96 +178,137 @@ fun DrawingCanvas(
                 } else {
                     awaitEachGesture {
                         val first = awaitFirstDown(requireUnconsumed = false)
-                        val strokeId = StrokeId.random()
-                        onStrokeStart(strokeId, first.position.toNormalized(size))
-                        cursor = first.position
                         first.consume()
+                        val strokeId = StrokeId.random()
+                        var drawing = true
+                        onStrokeStart(
+                            strokeId,
+                            first.position.screenToContent(scaleState.value, offsetState.value).toNormalized(size),
+                        )
+                        cursor = first.position
 
-                        // 지수이동평균(EMA) 상태 — 첫 점에서 시작. alpha=1f 면 원본 그대로.
+                        // 지수이동평균(EMA) 상태 — 첫 점에서 시작(화면좌표). alpha=1f 면 원본 그대로.
                         val alpha = smoothingAlpha.coerceIn(0.05f, 1f)
                         var smoothed = first.position
 
                         val pending = mutableListOf<DrawPoint>()
                         while (true) {
                             val event = awaitPointerEvent()
-                            var anyPressed = false
-                            event.changes.forEach { change: PointerInputChange ->
-                                if (change.pressed) anyPressed = true
-                                if (change.positionChanged()) {
-                                    smoothed += (change.position - smoothed) * alpha
-                                    pending.add(smoothed.toNormalized(size))
-                                    cursor = smoothed
-                                    change.consume()
-                                }
-                            }
-                            if (pending.isNotEmpty()) {
-                                onStrokeAppend(strokeId, pending.toList())
+
+                            // 두 번째 손가락 감지 → 진행 stroke 취소하고 줌/이동(pan/zoom)으로 전환.
+                            if (drawing && event.changes.count { it.pressed } >= 2) {
+                                onStrokeCancel(strokeId)
+                                cursor = null
                                 pending.clear()
+                                drawing = false
                             }
-                            if (!anyPressed) break
+
+                            if (drawing) {
+                                var anyPressed = false
+                                event.changes.forEach { change: PointerInputChange ->
+                                    if (change.pressed) anyPressed = true
+                                    if (change.positionChanged()) {
+                                        smoothed += (change.position - smoothed) * alpha
+                                        pending.add(
+                                            smoothed.screenToContent(scaleState.value, offsetState.value)
+                                                .toNormalized(size),
+                                        )
+                                        cursor = smoothed
+                                        change.consume()
+                                    }
+                                }
+                                if (pending.isNotEmpty()) {
+                                    onStrokeAppend(strokeId, pending.toList())
+                                    pending.clear()
+                                }
+                                if (!anyPressed) break
+                            } else {
+                                // 줌/이동 모드 — 두 손가락 핀치=확대(centroid 고정), 드래그=이동.
+                                val zoom = event.calculateZoom()
+                                val panChange = event.calculatePan()
+                                val centroid = event.calculateCentroid(useCurrent = true)
+                                if (centroid != Offset.Unspecified && (zoom != 1f || panChange != Offset.Zero)) {
+                                    val (ns, no) = zoomAround(
+                                        scaleState.value, offsetState.value, centroid, zoom, panChange, size,
+                                    )
+                                    onViewportChange(ns, no)
+                                }
+                                event.changes.forEach { if (it.positionChanged()) it.consume() }
+                                if (event.changes.none { it.pressed }) break
+                            }
                         }
 
-                        onStrokeEnd(strokeId)
-                        cursor = null
+                        if (drawing) {
+                            onStrokeEnd(strokeId)
+                            cursor = null
+                        }
                     }
                 }
             }
     ) {
-        // 0. 캔버스 배경색 (기본 흰색). 사진이 있으면 그 아래 깔린다.
-        drawRect(color = Color(state.backgroundColor))
-        // 1. 사진 배경 (있으면). 트레이싱 보조 알파 적용 — 표시만, 저장 PNG 엔 영향 없음. (라이브, 캐시 안 함)
-        //    외곽선 모드(edgeOverlay non-null)면 사진 대신 추출한 라인만 그린다. 계산 전이면 사진을 alpha 로 표시.
-        state.background?.bitmap?.let { bg ->
-            drawImage(
-                image = edgeOverlay ?: bg,
-                srcOffset = IntOffset.Zero,
-                srcSize = IntSize((edgeOverlay ?: bg).width, (edgeOverlay ?: bg).height),
-                dstOffset = IntOffset.Zero,
-                dstSize = IntSize(canvasSize.width, canvasSize.height),
-                alpha = if (edgeOverlay != null) 1f else backgroundAlpha,
-            )
+        // 월드 레이어(배경~선택 핸들·마커)는 뷰포트 변환 안에서 그린다 — 확대/이동이 한 번에 적용됨.
+        // 커서/스포이드 십자만 변환 밖(화면좌표)에서 일정 크기로 그린다.
+        withTransform({
+            translate(offset.x, offset.y)
+            scale(scale, scale, pivot = Offset.Zero)
+        }) {
+            // 0. 캔버스 배경색 (기본 흰색). 사진이 있으면 그 아래 깔린다.
+            drawRect(color = Color(state.backgroundColor))
+            // 1. 사진 배경 (있으면). 트레이싱 보조 알파 적용 — 표시만, 저장 PNG 엔 영향 없음. (라이브, 캐시 안 함)
+            //    외곽선 모드(edgeOverlay non-null)면 사진 대신 추출한 라인만 그린다. 계산 전이면 사진을 alpha 로 표시.
+            state.background?.bitmap?.let { bg ->
+                drawImage(
+                    image = edgeOverlay ?: bg,
+                    srcOffset = IntOffset.Zero,
+                    srcSize = IntSize((edgeOverlay ?: bg).width, (edgeOverlay ?: bg).height),
+                    dstOffset = IntOffset.Zero,
+                    dstSize = IntSize(canvasSize.width, canvasSize.height),
+                    alpha = if (edgeOverlay != null) 1f else backgroundAlpha,
+                )
+            }
+            // 2. 완료된 stroke — 1배율이면 캐시 비트맵, 확대 중이면 벡터 직접 렌더(또렷하게).
+            val cached = committedStrokes
+            if (cached != null && scale == 1f) {
+                drawImage(cached)
+            } else {
+                state.strokes.forEach { drawStroke(it, canvasSize, density) }
+            }
+            // 3. 진행 중 stroke (라이브)
+            state.openStrokes.values.forEach { drawStroke(it, canvasSize, density) }
+            // 4. 스티커 (stroke 위)
+            state.stickers.forEach { drawSticker(it, canvasSize) }
+            // 4.5 텍스트 (스티커 위)
+            state.texts.forEach { drawText(it, canvasSize) }
+            // 5. 안내선 (stroke/스티커 위, 커서 아래)
+            drawGuides(canvasSize, density, guideCross, guideGridCells)
+            // 6. 스티커 선택 핸들 (스티커 모드 + 선택됨) — 핸들 크기는 viewScale 로 나눠 화면상 일정.
+            if (isSticker) {
+                val sel = state.stickers.firstOrNull { it.id == selectedStickerId }
+                if (sel != null) drawStickerSelection(sel, canvasSize, density, selectionColor, scale)
+            }
+            // 6.5 텍스트 선택 핸들 (텍스트 모드 + 선택됨)
+            if (isText) {
+                val sel = state.texts.firstOrNull { it.id == selectedTextId }
+                if (sel != null) drawTextSelection(sel, canvasSize, density, selectionColor, scale)
+            }
+            // 9. 텍스트 입력 위치 마커 (입력 시트가 열린 동안) — 텍스트가 들어갈 자리에 I-beam 캐럿.
+            pendingTextPoint?.let { (nx, ny) ->
+                drawTextPlacementMarker(
+                    center = Offset(nx * canvasSize.width, ny * canvasSize.height),
+                    canvasSize = canvasSize,
+                    density = density,
+                    color = selectionColor,
+                    viewScale = scale,
+                )
+            }
         }
-        // 2. 완료된 stroke — 캐시 비트맵으로 한 번에. (없으면 첫 프레임 등 — 폴백 직접 그리기)
-        val cached = committedStrokes
-        if (cached != null) {
-            drawImage(cached)
-        } else {
-            state.strokes.forEach { drawStroke(it, canvasSize, density) }
-        }
-        // 3. 진행 중 stroke (라이브)
-        state.openStrokes.values.forEach { drawStroke(it, canvasSize, density) }
-        // 4. 스티커 (stroke 위)
-        state.stickers.forEach { drawSticker(it, canvasSize) }
-        // 4.5 텍스트 (스티커 위)
-        state.texts.forEach { drawText(it, canvasSize) }
-        // 5. 안내선 (stroke/스티커 위, 커서 아래)
-        drawGuides(canvasSize, density, guideCross, guideGridCells)
-        // 6. 스티커 선택 핸들 (스티커 모드 + 선택됨)
-        if (isSticker) {
-            val sel = state.stickers.firstOrNull { it.id == selectedStickerId }
-            if (sel != null) drawStickerSelection(sel, canvasSize, density, selectionColor)
-        }
-        // 6.5 텍스트 선택 핸들 (텍스트 모드 + 선택됨)
-        if (isText) {
-            val sel = state.texts.firstOrNull { it.id == selectedTextId }
-            if (sel != null) drawTextSelection(sel, canvasSize, density, selectionColor)
-        }
-        // 7. 커서 인디케이터 (그리기 모드)
+        // 7. 커서 인디케이터 (그리기 모드) — 화면좌표. 확대된 붓 footprint 를 보이려 반경에 scale 곱.
         cursor?.let { pos ->
-            drawBrushIndicator(center = pos, tool = tool, density = density)
+            drawBrushIndicator(center = pos, tool = tool, density = density, viewScale = scale)
         }
-        // 8. 스포이드 조준 십자 (스포이드 모드 + 누르는 중)
+        // 8. 스포이드 조준 십자 (스포이드 모드 + 누르는 중) — 화면좌표, 일정 크기.
         eyedropperPos?.let { pos ->
             drawEyedropperCursor(center = pos, density = density)
-        }
-        // 9. 텍스트 입력 위치 마커 (입력 시트가 열린 동안) — 텍스트가 들어갈 자리에 I-beam 캐럿.
-        pendingTextPoint?.let { (nx, ny) ->
-            drawTextPlacementMarker(
-                center = Offset(nx * canvasSize.width, ny * canvasSize.height),
-                canvasSize = canvasSize,
-                density = density,
-                color = selectionColor,
-            )
         }
     }
 }
@@ -260,11 +320,12 @@ private fun DrawScope.drawTextPlacementMarker(
     canvasSize: IntSize,
     density: Float,
     color: Color,
+    viewScale: Float = 1f,
 ) {
     val shortSide = min(canvasSize.width, canvasSize.height).toFloat()
-    // 기본 텍스트 크기(보통, sizeFrac=0.06) 높이에 맞춘 캐럿.
+    // 기본 텍스트 크기(보통, sizeFrac=0.06) 높이에 맞춘 캐럿. 세리프·선폭은 viewScale 로 나눠 화면상 일정.
     val half = (shortSide * 0.06f).coerceAtLeast(8f * density) / 2f
-    val serif = 6f * density
+    val serif = 6f * density / viewScale
     val top = center.y - half
     val bottom = center.y + half
 
@@ -273,8 +334,8 @@ private fun DrawScope.drawTextPlacementMarker(
         drawLine(c, Offset(center.x - serif, top), Offset(center.x + serif, top), strokeWidth = w, cap = StrokeCap.Round)
         drawLine(c, Offset(center.x - serif, bottom), Offset(center.x + serif, bottom), strokeWidth = w, cap = StrokeCap.Round)
     }
-    ibeam(Color.White.copy(alpha = 0.9f), 4f * density)
-    ibeam(color, 2f * density)
+    ibeam(Color.White.copy(alpha = 0.9f), 4f * density / viewScale)
+    ibeam(color, 2f * density / viewScale)
 }
 
 // 스포이드 조준 십자 — 중앙에 빈 틈을 둔 십자 + 링. 어떤 배경에서도 보이게 흰 외곽선 위에
@@ -329,6 +390,8 @@ private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.stickerG
     onTransformLocal: (StickerId, Float, Float, Float, Float) -> Unit,
     onCommit: (StickerId, Float, Float, Float, Float) -> Unit,
     onRemove: (StickerId) -> Unit,
+    scale: () -> Float,
+    offset: () -> Offset,
 ) {
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false)
@@ -338,30 +401,36 @@ private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.stickerG
         val shortSide = min(size.width, size.height).toFloat().coerceAtLeast(1f)
         val handleRadius = 18f * density
         val list = stickers()
+        // 화면좌표 → 콘텐츠좌표(줌 반영). 스티커 모드에선 줌이 변하지 않아 시작 시 1회 읽으면 충분.
+        val sc = scale()
+        val off = offset()
+        val downPos = down.position.screenToContent(sc, off)
 
         val selected = list.firstOrNull { it.id == selectedId() }
 
         // 1. 선택된 스티커의 핸들 우선 검사.
         if (selected != null) {
-            val local = toLocal(selected, down.position, w, h)
+            val local = toLocal(selected, downPos, w, h)
             val halfPx = selected.scale * shortSide / 2f
-            if (hypot(local.x - halfPx, local.y + halfPx) <= handleRadius) {
+            // 핸들 히트 반경은 화면 기준이므로 콘텐츠좌표에선 /sc.
+            val hitR = handleRadius / sc
+            if (hypot(local.x - halfPx, local.y + halfPx) <= hitR) {
                 // X 핸들 (우상단) — 삭제.
                 onRemove(selected.id)
                 setSelected(null)
                 drainGesture()
                 return@awaitEachGesture
             }
-            if (hypot(local.x - halfPx, local.y - halfPx) <= handleRadius) {
+            if (hypot(local.x - halfPx, local.y - halfPx) <= hitR) {
                 // 크기/회전 핸들 (우하단).
-                resizeRotateGesture(selected, w, h, shortSide, onTransformLocal, onCommit)
+                resizeRotateGesture(selected, w, h, shortSide, onTransformLocal, onCommit, sc, off)
                 return@awaitEachGesture
             }
         }
 
         // 2. 본체 hit-test (위에 그려진 것 우선 = 역순).
         val hit = list.lastOrNull { s ->
-            val local = toLocal(s, down.position, w, h)
+            val local = toLocal(s, downPos, w, h)
             val halfPx = s.scale * shortSide / 2f
             kotlin.math.abs(local.x) <= halfPx && kotlin.math.abs(local.y) <= halfPx
         }
@@ -372,8 +441,8 @@ private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.stickerG
             target = hit
         } else {
             // 빈 곳 → 새 스티커 배치.
-            val cx = (down.position.x / w).coerceIn(0f, 1f)
-            val cy = (down.position.y / h).coerceIn(0f, 1f)
+            val cx = (downPos.x / w).coerceIn(0f, 1f)
+            val cy = (downPos.y / h).coerceIn(0f, 1f)
             val newId = onPlace(cx, cy)
             if (newId == null) {
                 drainGesture()
@@ -387,7 +456,7 @@ private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.stickerG
             drainGesture()
             return@awaitEachGesture
         }
-        moveGesture(target, down.position, w, h, onTransformLocal, onCommit)
+        moveGesture(target, downPos, w, h, onTransformLocal, onCommit, sc, off)
     }
 }
 
@@ -399,6 +468,8 @@ private suspend fun androidx.compose.ui.input.pointer.AwaitPointerEventScope.mov
     h: Float,
     onTransformLocal: (StickerId, Float, Float, Float, Float) -> Unit,
     onCommit: (StickerId, Float, Float, Float, Float) -> Unit,
+    scale: Float,
+    offset: Offset,
 ) {
     val startCx = sticker.cx
     val startCy = sticker.cy
@@ -413,7 +484,8 @@ private suspend fun androidx.compose.ui.input.pointer.AwaitPointerEventScope.mov
             if (c.pressed) { pressed = true; pos = c.position }
             if (c.positionChanged()) c.consume()
         }
-        pos?.let { p ->
+        pos?.let { raw ->
+            val p = raw.screenToContent(scale, offset) // 콘텐츠좌표(줌 반영).
             cx = (startCx + (p.x - downPos.x) / w).coerceIn(0f, 1f)
             cy = (startCy + (p.y - downPos.y) / h).coerceIn(0f, 1f)
             if (p != downPos) moved = true
@@ -432,6 +504,8 @@ private suspend fun androidx.compose.ui.input.pointer.AwaitPointerEventScope.res
     shortSide: Float,
     onTransformLocal: (StickerId, Float, Float, Float, Float) -> Unit,
     onCommit: (StickerId, Float, Float, Float, Float) -> Unit,
+    viewScale: Float,
+    viewOffset: Offset,
 ) {
     val centerX = sticker.cx * w
     val centerY = sticker.cy * h
@@ -446,7 +520,8 @@ private suspend fun androidx.compose.ui.input.pointer.AwaitPointerEventScope.res
             if (c.pressed) { pressed = true; pos = c.position }
             if (c.positionChanged()) c.consume()
         }
-        pos?.let { p ->
+        pos?.let { raw ->
+            val p = raw.screenToContent(viewScale, viewOffset) // 콘텐츠좌표(줌 반영).
             val dx = p.x - centerX
             val dy = p.y - centerY
             val cornerDist = hypot(dx, dy)
@@ -494,14 +569,16 @@ private fun DrawScope.drawStickerSelection(
     canvasSize: IntSize,
     density: Float,
     color: Color,
+    viewScale: Float = 1f,
 ) {
     if (canvasSize.width <= 0 || canvasSize.height <= 0) return
     val shortSide = min(canvasSize.width, canvasSize.height).toFloat()
     val half = (sticker.scale * shortSide / 2f).coerceAtLeast(1f)
     val cx = sticker.cx * canvasSize.width
     val cy = sticker.cy * canvasSize.height
-    val handleR = 12f * density
-    val line = 1.5f * density
+    // 핸들·선폭은 viewScale 로 나눠 확대해도 화면상 일정 크기 유지.
+    val handleR = 12f * density / viewScale
+    val line = 1.5f * density / viewScale
 
     withTransform({
         translate(cx, cy)
@@ -537,14 +614,18 @@ private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.textGest
     setSelected: (TextId?) -> Unit,
     onRequestText: (Float, Float) -> Unit,
     onRemove: (TextId) -> Unit,
+    scale: () -> Float,
+    offset: () -> Offset,
 ) {
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false)
         down.consume()
         val w = size.width.toFloat().coerceAtLeast(1f)
         val h = size.height.toFloat().coerceAtLeast(1f)
-        val handleRadius = 18f * density
+        val sc = scale()
+        val handleRadius = 18f * density / sc // 화면 기준 히트 반경을 콘텐츠좌표로.
         val list = texts()
+        val downPos = down.position.screenToContent(sc, offset()) // 콘텐츠좌표(줌 반영).
 
         // 1. 선택된 텍스트의 X 핸들(우상단) 검사.
         val selected = list.firstOrNull { it.id == selectedId() }
@@ -552,7 +633,7 @@ private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.textGest
             val (halfW, halfH) = textHalfSizePx(selected, size)
             val handleX = selected.cx * w + halfW
             val handleY = selected.cy * h - halfH
-            if (hypot(down.position.x - handleX, down.position.y - handleY) <= handleRadius) {
+            if (hypot(downPos.x - handleX, downPos.y - handleY) <= handleRadius) {
                 onRemove(selected.id)
                 setSelected(null)
                 drainGesture()
@@ -563,8 +644,8 @@ private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.textGest
         // 2. 본체 hit-test (위에 그려진 것 우선 = 역순).
         val hit = list.lastOrNull { t ->
             val (halfW, halfH) = textHalfSizePx(t, size)
-            val lx = down.position.x - t.cx * w
-            val ly = down.position.y - t.cy * h
+            val lx = downPos.x - t.cx * w
+            val ly = downPos.y - t.cy * h
             kotlin.math.abs(lx) <= halfW && kotlin.math.abs(ly) <= halfH
         }
         if (hit != null) {
@@ -572,8 +653,8 @@ private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.textGest
         } else {
             // 빈 곳 → 입력 시트 요청. 선택 해제.
             setSelected(null)
-            val cx = (down.position.x / w).coerceIn(0f, 1f)
-            val cy = (down.position.y / h).coerceIn(0f, 1f)
+            val cx = (downPos.x / w).coerceIn(0f, 1f)
+            val cy = (downPos.y / h).coerceIn(0f, 1f)
             onRequestText(cx, cy)
         }
         drainGesture()
@@ -586,14 +667,16 @@ private fun DrawScope.drawTextSelection(
     canvasSize: IntSize,
     density: Float,
     color: Color,
+    viewScale: Float = 1f,
 ) {
     if (canvasSize.width <= 0 || canvasSize.height <= 0) return
     val (halfW, halfH) = textHalfSizePx(text, canvasSize)
     val cx = text.cx * canvasSize.width
     val cy = text.cy * canvasSize.height
-    val handleR = 12f * density
-    val line = 1.5f * density
-    val pad = 6f * density
+    // 핸들·선폭·여백은 viewScale 로 나눠 확대해도 화면상 일정 크기 유지.
+    val handleR = 12f * density / viewScale
+    val line = 1.5f * density / viewScale
+    val pad = 6f * density / viewScale
 
     drawRect(
         color = color,
@@ -638,8 +721,8 @@ private fun DrawScope.drawGuides(
     }
 }
 
-private fun DrawScope.drawBrushIndicator(center: Offset, tool: ToolSettings, density: Float) {
-    val sizePx = strokeWidthPxFor(tool, density)
+private fun DrawScope.drawBrushIndicator(center: Offset, tool: ToolSettings, density: Float, viewScale: Float = 1f) {
+    val sizePx = strokeWidthPxFor(tool, density) * viewScale
     val color = Color.Black.copy(alpha = 0.45f)
     val style = DrawStroke(width = 1.5f * density)
     when (tool.brush.capStyle) {

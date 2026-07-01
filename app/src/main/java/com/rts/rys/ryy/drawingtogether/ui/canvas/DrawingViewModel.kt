@@ -316,6 +316,17 @@ class DrawingViewModel : ViewModel() {
         }
     }
 
+    // 진행 중 stroke 취소 — 줌 제스처(두 번째 손가락 감지)로 그리기를 중단할 때.
+    // StrokeStart/Append 가 이미 피어에 실시간 전송됐으므로, 끝낸 뒤 곧바로 Undo 로 제거해
+    // 로컬·피어·타임랩스 기록 모두 정리한다(미러 stroke 포함).
+    fun strokeCancel(strokeId: StrokeId) {
+        if (tool.kind == ToolKind.Eraser) return
+        val mirrors = mirrorStrokes[strokeId]?.map { it.first } ?: emptyList()
+        strokeEnd(strokeId)
+        emit(DrawingEvent.Undo(nextSeq(), author, strokeId))
+        mirrors.forEach { emit(DrawingEvent.Undo(nextSeq(), author, it)) }
+    }
+
     // 지우개 한 점이 stroke 과 충돌하면 그 stroke 에 대해 Undo 이벤트 발행.
     // "함께 그리기" 단일 모드 — 자기/상대 누구 stroke 든 지울 수 있다.
     // hit radius 는 tool.strokeWidthDp 에 비례하는 정규화 좌표(0..1). 캔버스 크기 없이도 동작.

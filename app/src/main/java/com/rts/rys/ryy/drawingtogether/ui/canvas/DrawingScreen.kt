@@ -58,6 +58,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalConfiguration
@@ -1350,6 +1351,13 @@ private fun MyCanvasContent(
     } else {
         Modifier.fillMaxSize()
     }
+    // 줌 뷰포트 — 로컬 표시 전용(배율 + 이동). 사진/비율이 바뀌어 캔버스 모양이 달라지면 1:1 리셋.
+    var canvasScale by remember { mutableStateOf(1f) }
+    var canvasOffset by remember { mutableStateOf(Offset.Zero) }
+    LaunchedEffect(bg, ratio) {
+        canvasScale = 1f
+        canvasOffset = Offset.Zero
+    }
     Box(modifier = sizeModifier.background(Color.White)) {
         DrawingCanvas(
             state = vm.canvas,
@@ -1375,7 +1383,29 @@ private fun MyCanvasContent(
             onRequestText = onRequestText,
             onRemoveText = vm::removeText,
             pendingTextPoint = pendingTextPoint,
+            scale = canvasScale,
+            offset = canvasOffset,
+            onViewportChange = { s, o -> canvasScale = s; canvasOffset = o },
+            onStrokeCancel = vm::strokeCancel,
         )
+        // 줌 리셋 칩 — 확대 상태에서만. 탭하면 1:1 복귀. (좌측 하단, 닉네임 칩과 같은 반투명 스타일)
+        if (canvasScale != 1f) {
+            Text(
+                text = "⤢ ${(canvasScale * 100).toInt()}%",
+                color = Color.Gray,
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(horizontal = 8.dp, vertical = 6.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.65f),
+                        shape = RoundedCornerShape(percent = 50),
+                    )
+                    .clickable { canvasScale = 1f; canvasOffset = Offset.Zero }
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+            )
+        }
         // 내 닉네임 — 우측 상단 반투명 칩. 사진/그림 위에서도 읽히게 surface 배경 + 회색 글자.
         // pointerInput 없으므로 그리기 터치는 아래 캔버스가 받음.
         if (!selfNick.isNullOrBlank()) {
