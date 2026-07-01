@@ -25,30 +25,32 @@ Nearby의 `Payload`가 이미 메시지 단위 → **우리 쪽 프레이밍 불
 
 | 메시지 종류 | Nearby Payload 타입 |
 |---|---|
-| Hello/HelloAck, Event, Snapshot(메타), PhotoMeta, PhotoRemove, MergeBackground, SnapshotReq, PeerJoined/PeerLeft, PartyStart, Ping/Pong, Bye | `BYTES` (CBOR) |
-| 사진 본체 (JPEG 바이트), 스냅샷 캔버스(stroke + 스티커, `CanvasSnapshot` CBOR 바이트) | `FILE` |
+| Hello/HelloAck, Event, Snapshot(메타), PhotoMeta, PhotoRemove, MergeBackground, CanvasAspectFrame, SnapshotReq, PeerJoined/PeerLeft, PartyStart, Ping/Pong, Bye | `BYTES` (CBOR) |
+| 사진 본체 (JPEG 바이트), 스냅샷 캔버스(stroke + 스티커 + 텍스트 + 비율, `CanvasSnapshot` CBOR 바이트) | `FILE` |
 
-> 스냅샷의 캔버스 콘텐츠(stroke + 스티커)는 BYTES 32KB 한도를 넘기 쉬워(빽빽한 캔버스 80KB~500KB) **FILE 페이로드**(`CanvasSnapshot` CBOR)로 송신한다 (Phase 3.5-A). `Frame.Snapshot` 은 메타(payloadId)만 BYTES 로.
+> 스냅샷의 캔버스 콘텐츠(stroke + 스티커 + 텍스트)는 BYTES 32KB 한도를 넘기 쉬워(빽빽한 캔버스 80KB~500KB) **FILE 페이로드**(`CanvasSnapshot` CBOR)로 송신한다 (Phase 3.5-A). `Frame.Snapshot` 은 메타(payloadId)만 BYTES 로.
 
 ## 3. 메시지 타입 — 실제 `Frame.kt` (BYTES 채널)
 
 ```
 Hello            연결 직후 송신. proto/peerId/nick 교환. (다중 모드는 신규 피어에게 unicast)
 HelloAck         Hello 수신 응답.
-Event            단일 DrawingEvent (StrokeStart/Append/End/Clear/Undo, PlaceSticker/TransformSticker/RemoveSticker). authorId 동반.
-SnapshotReq      캔버스 상태 요청. targetPeerId(빈="" broadcast) + requesterPeerId.
+Event            단일 DrawingEvent (StrokeStart/Append/End/Clear/Undo, PlaceSticker/TransformSticker/RemoveSticker, PlaceText/RemoveText). authorId 동반.
+SnapshotReq      캔버스 상태 요청. targetPeerId(빈="" broadcast) + requesterPeerId + forLiveView(교실 방장 라이브뷰용).
 Snapshot         SnapshotReq 응답 메타. strokesPayloadId(FILE=CanvasSnapshot 매칭) + hasPhoto + targetPeerId.
 PhotoMeta        이어질 FILE(사진)의 payloadId/byteSize/width/height/mime + targetPeerId.
 PhotoRemove      배경 제거. targetPeerId.
-MergeBackground  "저장 시 배경 합치기" 토글 (enabled). 모임 모드는 broadcast 안 함.
-PeerJoined       (모임) 호스트가 다른 조인자에게 새 멤버 알림. peerId/nick.
-PeerLeft         (모임) 조인자 끊김 알림. peerId.
-PartyStart       (모임) 호스트 "그리기 시작" 신호 → 조인자 함께 Draw 진입.
+MergeBackground  "저장 시 배경 합치기" 토글 (enabled). 모임/교실 모드는 broadcast 안 함.
+CanvasAspectFrame 캔버스 비율 변경 (aspect). 함께=공유 캔버스, 모임/교실=발신자 미니뷰에 적용.
+PeerJoined       (모임) 호스트가 다른 조인자에게 새 멤버 알림. peerId/nick. (교실은 미송신 — 조인자 격리)
+PeerLeft         (모임) 조인자 끊김 알림. peerId. (교실은 미송신)
+PartyStart       (모임/교실) 호스트 "그리기 시작" 신호 → 조인자 함께 Draw 진입.
 Ping / Pong      keepalive(ts). 타입만 정의, 주기 송신 미구현.
 Bye              정상 종료 알림 (reason).
 ```
 
-> `proto` 정수는 `PROTO_VERSION` 상수. `targetPeerId` 류 필드는 모두 기본값 `""` — 1:1 함께 모드는 비워서 broadcast 의미, 모임 모드만 채워서 호스트 relay 라우팅.
+> `proto` 정수는 `PROTO_VERSION` 상수. `targetPeerId` 류 필드는 모두 기본값 `""` — 1:1 함께 모드는 비워서 broadcast 의미, 모임/교실 모드만 채워서 호스트 relay 라우팅.
+> **교실 모드**(호스트 중심, 별도 serviceId)의 멤버십·relay 정책은 [classroom-mode.md](classroom-mode.md) 참고 — mesh 가시성(Event relay·PeerJoined/Left)은 모임 전용이라 교실 조인자끼리 자동 미표시.
 
 ## 4. 인코딩 — CBOR
 
@@ -72,6 +74,7 @@ sealed class Frame {
     data class SnapshotReq(
         val targetPeerId: String = "",     // 빈="" = broadcast(Duo), 채움 = 호스트 relay 대상
         val requesterPeerId: String = "",  // 응답을 받을 사람 (응답 시 target 으로 사용)
+        val forLiveView: Boolean = false,  // 교실 조인자가 방장 라이브뷰(peerCanvases[host]) 채우기용 pull
     ) : Frame()
 
     @Serializable @SerialName("snapshot")
@@ -94,6 +97,9 @@ sealed class Frame {
     @Serializable @SerialName("merge_bg")
     data class MergeBackground(val enabled: Boolean) : Frame()
 
+    @Serializable @SerialName("canvas_aspect")
+    data class CanvasAspectFrame(val aspect: CanvasAspect) : Frame()  // 캔버스 비율 동기화
+
     @Serializable @SerialName("peer_joined")
     data class PeerJoined(val peerId: String, val nick: String) : Frame()
 
@@ -110,8 +116,8 @@ sealed class Frame {
 ```
 
 `FrameCodec` 은 `Cbor { ignoreUnknownKeys = true }` 로 인코딩/디코딩. 동기화 캔버스(stroke +
-스티커)는 별도 `encodeCanvas`/`decodeCanvas`(`CanvasSnapshot`) 로 FILE 페이로드 콘텐츠를 만든다
-(한도 무제한). `encodeStrokes`/`decodeStrokes` 도 남아있으나 동기화 경로는 `CanvasSnapshot` 사용.
+스티커 + 텍스트 + 비율)는 별도 `encodeCanvas`/`decodeCanvas`(`CanvasSnapshot`) 로 FILE 페이로드 콘텐츠를
+만든다(한도 무제한). `encodeStrokes`/`decodeStrokes` 도 남아있으나 동기화 경로는 `CanvasSnapshot` 사용.
 
 ## 5. 핸드셰이크
 
@@ -124,7 +130,8 @@ B → A: HelloAck  { peerId="B..." }
 ```
 
 - `proto` 불일치 → `Bye("incompatible-proto")` 후 끊기.
-- 종횡비 협상 필드는 와이어에 없음 — 캔버스 비율은 각 단말이 자기 사진에 맞춰 로컬 결정.
+- 핸드셰이크에 종횡비 협상 필드는 없음. 대신 캔버스 비율은 **`Frame.CanvasAspectFrame` 로 변경 시 동기화**되고,
+  스냅샷(`CanvasSnapshot.aspect`)에도 포함. 사진이 있으면 사진 비율이 우선(비율 필드는 표시에 무영향).
 - `peerId`: 설치당 1회 생성한 UUID(`SessionManager.peerId`, prefs 보관). 디바이스 MAC 대신 사용 → 권한 의존 회피.
 - **모임 모드**: 호스트는 `connectedPeers` flow 로 신규 피어 등장을 감지해 그 endpoint 에 `Hello` 를 **unicast**. 핸드셰이크는 피어별 `Map<endpointId, PeerHandshake>` 로 독립 추적.
 
@@ -156,8 +163,9 @@ A → B: PhotoMeta { ..., targetPeerId="B" } + FILE   (hasPhoto=true 인 경우)
    또는 A → B: PhotoRemove { targetPeerId="B" }      (사진 없으면 — 상대 배경도 비움)
 ```
 
-- 캔버스 콘텐츠는 BYTES 가 아니라 **FILE 페이로드**(CBOR `encodeCanvas` → `CanvasSnapshot{strokes, stickers}`). `Snapshot.strokesPayloadId` 로 매칭.
-- 수신측은 받은 strokes + 스티커로 메인 캔버스를 **덮어씀**(`applySnapshot(strokes, stickers)`).
+- 캔버스 콘텐츠는 BYTES 가 아니라 **FILE 페이로드**(CBOR `encodeCanvas` → `CanvasSnapshot{strokes, stickers, texts, aspect}`). `Snapshot.strokesPayloadId` 로 매칭.
+- 수신측은 받은 strokes + 스티커 + 텍스트 + 비율로 메인 캔버스를 **덮어씀**(`applySnapshot(strokes, stickers, texts, aspect)`).
+- **교실 모드**: 조인자가 `SnapshotReq(forLiveView=true)` 로 방장 라이브뷰를 pull 하면 호스트가 `sendHostCanvasToJoiner` 로 응답(target="" → 조인자의 `peerCanvases[host]` 에 적용). "가져오기"(forLiveView=false)는 자기 메인에 덮어씀.
 - **모임 모드 cascade**: A 가 B 의 캔버스를 가져와 자기 메인에 적용한 뒤, 자기 캔버스를 `targetPeerId=""` 로 다시 broadcast → 다른 참가자가 보는 *A 의 미니 뷰*도 갱신. 사진 적용이 끝난 후 broadcast 해야 빈 배경이 안 나간다.
 
 ## 8. 순서/충돌

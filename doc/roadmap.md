@@ -239,6 +239,14 @@
 
 **완료 기준**: 교실끼리만 발견·연결. 호스트 그림+사진 라이브, 조인자끼리 격리, "참여자 보기"·"가져오기"·재입장·늦은 참여자 정상. 모임/함께/싱글 회귀 없음. **실기 검증은 사용자가 진행 중.**
 
+## 교실 모드 이후 다듬기 — 완료
+> 교실 모드 완료 후 사용자 요청 기반 추가. 상세 아이디어는 [drawing-ideas.md](drawing-ideas.md).
+
+- [x] **캔버스 비율(가로세로) 선택** — `CanvasAspect`(자유/1:1/4:3/3:4/16:9/9:16). 사진 없을 때만 적용(사진 비율 우선). `CanvasState.aspect`(배경색과 동급 캔버스 속성, `Clear` 로 안 지워지고 `reset` 만 초기화), TopAppBar "비율" 버튼(`AspectRatioSheet`, 사진 없을 때만 노출). `PngComposer` 저장 치수도 비율 반영(자유=1080²).
+- [x] **캔버스 비율 동기화 (함께·모임·교실 3모드)** — `Frame.CanvasAspectFrame` 로 변경 시 전파(함께=공유 캔버스, 모임/교실=발신자 `peerCanvases`). 스냅샷에도 `CanvasSnapshot.aspect` 포함(`applySnapshot(..., aspect)`). `MiniCanvas` 도 `background?.aspectRatio ?: aspect.ratio` 로 표시.
+- [x] **세밀붓(Fine)** — 굵기 고정된 아주 가는 붓. `BrushType.fixedWidthDp`(non-null 이면 슬라이더 무시, 세밀붓=0.8dp). 선택 시 도구바 굵기 슬라이더 숨김("굵기 고정"). `PenIllustration`/`BrushPreview` 도 추가. 세밀 묘사용.
+- [x] **캔버스 줌인/줌아웃 (로컬 전용)** — 두 손가락 핀치 확대(centroid 고정)+드래그 이동, 한 손가락 그리기. 뷰포트 `scale`(1..5)+`offset`, 순수함수 `Viewport.kt`(`screenToContent`/`zoomAround`/`clampOffset`, `ViewportTest`). 그리는 중 두 번째 손가락 닿으면 진행 stroke 취소(`DrawingViewModel.strokeCancel`) 후 줌 전환. 확대 중엔 벡터 직접 렌더(또렷). 포인터 좌표를 콘텐츠 좌표로 변환해 정규화 → 저장 데이터는 줌과 무관. 리셋 칩(1:1)+사진/비율 변경 시 자동 리셋. **동기화·저장·타임랩스·미니뷰 미반영.** (줌 상태 자체 동기화·캔버스 회전은 미도입.)
+
 ## Phase 6 — 나중에 검토만
 지금 결정하지 않을 것들:
 - **따라 그리기 모드 옵션** — 학습 시나리오용. Clear/Undo/지우개를 자기 stroke 만, 상대 stroke 은 알파 감쇠. 페어링 시 양쪽 합의로 모드 선택. 사용자 요구 있을 때 도입. 알파 감쇠와 author 필터 분기 코드는 Phase 3-A 중 작성했다가 단일 모드 확정으로 제거됨 — 도입 시 git 히스토리 참고.
@@ -250,7 +258,7 @@
 
 ## 위험과 결정 보류 항목
 
-- **사진 종횡비 처리**: 사진이 있으면 캔버스 비율을 사진에 맞춤. 사진 없는 자유 모드는 정사각 고정.
+- **사진 종횡비 처리**: 사진이 있으면 캔버스 비율을 사진에 맞춤. 사진이 없으면 `CanvasAspect` 선택(기본 자유=화면 채움, 저장은 정사각 1080²).
 - **사진 크기와 메모리**: 대용량 사진(20MP+)은 디코딩 시 다운샘플링 필수. `PhotoLoader`에서 화면 해상도에 맞춰 inSampleSize 조정.
 - **Nearby Connections 백그라운드 동작**: Android 13+ 백그라운드 BT/Wi-Fi 스캔 제한. 화면 켜진 동안만 동작 가정.
 - **자동 재연결**: 의도적으로 미도입. 끊기면 사용자가 명시적으로 다시 연결.
