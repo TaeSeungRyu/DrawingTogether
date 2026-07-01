@@ -26,7 +26,7 @@ Nearby의 `Payload`가 이미 메시지 단위 → **우리 쪽 프레이밍 불
 | 메시지 종류 | Nearby Payload 타입 |
 |---|---|
 | Hello/HelloAck, Event, Snapshot(메타), PhotoMeta, PhotoRemove, MergeBackground, CanvasAspectFrame, SnapshotReq, PeerJoined/PeerLeft, PartyStart, Ping/Pong, Bye | `BYTES` (CBOR) |
-| 사진 본체 (JPEG 바이트), 스냅샷 캔버스(stroke + 스티커 + 텍스트 + 비율, `CanvasSnapshot` CBOR 바이트) | `FILE` |
+| 사진 본체 (JPEG 바이트), 스냅샷 캔버스(stroke + 스티커 + 텍스트 + 비율 + 배경색, `CanvasSnapshot` CBOR 바이트) | `FILE` |
 
 > 스냅샷의 캔버스 콘텐츠(stroke + 스티커 + 텍스트)는 BYTES 32KB 한도를 넘기 쉬워(빽빽한 캔버스 80KB~500KB) **FILE 페이로드**(`CanvasSnapshot` CBOR)로 송신한다 (Phase 3.5-A). `Frame.Snapshot` 은 메타(payloadId)만 BYTES 로.
 
@@ -42,6 +42,7 @@ PhotoMeta        이어질 FILE(사진)의 payloadId/byteSize/width/height/mime 
 PhotoRemove      배경 제거. targetPeerId.
 MergeBackground  "저장 시 배경 합치기" 토글 (enabled). 모임/교실 모드는 broadcast 안 함.
 CanvasAspectFrame 캔버스 비율 변경 (aspect). 함께=공유 캔버스, 모임/교실=발신자 미니뷰에 적용.
+BackgroundColorFrame 캔버스 배경색 변경 (argb). CanvasAspectFrame 과 동일 라우팅.
 PeerJoined       (모임) 호스트가 다른 조인자에게 새 멤버 알림. peerId/nick. (교실은 미송신 — 조인자 격리)
 PeerLeft         (모임) 조인자 끊김 알림. peerId. (교실은 미송신)
 PartyStart       (모임/교실) 호스트 "그리기 시작" 신호 → 조인자 함께 Draw 진입.
@@ -99,6 +100,9 @@ sealed class Frame {
 
     @Serializable @SerialName("canvas_aspect")
     data class CanvasAspectFrame(val aspect: CanvasAspect) : Frame()  // 캔버스 비율 동기화
+
+    @Serializable @SerialName("bg_color")
+    data class BackgroundColorFrame(val argb: Int) : Frame()  // 배경색 동기화
 
     @Serializable @SerialName("peer_joined")
     data class PeerJoined(val peerId: String, val nick: String) : Frame()
@@ -163,8 +167,8 @@ A → B: PhotoMeta { ..., targetPeerId="B" } + FILE   (hasPhoto=true 인 경우)
    또는 A → B: PhotoRemove { targetPeerId="B" }      (사진 없으면 — 상대 배경도 비움)
 ```
 
-- 캔버스 콘텐츠는 BYTES 가 아니라 **FILE 페이로드**(CBOR `encodeCanvas` → `CanvasSnapshot{strokes, stickers, texts, aspect}`). `Snapshot.strokesPayloadId` 로 매칭.
-- 수신측은 받은 strokes + 스티커 + 텍스트 + 비율로 메인 캔버스를 **덮어씀**(`applySnapshot(strokes, stickers, texts, aspect)`).
+- 캔버스 콘텐츠는 BYTES 가 아니라 **FILE 페이로드**(CBOR `encodeCanvas` → `CanvasSnapshot{strokes, stickers, texts, aspect, backgroundColor}`). `Snapshot.strokesPayloadId` 로 매칭.
+- 수신측은 받은 strokes + 스티커 + 텍스트 + 비율 + 배경색으로 메인 캔버스를 **덮어씀**(`applySnapshot(strokes, stickers, texts, aspect, backgroundColor)`).
 - **교실 모드**: 조인자가 `SnapshotReq(forLiveView=true)` 로 방장 라이브뷰를 pull 하면 호스트가 `sendHostCanvasToJoiner` 로 응답(target="" → 조인자의 `peerCanvases[host]` 에 적용). "가져오기"(forLiveView=false)는 자기 메인에 덮어씀.
 - **모임 모드 cascade**: A 가 B 의 캔버스를 가져와 자기 메인에 적용한 뒤, 자기 캔버스를 `targetPeerId=""` 로 다시 broadcast → 다른 참가자가 보는 *A 의 미니 뷰*도 갱신. 사진 적용이 끝난 후 broadcast 해야 빈 배경이 안 나간다.
 

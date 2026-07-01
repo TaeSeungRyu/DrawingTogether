@@ -312,6 +312,7 @@ Column(Modifier.fillMaxSize()) {
 | 배경 합치기 토글 | 양방향 broadcast | 자기만 (저장 옵션) |
 | 미니 뷰의 사진 배경 | (해당 없음, 1개 공유 캔버스) | 그 peer 의 사진 + stroke 둘 다 표시 |
 | 캔버스 비율 | 사진 있으면 사진 비율, 없으면 `CanvasAspect`(동기화됨) | 자기 메인·미니 뷰 모두 그 peer 의 사진 비율 또는 `CanvasAspect`(동기화) |
+| 배경색 | `BackgroundColorFrame` 로 공유 캔버스 동기화 | 발신자 미니 뷰에 반영(동기화) |
 | Clear/Undo/지우개 | 모두 영향 (함께 그리기) | 내 캔버스만 |
 | "동기화" | 즉시 컨펌 → SnapshotReq (사진 포함) | 다이얼로그 → 누구 캔버스 가져올지 선택 → 컨펌 (사진 안내) → 타겟 SnapshotReq (호스트 relay). 받은 뒤 자기 캔버스를 다시 broadcast 해 다른 사람의 내 미니 뷰도 갱신 |
 | 끊김 1명 | 세션 종료 | 조인자 끊김은 그 미니 뷰만 `EmptyMiniSlot` 으로. 호스트는 "방 열기" 로 재모집 가능. (호스트 끊김=전체 종료는 미구현 — 보류) |
@@ -376,7 +377,7 @@ Column(Modifier.fillMaxSize()) {
 
 ```
 ┌──────────────────────────────────────┐
-│ ←                                    │ TopAppBar (back만)
+│ ←  작품이름     [갤러리로 보내기][공유][삭제] │ TopAppBar
 ├──────────────────────────────────────┤
 │                                      │
 │      surfaceVariant letterbox        │
@@ -390,8 +391,9 @@ Column(Modifier.fillMaxSize()) {
 └──────────────────────────────────────┘
 ```
 
-- 홈 썸네일 탭 → `preview/{workId}` 라우트 → PNG 풀사이즈 표시
-- 첫 버전은 보기 전용. 삭제/공유/재편집은 Phase 5+ 로드맵.
+- 홈 썸네일 탭 → `preview/{workId}` 라우트 → PNG 풀사이즈 표시.
+- 상단 액션: **갤러리로 보내기**(`exportToGallery`) / **공유**(`ACTION_SEND`) / **삭제**(에러색, 확인 다이얼로그 → `WorkStore.delete` → 뒤로).
+- **작품 삭제**는 최근작업 모달 썸네일 **길게 누르기**로도 가능(확인 다이얼로그). 갤러리로 내보낸 사본은 유지. 재편집(stroke 보존)은 후속.
 
 ## 6.5 타임랩스 화면 (Phase 5.5)
 

@@ -52,7 +52,7 @@
 
 **완료 기준**: 캔버스에서 "저장" → 홈으로 돌아오면 썸네일 등장 → 탭하면 풀사이즈 보임. 외부 저장소 권한 불필요(앱 내부 `filesDir` 사용).
 
-> 추후: 삭제, 공유, 재편집(stroke 보존), 그리드 뷰
+> 삭제·공유·그리드 뷰 완료(삭제는 "교실 모드 이후 다듬기", 공유·그리드는 Phase 5/5.5). 추후: 재편집(stroke 보존).
 
 ## Phase 2 — Nearby Connections 페어링 & 연결
 목표: 두 기기가 Nearby로 연결되어 "HELLO/HELLO_ACK" 핸드셰이크까지.
@@ -188,7 +188,7 @@
 - [x] **트레이싱 보조 — 반투명 + 외곽선(엣지 검출)** — 사진 배경 표시 알파 순환(원본/연하게/아주 연하게/외곽선, `TraceOpacity`). TopAppBar 트레이싱 버튼(`TraceGlyph`, 사진 있을 때만). 반투명은 `drawImage(alpha=)` 로 표시만 적용. 외곽선은 `photo/EdgeDetector`(Sobel)로 사진에서 라인만 추출한 투명 오버레이를 사진 대신 표시(`DrawingViewModel.edgeOverlay`, viewModelScope+Default 로 사진당 1회 계산·캐시). 저장(`mergeBackgroundOnSave`)·동기화엔 미반영(직교).
 - [x] **텍스트 넣기(불변·삭제전용)** — 스티커형 배치 요소(`TextElement`: 정규화 cx/cy + sizeFrac + 색). `ToolKind.Text` → 빈 곳 탭 → 바텀시트(`TextInputSheet`, IME + 크기 프리셋)에서 입력·확인 시 그 위치에 굳음(탭한 자리에 I-beam 캐럿 표시). **입력 종료 = 수정·이동 불가, 삭제만**(탭 선택 후 X, 또는 통합 undo). `PlaceText`/`RemoveText` 2종 이벤트 → 멀티 동기화 자동. `TextRenderer`(네이티브 Paint, 줄바꿈·중앙정렬) 화면·PNG·미니뷰·타임랩스 공유. 색=현재 펜 색. 폰트는 기기 기본(벡터 아님 — 기기 간 동일 보장은 약함).
 - [x] **도형 채우기 토글** — `ToolSettings.fill`. `StrokeRenderer.drawShapeForm` 이 fill 이면 `Fill` DrawStyle, 아니면 외곽선 `Stroke`. 화면·PNG·동기화 자동 공유. 도형 드롭다운(`ShapeDropdownButton`) 하단에 "채우기" 토글.
-- [x] **배경색 선택** — `CanvasState.backgroundColor`(사진처럼 캔버스 속성, 기본 흰색). `DrawingCanvas` 가 맨 아래 바탕으로 칠하고 `PngComposer` 가 사진 없을 때 흰색 대신 저장. TopAppBar "배경색" 버튼(`BgColorGlyph`) → `ColorPickerSheet`. 현재 로컬 전용(멀티 동기화 미포함 — 와이어 추가는 후속).
+- [x] **배경색 선택** — `CanvasState.backgroundColor`(사진처럼 캔버스 속성, 기본 흰색). `DrawingCanvas` 가 맨 아래 바탕으로 칠하고 `PngComposer` 가 사진 없을 때 흰색 대신 저장. TopAppBar "배경색" 버튼(`BgColorGlyph`) → `ColorPickerSheet`. (멀티 동기화는 "교실 모드 이후 다듬기" 에서 추가됨.)
 - [x] **대칭(미러) 그리기** — `SymmetryMode`(끔/좌우/상하/4분할). `DrawingViewModel` 이 입력 stroke 의 미러 좌표 stroke 를 독립 `StrokeId` 로 함께 emit(정규화 좌표 반사) → 동기화·저장 자동, 도형·브러시도 그대로 미러. 도구바 "보조" 드롭다운(`GuideDropdownButton`, 안내선+대칭 섹션)에 추가. 한 제스처가 N개 stroke 라 undo 는 미러별 1회씩(향후 묶기 가능).
 - [x] **타임랩스 Phase 1 (기록+저장)** — 이벤트 로그를 메모리에 기록(`TimelapseRecorder`, `emit`/`applyRemoteEvent`/배경 setter 배선), TopAppBar 기록/종료 버튼 + ● REC + 뒤로가기 저장/폐기 확인. 종료 시 `TimelapseStore`(`filesDir/timelapses/<id>/`, 작품과 독립)에 CBOR 로그+썸네일+배경 저장. 메모리 임시 보관 — 저장 전 앱 종료 시 소실. 상세: [timelapse-plan.md](timelapse-plan.md).
 - [x] **타임랩스 Phase 2 (재생+갤러리+삭제)** — `TimelapsePlayer`(빈 `CanvasState` 에 로그 재적용, **프레임 시계로 실시간 연속 재생**+배속 1/2/4x, seek=`rebuildTo`, `CanvasState.reset()` 추가). 홈 "타임랩스" 버튼 → `TimelapseGalleryScreen`(썸네일 그리드, 길게눌러 삭제) → `TimelapsePlayerScreen`(read-only `ReplayCanvas` + 재생/일시정지/seek/배속/삭제). 라우트 `timelapses`·`timelapse/{id}`.
@@ -246,6 +246,8 @@
 - [x] **캔버스 비율 동기화 (함께·모임·교실 3모드)** — `Frame.CanvasAspectFrame` 로 변경 시 전파(함께=공유 캔버스, 모임/교실=발신자 `peerCanvases`). 스냅샷에도 `CanvasSnapshot.aspect` 포함(`applySnapshot(..., aspect)`). `MiniCanvas` 도 `background?.aspectRatio ?: aspect.ratio` 로 표시.
 - [x] **세밀붓(Fine)** — 굵기 고정된 아주 가는 붓. `BrushType.fixedWidthDp`(non-null 이면 슬라이더 무시, 세밀붓=0.8dp). 선택 시 도구바 굵기 슬라이더 숨김("굵기 고정"). `PenIllustration`/`BrushPreview` 도 추가. 세밀 묘사용.
 - [x] **캔버스 줌인/줌아웃 (로컬 전용)** — 두 손가락 핀치 확대(centroid 고정)+드래그 이동, 한 손가락 그리기. 뷰포트 `scale`(1..5)+`offset`, 순수함수 `Viewport.kt`(`screenToContent`/`zoomAround`/`clampOffset`, `ViewportTest`). 그리는 중 두 번째 손가락 닿으면 진행 stroke 취소(`DrawingViewModel.strokeCancel`) 후 줌 전환. 확대 중엔 벡터 직접 렌더(또렷). 포인터 좌표를 콘텐츠 좌표로 변환해 정규화 → 저장 데이터는 줌과 무관. 리셋 칩(1:1)+사진/비율 변경 시 자동 리셋. **동기화·저장·타임랩스·미니뷰 미반영.** (줌 상태 자체 동기화·캔버스 회전은 미도입.)
+- [x] **배경색 멀티 동기화** — `Frame.BackgroundColorFrame` + `CanvasSnapshot.backgroundColor`(비율 동기화와 동일 라우팅·패턴). `MiniCanvas` 도 흰색 고정 대신 peer 배경색 렌더. 이전엔 로컬 전용이던 배경색이 함께·모임·교실 3모드에 반영.
+- [x] **저장 작품 삭제** — `WorkStore.delete(id)`(PNG+meta 제거, 갤러리 내보낸 사본은 유지). 최근작업 모달 썸네일 길게눌러 + 미리보기 화면 상단 "삭제" 버튼, 둘 다 확인 다이얼로그. 타임랩스 갤러리와 동일 UX.
 
 ## Phase 6 — 나중에 검토만
 지금 결정하지 않을 것들:

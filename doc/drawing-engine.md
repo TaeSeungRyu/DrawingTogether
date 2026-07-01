@@ -87,12 +87,13 @@ data class TextElement(
     val colorArgb: Int,
 )
 
-// 동기화 응답 시 stroke + 스티커 + 텍스트 + 캔버스 비율을 한 묶음으로 캡슐화 (FILE 페이로드 CBOR).
+// 동기화 응답 시 stroke + 스티커 + 텍스트 + 캔버스 비율 + 배경색을 한 묶음으로 캡슐화 (FILE 페이로드 CBOR).
 data class CanvasSnapshot(
     val strokes: List<Stroke>,
     val stickers: List<Sticker> = emptyList(),
     val texts: List<TextElement> = emptyList(),
     val aspect: CanvasAspect = CanvasAspect.Free,
+    val backgroundColor: Int = WHITE,
 )
 
 // Phase 1.5+ — 사진 배경 (옵션)
@@ -139,7 +140,7 @@ class CanvasState {
         private set
 
     fun apply(event: DrawingEvent) { /* Stroke* / Clear / Undo / *Sticker / *Text dispatch (+완료 stroke 변경 시 bumpRevision) */ }
-    fun applySnapshot(strokes, stickers, texts, aspect) { /* 전체 교체 + bump */ }
+    fun applySnapshot(strokes, stickers, texts, aspect, backgroundColor) { /* 전체 교체 + bump */ }
     fun reset() { /* 전부 비움(배경·비율 포함) — 타임랩스 재생 rebuild 용 */ }
     fun setBackground(image: BackgroundImage?) { background = image; /* bump */ }
     fun setBackgroundColor(argb: Int) { backgroundColor = argb; /* bump */ }
@@ -251,9 +252,10 @@ Canvas(
 - 좌표는 정규화 (위 참고).
 - `strokeWidthDp`는 dp 단위로 송신. 수신 측에서 자기 `density`로 px 환산.
 - 색은 ARGB Int로 그대로 전송 (32-bit 고정 폭).
-- **캔버스 비율(`CanvasAspect`)**: 사진 없을 때 캔버스 모양을 결정(자유=화면 채움). 정규화 좌표라 비율을
-  바꾸면 기존 요소가 새 모양에 맞춰 리플로우. `Frame.CanvasAspectFrame` 로 세 모드 모두 동기화(함께=공유
-  캔버스, 모임/교실=발신자 미니뷰). 스냅샷에도 `CanvasSnapshot.aspect` 로 포함.
+- **캔버스 비율(`CanvasAspect`)·배경색(`backgroundColor`)**: 캔버스 속성. 비율은 사진 없을 때 모양을 결정
+  (자유=화면 채움), 배경색은 사진 아래 바탕. 둘 다 `Frame.CanvasAspectFrame`/`Frame.BackgroundColorFrame`
+  로 세 모드 동기화(함께=공유 캔버스, 모임/교실=발신자 미니뷰), 스냅샷에도 `CanvasSnapshot.aspect`/
+  `backgroundColor` 로 포함. 정규화 좌표라 비율을 바꾸면 기존 요소가 새 모양에 맞춰 리플로우.
 - **줌(뷰포트)**: `scale`/`offset` 은 로컬 화면 표시 전용 — 정규화 데이터·동기화·저장엔 영향 없음(§3 줌 참고).
 
 ## 8. PNG 내보내기 (구현 완료 — `works/PngComposer`)

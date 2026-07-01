@@ -46,9 +46,10 @@
    사진당 1회 캐시·사진 변경 시 무효화). 로컬 표시 전용.
 10. **도형 채우기 토글** — `ToolSettings.fill`. `StrokeRenderer.drawShapeForm` 이 fill 이면 `Fill`,
     아니면 외곽선 `Stroke`. 화면·PNG·동기화 자동 공유. 도형 드롭다운 하단에 "채우기" 토글.
-11. **배경색 선택** — `CanvasState.backgroundColor`(사진 배경처럼 캔버스 속성, 기본 흰색).
+11. **배경색 선택 + 동기화** — `CanvasState.backgroundColor`(사진 배경처럼 캔버스 속성, 기본 흰색).
     `DrawingCanvas` 가 맨 아래 바탕으로 칠하고, `PngComposer` 가 사진 없을 때 흰색 대신 이 색으로 저장.
-    TopAppBar "배경색" 버튼 → `ColorPickerSheet`. **현재 로컬 전용**(멀티 동기화 미포함 — 와이어 추가는 후속).
+    TopAppBar "배경색" 버튼 → `ColorPickerSheet`. **함께·모임·교실 3모드 동기화** — `Frame.BackgroundColorFrame`
+    + `CanvasSnapshot.backgroundColor`(비율 동기화와 동일 패턴). `MiniCanvas` 도 그 peer 배경색 렌더.
 12. **대칭(미러) 그리기** — `SymmetryMode`(끔/좌우/상하/4분할). `DrawingViewModel` 이 입력 stroke 의
     미러 좌표 stroke 를 독립 `StrokeId` 로 함께 emit(정규화 좌표 반사) → 동기화·저장 자동. 도형·브러시도
     그대로 미러. "보조" 드롭다운(구 안내선)에 대칭 섹션. 한 제스처가 N개 stroke 라 undo 는 미러별 1회씩(향후 묶기 가능).
