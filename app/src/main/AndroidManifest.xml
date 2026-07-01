@@ -2,7 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Nearby Connections (minSdk=31). 위치 권한 회피를 위해 neverForLocation 플래그 사용. -->
+    <!-- Nearby Connections. API 31+ 는 신권한 + neverForLocation 으로 위치 권한 회피,
+         API 30(minSdk) 은 레거시 BT + 위치 권한 사용(maxSdkVersion=30 으로 31+ 엔 미노출). -->
     <!-- API 33+ Wi-Fi P2P 신권한 -->
     <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES"
         android:usesPermissionFlags="neverForLocation"
@@ -13,6 +14,17 @@
         android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+
+    <!-- API 30 이하 전용 레거시 권한. maxSdkVersion=30 이라 API 31+ 기기엔 요청/표시 안 됨
+         (모던 기기의 "위치 권한 없음" 유지). Nearby 는 API 30 에서 BT 스캔에 위치 권한 필요. -->
+    <uses-permission android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"
+        android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"
+        android:maxSdkVersion="30" />
 
     <!-- Wi-Fi 상태 (일반 권한, 런타임 묻지 않음) -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />

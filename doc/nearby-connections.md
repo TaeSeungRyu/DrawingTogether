@@ -33,7 +33,7 @@
 
 ## 3. 권한 (Android 버전별)
 
-`minSdk = 31` 기준. Play Console 위치 권한 선언 폼을 피하기 위해 `ACCESS_FINE_LOCATION` 은 의도적으로 미선언. 트레이드오프: API 31-32 (Android 12/12L) 기기에서는 Wi-Fi Direct 없이 BT 위주로 동작 (사진 전송이 느려질 수 있음).
+`minSdk = 30`. **API 31+ 는 위치 권한 없이** 동작(신 BT 권한 + `neverForLocation`) — "무위치" 강점 유지. **API 30(Android 11) 은** Nearby 의 BT 스캔이 위치 권한을 요구하므로 `ACCESS_FINE_LOCATION` 을 쓰되, `maxSdkVersion="30"` 으로 **31+ 기기엔 아예 노출/요청되지 않게** 격리. (보급·교육용 태블릿 상당수가 API 30 에 머물러 도달률 위해 30 지원 — `doc/roadmap.md` 참고.)
 
 ### `AndroidManifest.xml`
 
@@ -49,19 +49,25 @@
 <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
 
+<!-- API 30 이하 전용 (maxSdkVersion=30 → 31+ 엔 미노출) -->
+<uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+<uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" />
+
 <!-- Wi-Fi 상태 (일반 권한, 런타임 묻지 않음) -->
 <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
 ```
 
-### 런타임 요청 순서
+### 런타임 요청 순서 (`NearbyPermissions.required()`)
 
 `pairing` 화면 진입 시 한 번에 묶어서 요청:
 
 1. API 33+: `BLUETOOTH_SCAN`, `BLUETOOTH_CONNECT`, `BLUETOOTH_ADVERTISE`, `NEARBY_WIFI_DEVICES`
 2. API 31-32: 위와 동일하되 `NEARBY_WIFI_DEVICES` 제외
+3. API 30: `ACCESS_FINE_LOCATION` 만 (BLUETOOTH/BLUETOOTH_ADMIN 은 install-time 권한이라 런타임 요청 대상 아님)
 
-Android의 "Nearby devices" 권한 그룹 덕에 위 권한들이 단일 다이얼로그로 통합되어 표시됨.
+API 31+ 는 "Nearby devices" 권한 그룹으로 단일 다이얼로그. API 30 은 위치 권한 다이얼로그가 뜬다(그 버전 한정).
 
 솔로 모드에서는 권한 요구 없음 — 사용자 신뢰 측면에서 중요.
 
