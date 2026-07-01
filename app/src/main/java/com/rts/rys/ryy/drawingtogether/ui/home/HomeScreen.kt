@@ -1,11 +1,14 @@
 package com.rts.rys.ryy.drawingtogether.ui.home
 
 import android.app.Activity
+import android.content.res.Configuration
 import android.os.SystemClock
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -36,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -81,14 +85,117 @@ fun HomeScreen(
         }
     }
 
+    val isLandscape =
+        LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    // 모드 버튼 6개 — 세로/가로 배치에서 공용. 버튼 사이 간격은 부모 Column 의 verticalArrangement 가 처리
+    // (여기선 개별 Spacer 를 두지 않는다).
+    val modeButtons: @Composable ColumnScope.() -> Unit = {
+        // 싱글모드 — 코랄(primary). 가장 강한 CTA.
+        Button(
+            onClick = onSingleMode,
+            modifier = Modifier.fillMaxWidth().height(72.dp),
+            shape = MaterialTheme.shapes.extraLarge,
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("싱글모드", style = MaterialTheme.typography.titleLarge)
+                Spacer(modifier = Modifier.height(2.dp))
+                Text("혼자 그리기", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        // 함께 모드 — 민트(secondary). 1:1 공유 캔버스.
+        Button(
+            onClick = onDuoMode,
+            modifier = Modifier.fillMaxWidth().height(72.dp),
+            shape = MaterialTheme.shapes.extraLarge,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.secondary,
+                contentColor = MaterialTheme.colorScheme.onSecondary,
+            ),
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("함께 모드", style = MaterialTheme.typography.titleLarge)
+                Spacer(modifier = Modifier.height(2.dp))
+                Text("둘이서 한 캔버스에 같이 그리기", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        // 모임 모드 — secondaryContainer. mesh(모두가 모두를 봄).
+        Button(
+            onClick = onPartyMode,
+            modifier = Modifier.fillMaxWidth().height(72.dp),
+            shape = MaterialTheme.shapes.extraLarge,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            ),
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("모임 모드", style = MaterialTheme.typography.titleLarge)
+                Spacer(modifier = Modifier.height(2.dp))
+                Text("최대 4명, 각자 캔버스 + 미니 뷰", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        // 교실 모드 — 호스트 중심(교사–학생).
+        Button(
+            onClick = onClassroomMode,
+            modifier = Modifier.fillMaxWidth().height(72.dp),
+            shape = MaterialTheme.shapes.extraLarge,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+            ),
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("교실 모드", style = MaterialTheme.typography.titleLarge)
+                Spacer(modifier = Modifier.height(2.dp))
+                Text("최대 10명, 방장 중심 (교사–학생)", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        // 최근 작업 — 라벤더(tertiary).
+        Button(
+            onClick = { modalOpen = true },
+            modifier = Modifier.fillMaxWidth().height(72.dp),
+            shape = MaterialTheme.shapes.extraLarge,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.tertiary,
+                contentColor = MaterialTheme.colorScheme.onTertiary,
+            ),
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("최근 작업", style = MaterialTheme.typography.titleLarge)
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = if (works.isEmpty()) "아직 저장된 작품이 없어요"
+                           else "${works.size}개 저장됨",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+        // 타임랩스 — 라벤더 컨테이너 톤.
+        Button(
+            onClick = onTimelapses,
+            modifier = Modifier.fillMaxWidth().height(72.dp),
+            shape = MaterialTheme.shapes.extraLarge,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+            ),
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("타임랩스", style = MaterialTheme.typography.titleLarge)
+                Spacer(modifier = Modifier.height(2.dp))
+                Text("그리는 과정 다시 보기", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+    }
+
     Box(modifier = modifier.fillMaxSize()) {
         PastelBlobBackground()
-        // verticalScroll — 가로 모드처럼 높이가 부족하면 버튼들이 화면 밖으로 밀려 선택 안 되던
-        // 문제 해결. 세로에서도 자연스럽게 위쪽 정렬 + 필요 시 스크롤.
+        // 제목 영역 + 버튼 영역 분리. 버튼 영역이 제목 아래 남은 공간을 모두 차지하므로 outer Column
+        // 은 스크롤하지 않는다(스크롤은 세로에선 불필요, 가로에선 버튼 영역 안쪽에서만 처리).
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -115,133 +222,28 @@ fun HomeScreen(
                 .padding(vertical = 4.dp, horizontal = 8.dp),
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // 싱글모드 — 코랄(primary). 가장 강한 CTA.
-        Button(
-            onClick = onSingleMode,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(72.dp),
-            shape = MaterialTheme.shapes.extraLarge,
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("싱글모드", style = MaterialTheme.typography.titleLarge)
-                Spacer(modifier = Modifier.height(2.dp))
-                Text("혼자 그리기", style = MaterialTheme.typography.bodySmall)
-            }
+        // 버튼 영역 — 제목 아래 남은 공간을 모두 차지.
+        //  - 세로: 균등 간격(SpaceEvenly) 으로 영역 전체에 고르게 분산.
+        //  - 가로: 높이가 부족하므로 안쪽에서 스크롤 + 고정 간격.
+        if (isLandscape) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                content = modeButtons,
+            )
+        } else {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.SpaceEvenly,
+                content = modeButtons,
+            )
         }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // 함께 모드 — 민트(secondary). 1:1 공유 캔버스.
-        Button(
-            onClick = onDuoMode,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(72.dp),
-            shape = MaterialTheme.shapes.extraLarge,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.secondary,
-                contentColor = MaterialTheme.colorScheme.onSecondary,
-            ),
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("함께 모드", style = MaterialTheme.typography.titleLarge)
-                Spacer(modifier = Modifier.height(2.dp))
-                Text("둘이서 한 캔버스에 같이 그리기", style = MaterialTheme.typography.bodySmall)
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // 모임 모드 — secondary 의 컨테이너 톤으로 같은 계열이지만 위계 한 단계 낮춤.
-        // 함께 모드와 같은 "연결" 군 이지만 좀 더 큰 규모.
-        Button(
-            onClick = onPartyMode,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(72.dp),
-            shape = MaterialTheme.shapes.extraLarge,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-            ),
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("모임 모드", style = MaterialTheme.typography.titleLarge)
-                Spacer(modifier = Modifier.height(2.dp))
-                Text("최대 4명, 각자 캔버스 + 미니 뷰", style = MaterialTheme.typography.bodySmall)
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // 교실 모드 — 호스트 중심(교사–학생). 모임 모드와 같은 "연결" 군이지만 호스트만 전체를 봄.
-        Button(
-            onClick = onClassroomMode,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(72.dp),
-            shape = MaterialTheme.shapes.extraLarge,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-            ),
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("교실 모드", style = MaterialTheme.typography.titleLarge)
-                Spacer(modifier = Modifier.height(2.dp))
-                Text("최대 10명, 방장 중심 (교사–학생)", style = MaterialTheme.typography.bodySmall)
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // 최근 작업 — 라벤더(tertiary). 보조 액션이지만 같은 시각 무게.
-        Button(
-            onClick = { modalOpen = true },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(72.dp),
-            shape = MaterialTheme.shapes.extraLarge,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.tertiary,
-                contentColor = MaterialTheme.colorScheme.onTertiary,
-            ),
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("최근 작업", style = MaterialTheme.typography.titleLarge)
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = if (works.isEmpty()) "아직 저장된 작품이 없어요"
-                           else "${works.size}개 저장됨",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // 타임랩스 — 라벤더 컨테이너 톤. 그리기 과정 재생 갤러리.
-        Button(
-            onClick = onTimelapses,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(72.dp),
-            shape = MaterialTheme.shapes.extraLarge,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-            ),
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("타임랩스", style = MaterialTheme.typography.titleLarge)
-                Spacer(modifier = Modifier.height(2.dp))
-                Text("그리는 과정 다시 보기", style = MaterialTheme.typography.bodySmall)
-            }
-        }
-            Spacer(modifier = Modifier.height(32.dp))
         }
 
         if (modalOpen) {
