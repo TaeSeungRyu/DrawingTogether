@@ -113,5 +113,10 @@ interface Transport {
     // 특정 endpointId 에게만 FILE 송신. 동기화 응답 (snapshot strokes / 사진) 에 사용.
     suspend fun sendFileTo(endpointId: String, uri: Uri): Long
 
+    // 특정 endpoint 연결을 로컬에서 끊는다. Nearby 는 상대가 조용히 사라진 경우(Bye 없이 범위
+    // 이탈·비행기 모드) onDisconnected 를 안 주거나 매우 늦게 주므로, 앱 하트비트가 무응답으로
+    // 판정하면 이걸로 명시적으로 끊어 끊김을 표면화한다. localRole 은 보존(재연결에 필요).
+    fun disconnectFromEndpoint(endpointId: String)
+
     fun stop()
 }

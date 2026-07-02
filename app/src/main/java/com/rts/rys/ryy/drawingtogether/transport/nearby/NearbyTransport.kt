@@ -290,11 +290,23 @@ class NearbyTransport(
         }
 
         override fun onDisconnected(endpointId: String) {
-            _connectedPeers.value = _connectedPeers.value.filter { it.endpointId != endpointId }
-            if (_connectedPeers.value.isEmpty() && _state.value is TransportState.Connected) {
-                _state.value = TransportState.Idle
-            }
+            handleEndpointGone(endpointId)
         }
+    }
+
+    // endpoint 소실 정리 — Nearby onDisconnected 콜백과 하트비트 강제 해제가 공유.
+    // connectedPeers 에서 제거, 마지막 하나였고 연결 상태였으면 Idle 로. localRole 은 건드리지 않음.
+    private fun handleEndpointGone(endpointId: String) {
+        _connectedPeers.value = _connectedPeers.value.filter { it.endpointId != endpointId }
+        if (_connectedPeers.value.isEmpty() && _state.value is TransportState.Connected) {
+            _state.value = TransportState.Idle
+        }
+    }
+
+    override fun disconnectFromEndpoint(endpointId: String) {
+        // Nearby 에 로컬 해제 요청 후, 콜백이 안 올 수 있으니 즉시 동일 정리(idempotent).
+        runCatching { client.disconnectFromEndpoint(endpointId) }
+        handleEndpointGone(endpointId)
     }
 
     private val endpointDiscoveryCallback = object : EndpointDiscoveryCallback() {

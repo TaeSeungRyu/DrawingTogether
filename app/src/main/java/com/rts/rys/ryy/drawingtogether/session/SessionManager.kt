@@ -3,6 +3,7 @@ package com.rts.rys.ryy.drawingtogether.session
 import android.content.Context
 import android.content.SharedPreferences
 import android.net.Uri
+import android.os.SystemClock
 import com.rts.rys.ryy.drawingtogether.drawing.model.DrawingEvent
 import com.rts.rys.ryy.drawingtogether.drawing.model.PeerId
 import com.rts.rys.ryy.drawingtogether.drawing.model.Sticker
@@ -21,6 +22,7 @@ import com.rts.rys.ryy.drawingtogether.transport.nearby.TransportMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -103,6 +105,9 @@ class SessionManager private constructor(
 ) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    // 하트비트 생존 추적(Duo) — 모든 인바운드 프레임이 갱신, 주기 Ping 이 트래픽을 유지한다.
+    private val liveness = LivenessTracker(HEARTBEAT_TIMEOUT_MS)
 
     private val _state = MutableStateFlow<SessionState>(SessionState.Idle)
     val state: StateFlow<SessionState> = _state.asStateFlow()
@@ -253,6 +258,24 @@ class SessionManager private constructor(
                 }
             }
             .launchIn(scope)
+
+        // 하트비트(Duo) — 상대가 Bye 없이 사라지면(범위 이탈·비행기 모드) Nearby onDisconnected 가
+        // 안 오거나 너무 늦어 남은 쪽이 끊김을 못 잡는다. 연결 중 주기적으로 Ping 을 쏘고(상대는 Pong
+        // 응답 → 인바운드로 생존 갱신), 타임아웃 넘게 무응답인 peer 를 명시적으로 끊어 Failed 로 표면화.
+        if (mode == TransportMode.Duo) {
+            scope.launch {
+                while (true) {
+                    delay(HEARTBEAT_INTERVAL_MS)
+                    if (_state.value !is SessionState.Connected) continue
+                    val now = SystemClock.elapsedRealtime()
+                    runCatching { transport.send(Frame.Ping(now)) }
+                    val active = transport.connectedPeers.value.map { it.endpointId }
+                    liveness.staleEndpoints(active, now).forEach { id ->
+                        transport.disconnectFromEndpoint(id)
+                    }
+                }
+            }
+        }
     }
 
     fun setNick(value: String) {
@@ -398,6 +421,8 @@ class SessionManager private constructor(
     }
 
     private fun handleIncoming(endpointId: String, frame: Frame) {
+        // 어떤 프레임이든 도착 = 그 endpoint 는 살아있음(하트비트 생존 신호).
+        liveness.onSeen(endpointId, SystemClock.elapsedRealtime())
         when (frame) {
             is Frame.Event -> {
                 // 원격 DrawingEvent → DrawingScreen 으로 흘려보냄.
@@ -768,6 +793,10 @@ class SessionManager private constructor(
         private const val PREFS_NAME = "session_prefs"
         private const val KEY_NICK = "nick"
         private const val KEY_PEER_ID = "peer_id"
+
+        // 하트비트 — 3초마다 Ping, 10초(≈Ping 3회 누락) 무응답이면 끊김 판정. BT 지연 여유 포함.
+        private const val HEARTBEAT_INTERVAL_MS = 3_000L
+        private const val HEARTBEAT_TIMEOUT_MS = 10_000L
 
         // Phase 4-D: 모드별 별도 싱글톤. 인스턴스들은 prefs (peerId/nick) 만 공유하고
         // transport 와 핸드셰이크 상태는 완전 격리. 사용자 요구 "1:1 은 1:1 만, 1:N 은 1:N 만".
