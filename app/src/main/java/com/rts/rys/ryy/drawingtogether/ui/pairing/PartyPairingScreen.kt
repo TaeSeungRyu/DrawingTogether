@@ -207,9 +207,18 @@ fun PartyPairingScreen(
                     transportState = transportState,
                     discoveredNicks = discovered,
                     waitingForHostStart = sessionState is SessionState.Connected,
+                    // 연결됐다 끊긴 상태(Failed) — 첫 진입(Pairing)과 구분해 재검색 버튼을 노출.
+                    disconnected = sessionState is SessionState.Failed,
                     onRetryPermission = { requestPermissions.launch(NearbyPermissions.required()) },
                     onPickPeer = { endpointId ->
                         scope.launch { session.transport.requestConnection(endpointId) }
+                    },
+                    // 연결됐다 호스트 이탈로 끊기면 검색이 멈춘 채 남는다 — 뒤로가기 없이 재검색(#13).
+                    onResearch = {
+                        scope.launch {
+                            session.enterPairing()
+                            session.transport.startDiscovery()
+                        }
                     },
                 )
             }
@@ -437,8 +446,10 @@ private fun ColumnScope.JoinerBody(
     transportState: TransportState,
     discoveredNicks: List<com.rts.rys.ryy.drawingtogether.transport.DiscoveredPeer>,
     waitingForHostStart: Boolean,
+    disconnected: Boolean,
     onRetryPermission: () -> Unit,
     onPickPeer: (endpointId: String) -> Unit,
+    onResearch: () -> Unit,
 ) {
     Text(
         text = if (waitingForHostStart) "조인 — 호스트가 시작하기를 기다리는 중"
@@ -472,7 +483,26 @@ private fun ColumnScope.JoinerBody(
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 )
             }
-            discoveredNicks.isEmpty() -> EmptyDiscoveryHint(transportState)
+            discoveredNicks.isEmpty() ->
+                // 연결됐다 끊겨(Failed) 검색이 멈춘 채 남은 경우 — 뒤로가기 없이 수동 재검색(#13).
+                if (disconnected) {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            text = "연결이 끊겼어요.\n다시 검색할 수 있어요.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(onClick = onResearch) { Text("다시 검색") }
+                    }
+                } else {
+                    EmptyDiscoveryHint(transportState)
+                }
             else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 discoveredNicks.forEach { peer ->
                     Card(
