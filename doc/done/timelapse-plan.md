@@ -3,7 +3,7 @@
 > 상태: **완료 — Phase 1~3 + 다듬기** (기록·저장 / 재생·갤러리·삭제 / MP4 내보내기·공유).
 > 실기기 검증 양호. 다듬기: 기록 타이머·15분 소프트 가드, 종료 저장 백그라운드화, 재생 실시간화,
 > 비트맵 캐시, 내보내기 해상도/배속 옵션 + 비트레이트·사진 화질 개선.
-> 상세·우선순위는 [drawing-ideas.md](drawing-ideas.md), 단계 표기는 [roadmap.md](roadmap.md). 결정 사항은 §7.
+> 상세·우선순위는 [drawing-ideas.md](../drawing-ideas.md), 단계 표기는 [roadmap.md](../roadmap.md). 결정 사항은 §7.
 
 ## 배경 / 설계 원칙
 

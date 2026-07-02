@@ -179,7 +179,7 @@
 - [x] **안내선(가이드라인)** — 중앙 십자선 + 격자 6×6/18×18. 로컬 전용(동기화·저장 미포함). `DrawingViewModel.guideCross/guideGrid`, `DrawingCanvas.drawGuides`, `GuideDropdownButton`.
 - [x] **에어브러시(분사)** — `BrushType.Airbrush`. `drawAirbrush` 경로 보간 + 결정론 seed(`stroke.id`)로 점 분사 → 매 프레임·양 단말 동일. 분사점 미저장(StrokeId 만 와이어).
 - [x] **번짐(수채/스머지)** — `BrushType.Blur`. native `Paint` + `BlurMaskFilter` via `drawIntoCanvas{nativeCanvas}`. PNG 합성에서도 동작.
-- [x] **스티커** — 자체 벡터 12종 배치/이동/크기·회전/삭제 + 통합 undo. stroke 아닌 새 요소 타입 (`Sticker`/`StickerKey`/`StickerId`, `DrawingEvent` 3종 Place/Transform/Remove, `CanvasState._stickers` + `UndoItem` 통합 undo, `StickerRenderer.drawSticker` 화면·PNG·미니뷰 공유, Snapshot `CanvasSnapshot`(strokes+stickers) 확장). 변형은 commit-on-end. 상세: [sticker-plan.md](done-sticker-plan.md).
+- [x] **스티커** — 자체 벡터 12종 배치/이동/크기·회전/삭제 + 통합 undo. stroke 아닌 새 요소 타입 (`Sticker`/`StickerKey`/`StickerId`, `DrawingEvent` 3종 Place/Transform/Remove, `CanvasState._stickers` + `UndoItem` 통합 undo, `StickerRenderer.drawSticker` 화면·PNG·미니뷰 공유, Snapshot `CanvasSnapshot`(strokes+stickers) 확장). 변형은 commit-on-end. 상세: [sticker-plan.md](done/sticker-plan.md).
 - [x] **브러시 변형 4종(네온/점선/무지개/붓펜)** — `BrushType` 4개 추가 + `StrokeRenderer` 분기. 네온=발광 후광(BlurMaskFilter)+밝은 코어, 점선=`dashPathEffect`, 무지개=누적 길이→hue 회전(결정론 phase=`stroke.id`), 붓펜=점 간 거리(속도)→구간별 굵기 변조. 모두 점 좌표에서 유도 → 와이어 변경 없음, 화면·PNG·멀티 자동 공유. `PenIllustration`/`BrushPreview` 도 4종 추가.
 - [x] **손떨림 보정(스트로크 안정화)** — 입력 점에 지수이동평균(EMA) 적용. 끔/약/강 3단(`Smoothing` enum, alpha 1.0/0.5/0.28). `DrawingCanvas` 입력 단계에서 보정 → 보정된 점만 stroke 에 저장·전송하므로 동기화·저장·undo 자동. 도구바 굵기 줄 "보정" 토글 칩(`SmoothingChip`). 로컬 설정.
 - [x] **선 곡선 평활화(렌더)** — 자유 곡선을 직선 폴리라인이 아니라 인접 점 중간점-2차 베지어로 그려 꺾임을 둥글게(`buildFreehandPath`). 색·굵기가 구간별인 무지개·붓펜은 `forEachSmoothPiece`+`drawSmoothPiece`. 화면·PNG 공유. 손떨림 보정(입력)과 별개 단계.
@@ -190,7 +190,7 @@
 - [x] **도형 채우기 토글** — `ToolSettings.fill`. `StrokeRenderer.drawShapeForm` 이 fill 이면 `Fill` DrawStyle, 아니면 외곽선 `Stroke`. 화면·PNG·동기화 자동 공유. 도형 드롭다운(`ShapeDropdownButton`) 하단에 "채우기" 토글.
 - [x] **배경색 선택** — `CanvasState.backgroundColor`(사진처럼 캔버스 속성, 기본 흰색). `DrawingCanvas` 가 맨 아래 바탕으로 칠하고 `PngComposer` 가 사진 없을 때 흰색 대신 저장. TopAppBar "배경색" 버튼(`BgColorGlyph`) → `ColorPickerSheet`. (멀티 동기화는 "교실 모드 이후 다듬기" 에서 추가됨.)
 - [x] **대칭(미러) 그리기** — `SymmetryMode`(끔/좌우/상하/4분할). `DrawingViewModel` 이 입력 stroke 의 미러 좌표 stroke 를 독립 `StrokeId` 로 함께 emit(정규화 좌표 반사) → 동기화·저장 자동, 도형·브러시도 그대로 미러. 도구바 "보조" 드롭다운(`GuideDropdownButton`, 안내선+대칭 섹션)에 추가. 한 제스처가 N개 stroke 라 undo 는 미러별 1회씩(향후 묶기 가능).
-- [x] **타임랩스 Phase 1 (기록+저장)** — 이벤트 로그를 메모리에 기록(`TimelapseRecorder`, `emit`/`applyRemoteEvent`/배경 setter 배선), TopAppBar 기록/종료 버튼 + ● REC + 뒤로가기 저장/폐기 확인. 종료 시 `TimelapseStore`(`filesDir/timelapses/<id>/`, 작품과 독립)에 CBOR 로그+썸네일+배경 저장. 메모리 임시 보관 — 저장 전 앱 종료 시 소실. 상세: [timelapse-plan.md](done-timelapse-plan.md).
+- [x] **타임랩스 Phase 1 (기록+저장)** — 이벤트 로그를 메모리에 기록(`TimelapseRecorder`, `emit`/`applyRemoteEvent`/배경 setter 배선), TopAppBar 기록/종료 버튼 + ● REC + 뒤로가기 저장/폐기 확인. 종료 시 `TimelapseStore`(`filesDir/timelapses/<id>/`, 작품과 독립)에 CBOR 로그+썸네일+배경 저장. 메모리 임시 보관 — 저장 전 앱 종료 시 소실. 상세: [timelapse-plan.md](done/timelapse-plan.md).
 - [x] **타임랩스 Phase 2 (재생+갤러리+삭제)** — `TimelapsePlayer`(빈 `CanvasState` 에 로그 재적용, **프레임 시계로 실시간 연속 재생**+배속 1/2/4x, seek=`rebuildTo`, `CanvasState.reset()` 추가). 홈 "타임랩스" 버튼 → `TimelapseGalleryScreen`(썸네일 그리드, 길게눌러 삭제) → `TimelapsePlayerScreen`(read-only `ReplayCanvas` + 재생/일시정지/seek/배속/삭제). 라우트 `timelapses`·`timelapse/{id}`.
 - [x] **타임랩스 Phase 3 (MP4 내보내기·공유)** — `TimelapseVideoExporter`: 헤드리스 프레임 렌더(같은 렌더러) → `MediaCodec`(H.264, YUV420 flexible, `getInputImage`) + `MediaMuxer`(MP4) → `MediaStore.Video`(`Movies/DrawingTogether`) + 공유 인텐트. fps 30, **내보내기 다이얼로그(해상도 480/720/1080, 배속 1/2/4x)**, 비트레이트 ~0.5bpp, 사진은 큰 변 이하로 제한(업스케일 방지), 긴 녹화 프레임 간격 가속. 진행률 오버레이. 실기기 검증 양호.
 - [x] **타임랩스 다듬기** — 기록 경과 타이머(● REC m:ss) + 15분 소프트 가드(`MAX_RECORD_MS`, 1분 전 경고·자동 종료저장), 기록 시작 시점 캔버스 시딩(기록 전 작업 포함), 종료 썸네일/저장 백그라운드화(프리징 방지).
@@ -212,7 +212,7 @@
 - [x] 런처 이름 한글화 "드로잉 투게더" (앱 실행 중 화면은 영문 "Drawing Together" 유지).
 
 ## 교실 모드 (1:N, 호스트 중심) — 완료
-> 기존 **모임 모드(Party, mesh)** 와 **별개인 신규 모드**. "공유 + 분기"로 스타 전송·세션·미니뷰 인프라를 재사용하되 가시성·UI만 분기. 모임 모드 동작은 그대로 보존. 상세·구현 메모: [classroom-mode.md](done-classroom-mode.md).
+> 기존 **모임 모드(Party, mesh)** 와 **별개인 신규 모드**. "공유 + 분기"로 스타 전송·세션·미니뷰 인프라를 재사용하되 가시성·UI만 분기. 모임 모드 동작은 그대로 보존. 상세·구현 메모: [classroom-mode.md](done/classroom-mode.md).
 
 **핵심 동작**
 - 호스트(교사): 자기 그림+사진이 전 조인자에게 라이브. "참여자 보기" 버튼 → 모달에서 이름 선택 → 그 조인자를 한 명씩 라이브로 봄.
@@ -250,7 +250,7 @@
 - [x] **저장 작품 삭제** — `WorkStore.delete(id)`(PNG+meta 제거, 갤러리 내보낸 사본은 유지). 최근작업 모달 썸네일 길게눌러 + 미리보기 화면 상단 "삭제" 버튼, 둘 다 확인 다이얼로그. 타임랩스 갤러리와 동일 UX.
 
 ## 버그 수정 — 2026-07 헌팅 리포트 대응 (코드 완료)
-> `doc/done-bug-hunt-2026-07-01.md` 확정 17건 순차 수정 + QA 가이드 `doc/done-qa-checklist.md`. 항목별 커밋.
+> `doc/done/bug-hunt-2026-07-01.md` 확정 17건 순차 수정 + QA 가이드 `doc/done/qa-checklist.md`. 항목별 커밋.
 > 코드는 전부 완료. 일부 항목은 멀티(3대+) 기기 QA만 남음.
 
 **렌더/저장 (WYSIWYG·리소스)**
@@ -280,7 +280,7 @@
 - [x] **모임 mesh 늦은참여 자동채움** (`2f9c787`) — 재참여 시 미니뷰가 라이브 이벤트로만 채워지던 문제. 교실 forLiveView pull 을 Party 로 확장(모든 peer 대상), 응답은 broadcast+origin 라우팅(#4·#5 재사용). roadmap Phase 3 "늦참가 SNAPSHOT_REQ→SNAPSHOT" 미구현분을 모임에 채움.
 - [x] **모임 broadcast endpoint별 전송** (`57942da`) — `broadcastMyCanvasAsPeer` 가 broadcast용 `sendFile`(단일 pfd 재사용)을 써 호스트가 여러 조인자에 보낼 때 첫 명만 FILE 수신하던 버그. `connectedPeers` 각각 `sendFileTo`+`sendTo` 로 개별 전송(shareBackgroundToPeer 패턴).
 
-**검증 완료**: 확정 17건 + 신규 3건 전부 코드 완료 및 QA 통과(유닛/기기 1~3대/코드리뷰). 상세 표는 `doc/done-qa-checklist.md`. 이 버그 수정 이니셔티브 종료.
+**검증 완료**: 확정 17건 + 신규 3건 전부 코드 완료 및 QA 통과(유닛/기기 1~3대/코드리뷰). 상세 표는 `doc/done/qa-checklist.md`. 이 버그 수정 이니셔티브 종료.
 
 ## Phase 6 — 나중에 검토만
 지금 결정하지 않을 것들:

@@ -44,7 +44,7 @@ import java.util.concurrent.ConcurrentHashMap
 // Duo       = 1:1 함께 모드 (P2P_POINT_TO_POINT)
 // Party     = 1:N 모임 모드 (P2P_STAR, 호스트 + 최대 3 조인자, mesh 가시성)
 // Classroom = 1:N 교실 모드 (P2P_STAR, 호스트 중심 — 조인자끼리 안 보임). serviceId 가 달라
-//             교실 모드 기기끼리만 발견·연결된다(모임/함께 기기는 미발견). doc/done-classroom-mode.md.
+//             교실 모드 기기끼리만 발견·연결된다(모임/함께 기기는 미발견). doc/done/classroom-mode.md.
 // 호스트가 받을 수 있는 최대 조인자 수. maxJoiners 로 모드별 지정.
 // 주의: Nearby P2P_STAR 는 소규모 그룹용 — 대역폭·안정성상 수십 명 동시 연결은 비현실적.
 // 교실 모드도 "현실적인 수"(host + 9 = 10명)로 잡는다. 더 키우면 연결 실패/끊김이 잦아진다.

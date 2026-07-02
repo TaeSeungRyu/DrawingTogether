@@ -51,7 +51,7 @@ Bye              정상 종료 알림 (reason).
 ```
 
 > `proto` 정수는 `PROTO_VERSION` 상수. `targetPeerId` 류 필드는 모두 기본값 `""` — 1:1 함께 모드는 비워서 broadcast 의미, 모임/교실 모드만 채워서 호스트 relay 라우팅.
-> **교실 모드**(호스트 중심, 별도 serviceId)의 멤버십·relay 정책은 [classroom-mode.md](done-classroom-mode.md) 참고 — mesh 가시성(Event relay·PeerJoined/Left)은 모임 전용이라 교실 조인자끼리 자동 미표시.
+> **교실 모드**(호스트 중심, 별도 serviceId)의 멤버십·relay 정책은 [classroom-mode.md](done/classroom-mode.md) 참고 — mesh 가시성(Event relay·PeerJoined/Left)은 모임 전용이라 교실 조인자끼리 자동 미표시.
 
 ## 4. 인코딩 — CBOR
 
