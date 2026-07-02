@@ -111,24 +111,8 @@ fun HomeScreen(
                 Text("혼자 그리기", style = MaterialTheme.typography.bodySmall)
             }
         }
-        // 함께 그리기 — 협업 모드 4종(함께/모임/교실/나눠 그리기)을 하나로 묶은 통합 버튼.
-        // 탭하면 바텀시트로 방식을 고른다. 민트(secondary) 컨테이너 + 은은한 청록(onSecondaryContainer)
-        // 글씨로 동계 톤 조화 — 협업의 대표 CTA.
-        Button(
-            onClick = { collabSheetOpen = true },
-            modifier = Modifier.fillMaxWidth().height(88.dp),
-            shape = MaterialTheme.shapes.extraLarge,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.secondary,
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-            ),
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("함께 그리기", style = MaterialTheme.typography.titleLarge)
-                Spacer(modifier = Modifier.height(2.dp))
-                Text("함께 · 모임 · 교실 · 나눠 그리기", style = MaterialTheme.typography.bodySmall)
-            }
-        }
+        // 함께 그리기 — 협업 모드 4종을 하나로 묶은 히어로 버튼(그라데이션 + 이모지). 탭 → 바텀시트.
+        CollabHeroGradient(onClick = { collabSheetOpen = true })
         // 최근 작업 — 라벤더(tertiary).
         Button(
             onClick = { modalOpen = true },
