@@ -13,6 +13,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.UUID
@@ -22,31 +24,50 @@ import java.util.UUID
 // 앱 내부 저장소(filesDir)이라 외부 스토리지 권한 불필요.
 class WorkStore private constructor(private val worksDir: File) {
 
-    private val _works = MutableStateFlow(loadAll())
+    private val _works = MutableStateFlow<List<Work>>(emptyList())
     val works: StateFlow<List<Work>> = _works.asStateFlow()
+
+    // save 직렬화(#15) — 이름 확정~_works 갱신 구간을 겹치지 않게 해, 거의 동시 save 두 건이
+    // 서로 stale 한 _works 를 보고 같은 이름을 확정하는 것을 막는다.
+    private val saveMutex = Mutex()
+
+    init {
+        // 이전 실행에서 png 만 쓰고 meta 쓰기 전에 크래시로 남은 orphan png 정리(#14).
+        // loadAll 은 .meta 만 나열하므로 orphan png 는 목록/prune 에서 영영 누락돼 내부에 쌓인다.
+        sweepOrphanPngs()
+        _works.value = loadAll()
+    }
 
     suspend fun save(
         bitmap: Bitmap,
         hasPhotoBackground: Boolean,
         name: String,
     ): Work = withContext(Dispatchers.IO) {
-        val id = UUID.randomUUID().toString()
-        val finalName = resolveUniqueName(name, _works.value)
-        val work = Work(
-            id = id,
-            savedAtEpochMs = System.currentTimeMillis(),
-            widthPx = bitmap.width,
-            heightPx = bitmap.height,
-            hasPhotoBackground = hasPhotoBackground,
-            name = finalName,
-        )
-        pngFile(id).outputStream().use { out ->
-            bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+        saveMutex.withLock {
+            val id = UUID.randomUUID().toString()
+            val finalName = resolveUniqueName(name, _works.value)
+            val work = Work(
+                id = id,
+                savedAtEpochMs = System.currentTimeMillis(),
+                widthPx = bitmap.width,
+                heightPx = bitmap.height,
+                hasPhotoBackground = hasPhotoBackground,
+                name = finalName,
+            )
+            pngFile(id).outputStream().use { out ->
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+            }
+            try {
+                metaFile(id).writeText(work.toMetaLine())
+            } catch (t: Throwable) {
+                // meta 쓰기 실패 시 방금 쓴 png 를 롤백 — orphan 으로 남지 않게(#14).
+                runCatching { pngFile(id).delete() }
+                throw t
+            }
+            pruneToLimit()
+            _works.value = loadAll()
+            work
         }
-        metaFile(id).writeText(work.toMetaLine())
-        pruneToLimit()
-        _works.value = loadAll()
-        work
     }
 
     // "최근 작업" 은 MAX_WORKS 개로 한정. 초과 시 가장 오래된 항목부터 PNG + meta 같이 제거.
@@ -139,6 +160,13 @@ class WorkStore private constructor(private val worksDir: File) {
         uri
     }
 
+    // 대응 .meta 가 없는 .png 를 삭제 — meta 쓰기 전 크래시로 남은 orphan 정리(#14).
+    // 앱 시작(생성자)에서만 호출 — 그 시점엔 진행 중 save 가 없어 반쯤 쓰인 png 를 오삭제할 위험 없음.
+    private fun sweepOrphanPngs() {
+        val names = worksDir.listFiles()?.map { it.name } ?: return
+        orphanPngIds(names).forEach { id -> runCatching { pngFile(id).delete() } }
+    }
+
     private fun loadAll(): List<Work> {
         val files = worksDir.listFiles { f -> f.name.endsWith(".meta") } ?: emptyArray()
         return files
@@ -161,6 +189,19 @@ class WorkStore private constructor(private val worksDir: File) {
 
         // 같은 이름이 있으면 "곰돌이", "곰돌이 (2)", "곰돌이 (3)" ... 순으로 비어있는 첫 자리를 사용.
         // 이름이 빈 문자열이면 그대로 빈 문자열 반환(라벨 없는 작품 허용).
+        // 파일명 목록에서 대응 "<id>.meta" 가 없는 "<id>.png" 의 id 들을 반환(orphan). 순수 함수 — 테스트용.
+        internal fun orphanPngIds(fileNames: Collection<String>): List<String> {
+            val metaIds = fileNames.asSequence()
+                .filter { it.endsWith(".meta") }
+                .map { it.removeSuffix(".meta") }
+                .toHashSet()
+            return fileNames.asSequence()
+                .filter { it.endsWith(".png") }
+                .map { it.removeSuffix(".png") }
+                .filter { it !in metaIds }
+                .toList()
+        }
+
         internal fun resolveUniqueName(base: String, existing: List<Work>): String {
             val trimmed = base.trim()
             if (trimmed.isEmpty()) return ""
