@@ -1511,6 +1511,7 @@ fun DrawingScreen(
                         orderedCanvases = splitOrderedCanvases(cfg, session.peerId, vm),
                         density = density,
                         screenCanvasShortDp = vm.screenCanvasShortDp,
+                        drawDividers = true, // 미리보기에만 영역 구분선(저장물엔 미포함).
                     ).asImageBitmap()
                 }
             }

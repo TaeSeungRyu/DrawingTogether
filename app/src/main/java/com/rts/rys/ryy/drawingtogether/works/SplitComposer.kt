@@ -17,11 +17,13 @@ object SplitComposer {
     private const val COMPOSITE_SIZE = 1080
 
     // orderedCanvases[i] = 슬롯 i 담당자의 캔버스(없으면 null → 흰 슬롯).
+    // drawDividers = true 면 슬롯 경계에 희미한 선을 그린다(미리보기 전용 — 저장물엔 미포함).
     fun compose(
         layout: SplitLayout,
         orderedCanvases: List<CanvasState?>,
         density: Float,
         screenCanvasShortDp: Float,
+        drawDividers: Boolean = false,
     ): Bitmap {
         val w = COMPOSITE_SIZE
         val h = COMPOSITE_SIZE
@@ -30,13 +32,15 @@ object SplitComposer {
         canvas.drawColor(android.graphics.Color.WHITE)
         val paint = Paint(Paint.FILTER_BITMAP_FLAG)
 
-        layout.slots.forEachIndexed { i, slot ->
-            val dst = Rect(
+        val slotRects = layout.slots.map { slot ->
+            Rect(
                 (slot.left * w).roundToInt(),
                 (slot.top * h).roundToInt(),
                 (slot.right * w).roundToInt(),
                 (slot.bottom * h).roundToInt(),
             )
+        }
+        slotRects.forEachIndexed { i, dst ->
             val state = orderedCanvases.getOrNull(i) ?: return@forEachIndexed
             // 슬롯 캔버스를 자체 해상도로 렌더(사진 배경 포함) 후 슬롯 rect 로 스케일.
             val slotBmp = PngComposer.compose(
@@ -47,6 +51,16 @@ object SplitComposer {
             )
             canvas.drawBitmap(slotBmp, null, dst, paint)
             slotBmp.recycle()
+        }
+
+        // 미리보기 — 슬롯 경계 희미한 선. 각 슬롯 rect 외곽선을 얇게 그리면 내부 구분선 + 옅은 테두리.
+        if (drawDividers) {
+            val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                strokeWidth = (w * 0.004f).coerceAtLeast(2f)
+                color = 0x40000000 // 희미한 검정(약 25% 알파)
+            }
+            slotRects.forEach { canvas.drawRect(it, line) }
         }
         return out
     }
