@@ -90,6 +90,10 @@ enum class SymmetryMode(val label: String) {
 class DrawingViewModel : ViewModel() {
     val canvas = CanvasState()
 
+    // 화면에 그려지는 캔버스의 짧은변(dp) — DrawingCanvas 가 측정해 알려준다. 0f = 미측정.
+    // 저장(PNG) 시 export 해상도 대비 stroke 굵기 비율을 화면과 맞추는 데 쓴다(#1). 화면 표시엔 미사용.
+    var screenCanvasShortDp: Float = 0f
+
     // 타임랩스 기록기 — 메모리 임시 보관. 디스크 저장은 DrawingScreen 이 finishRecording() 결과로 수행.
     private val recorder = TimelapseRecorder()
     val isRecording: Boolean get() = recorder.isRecording

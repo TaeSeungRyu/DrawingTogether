@@ -89,6 +89,8 @@ fun DrawingCanvas(
     onViewportChange: (Float, Offset) -> Unit = { _, _ -> },
     // 그리기 중 두 번째 손가락 감지 → 진행 stroke 취소(줌/이동으로 전환).
     onStrokeCancel: (StrokeId) -> Unit = {},
+    // 캔버스 짧은변(dp)이 측정/변경될 때 알림 — 저장 시 굵기 정규화용(#1). 화면 표시엔 미사용.
+    onCanvasShortDpChange: (Float) -> Unit = {},
 ) {
     val density = LocalDensity.current.density
     // pointerInput(tool.kind) 은 scale/offset 변화로 재시작하지 않으므로, 제스처 코루틴에서
@@ -123,7 +125,11 @@ fun DrawingCanvas(
     Canvas(
         modifier = modifier
             .fillMaxSize()
-            .onSizeChanged { canvasSize = it }
+            .onSizeChanged {
+                canvasSize = it
+                val shortPx = min(it.width, it.height)
+                if (shortPx > 0 && density > 0f) onCanvasShortDpChange(shortPx / density)
+            }
             .pointerInput(tool.kind) {
                 if (isSticker) {
                     stickerGestures(

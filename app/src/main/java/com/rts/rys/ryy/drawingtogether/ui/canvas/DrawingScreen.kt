@@ -388,7 +388,7 @@ fun DrawingScreen(
                         setBackground(bg)
                         setBackgroundColor(bgColor)
                     }
-                    PngComposer.compose(snap, density)
+                    PngComposer.compose(snap, density, screenCanvasShortDp = vm.screenCanvasShortDp)
                 }
                 TimelapseStore.get(context)
                     .save(recorded.entries, recorded.durationMs, recorded.backgrounds, thumb)
@@ -1307,7 +1307,10 @@ fun DrawingScreen(
             scope.launch {
                 val includeBg = vm.canvas.mergeBackgroundOnSave
                 val mergedBg = vm.canvas.background != null && includeBg
-                val bitmap = PngComposer.compose(vm.canvas, density, includeBg)
+                val bitmap = PngComposer.compose(
+                    vm.canvas, density, includeBg,
+                    screenCanvasShortDp = vm.screenCanvasShortDp,
+                )
                 WorkStore.get(context).save(bitmap, mergedBg, raw)
                 snackbarHostState.showSnackbar(
                     message = SAVED_MESSAGE,
@@ -1417,6 +1420,7 @@ private fun MyCanvasContent(
             offset = canvasOffset,
             onViewportChange = { s, o -> canvasScale = s; canvasOffset = o },
             onStrokeCancel = vm::strokeCancel,
+            onCanvasShortDpChange = { vm.screenCanvasShortDp = it },
         )
         // 줌 리셋 칩 — 확대 상태에서만. 탭하면 1:1 복귀. (좌측 하단, 닉네임 칩과 같은 반투명 스타일)
         if (canvasScale != 1f) {
