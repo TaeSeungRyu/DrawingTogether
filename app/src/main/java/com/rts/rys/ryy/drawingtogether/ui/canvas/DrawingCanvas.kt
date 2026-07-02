@@ -438,7 +438,7 @@ private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.stickerG
             }
             if (hypot(local.x - halfPx, local.y - halfPx) <= hitR) {
                 // 크기/회전 핸들 (우하단).
-                resizeRotateGesture(selected, w, h, shortSide, onTransformLocal, onCommit, sc, off)
+                resizeRotateGesture(selected, downPos, w, h, shortSide, onTransformLocal, onCommit, sc, off)
                 return@awaitEachGesture
             }
         }
@@ -514,6 +514,7 @@ private suspend fun androidx.compose.ui.input.pointer.AwaitPointerEventScope.mov
 // 우하단 핸들 드래그 = 중심 기준 거리→scale, 각도→rotation 동시. commit-on-end.
 private suspend fun androidx.compose.ui.input.pointer.AwaitPointerEventScope.resizeRotateGesture(
     sticker: Sticker,
+    downPos: Offset,
     w: Float,
     h: Float,
     shortSide: Float,
@@ -526,6 +527,8 @@ private suspend fun androidx.compose.ui.input.pointer.AwaitPointerEventScope.res
     val centerY = sticker.cy * h
     var scale = sticker.scale
     var rot = sticker.rotationDeg
+    // moveGesture 와 대칭 — 손가락이 down 지점에서 실제로 움직였을 때만 커밋. 핸들 탭만 하면
+    // no-op TransformSticker 가 멀티로 전송되던 문제(#12)를 막는다.
     var moved = false
     while (true) {
         val event = awaitPointerEvent()
@@ -545,8 +548,10 @@ private suspend fun androidx.compose.ui.input.pointer.AwaitPointerEventScope.res
             scale = (half * 2f / shortSide).coerceIn(MIN_STICKER_SCALE, MAX_STICKER_SCALE)
             // 핸들 기준각 45° 를 빼서 손가락 방향이 그대로 회전각이 되게.
             rot = Math.toDegrees(atan2(dy, dx).toDouble()).toFloat() - 45f
-            moved = true
-            onTransformLocal(sticker.id, sticker.cx, sticker.cy, scale, rot)
+            if (p != downPos) {
+                moved = true
+                onTransformLocal(sticker.id, sticker.cx, sticker.cy, scale, rot)
+            }
         }
         if (!pressed) break
     }
