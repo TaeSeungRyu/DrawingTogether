@@ -87,13 +87,14 @@ fun AppNavGraph(modifier: Modifier = Modifier) {
                     // 모임 호스트 이탈 등 — 홈까지 한 번에 복귀.
                     nav.popBackStack(Routes.Home, inclusive = false)
                 },
-                onReconnect = {
-                    // 재연결 흐름. Duo 면 자동 호스트 광고 시작 (autoHost=true) — 사용자가
-                    // 페어링 화면에서 다시 한 번 호스트 버튼을 탭하지 않아도 된다.
+                onReconnect = { asHost ->
+                    // 재연결 흐름(실질적으로 Duo 전용 — 스타 모드는 DrawingScreen 에서 조기 분기).
+                    // 원래 역할대로 재진입: 호스트였으면 광고(autoHost=true), 조인자였으면 검색(false).
+                    // 둘 다 autoHost=true 로 광고만 하다 교착되던 문제(#7)를 해소.
                     val target = when (mode) {
                         DrawMode.Party -> Routes.PartyPairing
                         DrawMode.Classroom -> Routes.ClassroomPairing
-                        else -> pairingRoute(autoHost = true)
+                        else -> pairingRoute(autoHost = asHost)
                     }
                     nav.navigate(target)
                 },

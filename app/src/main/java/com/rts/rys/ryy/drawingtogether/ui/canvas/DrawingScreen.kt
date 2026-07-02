@@ -351,7 +351,9 @@ private suspend fun sendHostCanvasToJoiner(
 fun DrawingScreen(
     mode: DrawMode = DrawMode.Single,
     onBack: () -> Unit,
-    onReconnect: () -> Unit,
+    // asHost=true 면 원래 이 기기가 호스트(광고)였으므로 재연결도 광고로, false 면 조인자였으므로
+    // 검색으로 재진입한다 — 둘 다 광고만 하다 교착되던 문제(#7)를 역할 비대칭 복원으로 해소.
+    onReconnect: (asHost: Boolean) -> Unit,
     onExitToHome: () -> Unit = {},
     modifier: Modifier = Modifier,
     vm: DrawingViewModel = viewModel(),
@@ -569,7 +571,8 @@ fun DrawingScreen(
                 withDismissAction = true,
             )
             if (result == SnackbarResult.ActionPerformed) {
-                onReconnect()
+                // 원래 역할대로 재진입 — 호스트였으면 광고, 조인자였으면 검색.
+                onReconnect(role == com.rts.rys.ryy.drawingtogether.transport.Role.Host)
             }
         }
     }
