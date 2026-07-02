@@ -249,6 +249,35 @@
 - [x] **배경색 멀티 동기화** — `Frame.BackgroundColorFrame` + `CanvasSnapshot.backgroundColor`(비율 동기화와 동일 라우팅·패턴). `MiniCanvas` 도 흰색 고정 대신 peer 배경색 렌더. 이전엔 로컬 전용이던 배경색이 함께·모임·교실 3모드에 반영.
 - [x] **저장 작품 삭제** — `WorkStore.delete(id)`(PNG+meta 제거, 갤러리 내보낸 사본은 유지). 최근작업 모달 썸네일 길게눌러 + 미리보기 화면 상단 "삭제" 버튼, 둘 다 확인 다이얼로그. 타임랩스 갤러리와 동일 UX.
 
+## 버그 수정 — 2026-07 헌팅 리포트 대응 (코드 완료)
+> `doc/bug-hunt-2026-07-01.md` 확정 17건 순차 수정 + QA 가이드 `doc/qa-checklist.md`. 항목별 커밋.
+> 코드는 전부 완료. 일부 항목은 멀티(3대+) 기기 QA만 남음.
+
+**렌더/저장 (WYSIWYG·리소스)**
+- [x] **#1 선 굵기 정규화** — 저장 PNG가 화면과 같은 굵기 비율. `works/ExportScale.kt`(순수 `exportStrokeDensity`) — 화면 렌더 불변, export density만 `export_짧은변_px / 화면캔버스_짧은변_dp`로 스케일. 유닛+기기 QA ✓.
+- [x] **#16 타임랩스 영상 굵기** — 캔버스 폭 400dp 고정 가정 제거. `Timelapse.canvasShortDp` 기록 + #1 헬퍼 재사용. 유닛+기기 QA ✓.
+- [x] **#9 에어브러시/네온/블러 질감** — #1과 같은 density 인자를 공유해 export 경로에서 자동 스케일(별도 수정 불필요, export 관점 해소).
+- [x] **#11 타임랩스 인코더 누수** — `TimelapseVideoExporter` codec/muxer 생성을 try 안으로, nullable finally 해제.
+- [x] **#14 orphan png** — meta 쓰기 실패 시 png 롤백 + 시작 시 대응 meta 없는 png 스윕(`orphanPngIds` 순수+유닛).
+- [x] **#15 동시 save 이름 중복** — `WorkStore.save` Mutex 직렬화.
+- [x] **#17 EdgeDetector recycle** — ARGB_8888 변환 copy본만 recycle(원본 src는 호출자 소유라 유지).
+
+**엔진/입력**
+- [x] **#8 applySnapshot undo 순서** — Stroke/Sticker/TextElement에 `seq`(기본 0=구데이터 호환), seq 병합정렬로 시간순 복원. 유닛 ✓.
+- [x] **#6 openStroke 누수** — `DrawingCanvas` 제스처 try/finally로 취소 시 정리 + `strokeCancel` 판정을 열린 stroke 존재 기준으로. 유닛+기기 QA ✓.
+- [x] **#12 스티커 핸들 no-op** — resizeRotateGesture가 실제 이동(`p != downPos`) 시에만 커밋(moveGesture와 대칭).
+
+**연결/전송 (Nearby)**
+- [x] **#7 Duo 재연결 교착** — `onReconnect`에 원 역할(asHost) 전달 → 호스트만 광고, 조인자는 검색. 기기 2대 QA ✓.
+- [x] **Duo 하트비트 (신규)** — 상대가 Bye 없이 사라진 경우 감지(#7 검증 전제). `LivenessTracker`(순수+유닛) + Duo 3초 Ping/10초 타임아웃 + `Transport.disconnectFromEndpoint`(localRole 보존). **Duo 전용**(스타 모드는 "방 열기"로 처리 — 사용자 결정, 확장 안 함). 기기 2대 QA ✓.
+- [x] **#2 maxJoiners 우회** — 예약 집합(acceptedEndpoints) 정원 = 연결됨+예약, onConnectionInitiated·acceptPending 재검사+onConnectionResult 최종방어.
+- [x] **#3 동시 pending 유실** — `_pending` 단일→ArrayDeque 큐(head 노출, UI 순차).
+- [x] **#10 공유 컬렉션 동시성** — outgoingFilePayloads/nickByEndpoint를 ConcurrentHashMap 계열로(GMS콜백↔Main).
+- [x] **#4·#5 mesh relay 발신자 오인식** — CanvasAspect/BackgroundColor에 `senderPeerId`, broadcast Snapshot/PhotoMeta/PhotoRemove에 `originPeerId`(기본 ""=구피어 폴백). 송신 시 `session.peerId` 스탬프, 수신 `resolveSender`(프레임 우선·endpoint 폴백), relay가 원발신자 보존. 코덱 라운드트립 유닛 ✓.
+- [x] **#13 조인자 재검색** — 조인자가 연결됐다 호스트 이탈로 끊긴 뒤(sessionState=Failed) "다시 검색" 버튼 노출(enterPairing+startDiscovery). 뒤로가기 외 회복 경로.
+
+**남은 QA (코드 완료, 검증만)**: #2·#3·#4·#5·#12·#13은 3대+ mesh/레이스, #10·#11·#17은 코드리뷰/스트레스.
+
 ## Phase 6 — 나중에 검토만
 지금 결정하지 않을 것들:
 - **따라 그리기 모드 옵션** — 학습 시나리오용. Clear/Undo/지우개를 자기 stroke 만, 상대 stroke 은 알파 감쇠. 페어링 시 양쪽 합의로 모드 선택. 사용자 요구 있을 때 도입. 알파 감쇠와 author 필터 분기 코드는 Phase 3-A 중 작성했다가 단일 모드 확정으로 제거됨 — 도입 시 git 히스토리 참고.
@@ -263,10 +292,10 @@
 - **사진 종횡비 처리**: 사진이 있으면 캔버스 비율을 사진에 맞춤. 사진이 없으면 `CanvasAspect` 선택(기본 자유=화면 채움, 저장은 정사각 1080²).
 - **사진 크기와 메모리**: 대용량 사진(20MP+)은 디코딩 시 다운샘플링 필수. `PhotoLoader`에서 화면 해상도에 맞춰 inSampleSize 조정.
 - **Nearby Connections 백그라운드 동작**: Android 13+ 백그라운드 BT/Wi-Fi 스캔 제한. 화면 켜진 동안만 동작 가정.
-- **자동 재연결**: 의도적으로 미도입. 끊기면 사용자가 명시적으로 다시 연결.
+- **자동 재연결**: 의도적으로 미도입. 끊기면 사용자가 명시적으로 다시 연결(Duo는 "재연결", 조인자는 "다시 검색" 버튼 — 원 역할 복원).
 - **Play Services 의존**: 한국 시장 가정 — 화웨이/de-Google ROM은 지원 범위 밖.
 - **렌더 성능**: 에어브러시(매 프레임 분사 재계산) / 번짐(BlurMaskFilter) stroke 가 많이 쌓이면 프레임 드랍 가능 → "완료 stroke 비트맵 캐시"(Phase 5 보류) 의 필요성 커짐. 실측 후 도입.
-- **PING/PONG keepalive**: `Frame.Ping/Pong` 타입만 있고 주기 송신 미구현. 끊김은 Nearby `onDisconnected` 로 감지(현재 충분).
+- **PING/PONG keepalive**: Duo 하트비트 구현됨(2026-07) — 3초 Ping/10초 무응답 타임아웃으로 상대가 Bye 없이 사라진 경우 감지. 스타(모임/교실)는 미적용("방 열기"로 처리 — 사용자 결정). 이전엔 `onDisconnected`만으론 조용히 사라진 상대를 못 잡던 문제.
 - **수익화**: 횟수 제한 IAP 검토 → 보류. 상세는 [BILLING.md](BILLING.md).
 
 ## 빌드/실행 명령
