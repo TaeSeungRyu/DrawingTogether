@@ -137,6 +137,16 @@ sealed class Frame {
     @Serializable
     @SerialName("party_start")
     data object PartyStart : Frame()
+
+    // 나눠 그리기 시작 — 호스트가 레이아웃 + 슬롯 순서(peerId 리스트)를 확정해 broadcast.
+    // 조인자는 이 신호를 받고 draw 진입(모임의 PartyStart 지각입장과 동일 역할, 데이터 동반).
+    // peerIds[i] = 슬롯 i 담당자(호스트가 0번, 조인 순으로). layoutId = SplitLayout.name.
+    @Serializable
+    @SerialName("split_start")
+    data class SplitStart(
+        val layoutId: String,
+        val peerIds: List<String>,
+    ) : Frame()
 }
 
 const val PROTO_VERSION: Int = 1

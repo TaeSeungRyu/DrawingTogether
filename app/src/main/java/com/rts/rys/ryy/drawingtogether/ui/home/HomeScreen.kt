@@ -59,6 +59,7 @@ fun HomeScreen(
     onDuoMode: () -> Unit,
     onPartyMode: () -> Unit,
     onClassroomMode: () -> Unit,
+    onSplitMode: () -> Unit = {},
     onWorkClick: (String) -> Unit,
     onTimelapses: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -154,6 +155,22 @@ fun HomeScreen(
                 Text("교실 모드", style = MaterialTheme.typography.titleLarge)
                 Spacer(modifier = Modifier.height(2.dp))
                 Text("최대 10명, 방장 중심 (교사–학생)", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        // 나눠 그리기 — mesh(모임 재사용), 레이아웃으로 나눠 각자 구역만 그림.
+        Button(
+            onClick = onSplitMode,
+            modifier = Modifier.fillMaxWidth().height(72.dp),
+            shape = MaterialTheme.shapes.extraLarge,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            ),
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("나눠 그리기", style = MaterialTheme.typography.titleLarge)
+                Spacer(modifier = Modifier.height(2.dp))
+                Text("2~4명, 레이아웃 나눠 각자 구역 그리기", style = MaterialTheme.typography.bodySmall)
             }
         }
         // 최근 작업 — 라벤더(tertiary).

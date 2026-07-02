@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.SystemClock
 import com.rts.rys.ryy.drawingtogether.drawing.model.DrawingEvent
 import com.rts.rys.ryy.drawingtogether.drawing.model.PeerId
+import com.rts.rys.ryy.drawingtogether.drawing.model.SplitLayout
 import com.rts.rys.ryy.drawingtogether.drawing.model.Sticker
 import com.rts.rys.ryy.drawingtogether.drawing.model.Stroke
 import com.rts.rys.ryy.drawingtogether.drawing.model.TextElement
@@ -96,6 +97,13 @@ data class IncomingBackgroundColor(
     val argb: Int,
 )
 
+// 나눠 그리기 설정 — 호스트가 확정해 broadcast(SplitStart)한 레이아웃 + 슬롯 순서.
+// orderedPeerIds[i] = 슬롯 i 담당자. 각 기기는 자기 peerId 위치로 자기 슬롯을 안다.
+data class SplitConfig(
+    val layout: SplitLayout,
+    val orderedPeerIds: List<PeerId>,
+)
+
 // 프로세스 전역 싱글톤. WorkStore와 동일한 패턴.
 class SessionManager private constructor(
     val mode: TransportMode,
@@ -162,6 +170,13 @@ class SessionManager private constructor(
     // 의 핸드셰이크 완료 시점에 그 조인자에게 PartyStart unicast 해 자동으로 Draw 진입시킨다.
     // 안 그러면 새 조인자가 "호스트가 시작하기를 기다리는 중" 화면에서 영원히 대기.
     private var partyStarted: Boolean = false
+
+    // 나눠 그리기 설정(레이아웃 + 슬롯 순서). 호스트는 broadcastSplitStart 로 세팅, 조인자는
+    // SplitStart 수신 시 세팅. draw 화면이 이 값으로 자기 슬롯 비율·합성 순서를 안다.
+    private val _splitConfig = MutableStateFlow<SplitConfig?>(null)
+    val splitConfig: StateFlow<SplitConfig?> = _splitConfig.asStateFlow()
+    // 호스트가 보낸 마지막 SplitStart — "방 열기"로 (재)합류한 조인자에게 다시 unicast 해 슬롯 복원.
+    private var lastSplitStart: Frame.SplitStart? = null
 
     // FILE 페이로드와 짝이 되는 메타는 PhotoMeta(사진) 또는 Snapshot(strokes) 두 종류.
     // 도착 순서가 달라질 수 있어서 양방향 버퍼.
@@ -303,6 +318,18 @@ class SessionManager private constructor(
         }
     }
 
+    // 나눠 그리기 호스트가 "그리기 시작" 시 호출. 레이아웃 + 슬롯 순서를 확정해 broadcast + 자기
+    // splitConfig 세팅. 이후 (재)합류 조인자에게는 maybeFinishHandshake 가 lastSplitStart 를 unicast.
+    fun broadcastSplitStart(layout: SplitLayout, orderedPeerIds: List<PeerId>) {
+        if (mode != TransportMode.Split) return
+        val frame = Frame.SplitStart(layoutId = layout.name, peerIds = orderedPeerIds.map { it.value })
+        lastSplitStart = frame
+        _splitConfig.value = SplitConfig(layout, orderedPeerIds)
+        scope.launch {
+            runCatching { transport.send(frame) }
+        }
+    }
+
     fun disconnect() {
         scope.launch {
             if (_state.value is SessionState.Connected) {
@@ -368,7 +395,7 @@ class SessionManager private constructor(
                 removed?.remoteHello?.peerId?.let { removedPeerIds.add(it) }
             }
         }
-        if (mode == TransportMode.Party && transport.localRole == Role.Host && removedPeerIds.isNotEmpty()) {
+        if (mode.isMesh && transport.localRole == Role.Host && removedPeerIds.isNotEmpty()) {
             val survivors = handshakes.keys.toList()
             scope.launch {
                 removedPeerIds.forEach { leftPeerId ->
@@ -448,6 +475,13 @@ class SessionManager private constructor(
             is Frame.PeerLeft -> {
                 indirectPeers.remove(PeerId(frame.peerId))
                 publishRemotePeers()
+            }
+            is Frame.SplitStart -> {
+                // 조인자가 나눠 그리기 설정 수신 → splitConfig 세팅 후 partyStart 로 draw 진입 트리거.
+                SplitLayout.byId(frame.layoutId)?.let { layout ->
+                    _splitConfig.value = SplitConfig(layout, frame.peerIds.map(::PeerId))
+                }
+                _partyStart.tryEmit(Unit)
             }
             is Frame.PartyStart -> {
                 _partyStart.tryEmit(Unit)
@@ -619,7 +653,7 @@ class SessionManager private constructor(
                 // PeerLeft 알림은 "모두가 모두를 보는" Party(mesh) 전용 — 교실은 조인자끼리 안 보임.
                 // onDisconnected 가 곧 자동 발화하지만 그땐 handshakes 가 이미 비어있어
                 // syncHandshakesWithPeers 가 PeerLeft 를 송신하지 않으므로 여기서 명시 송신.
-                if (mode == TransportMode.Party && transport.localRole == Role.Host && leftHello != null) {
+                if (mode.isMesh && transport.localRole == Role.Host && leftHello != null) {
                     val survivors = handshakes.keys.toList()
                     scope.launch {
                         survivors.forEach { survivor ->
@@ -675,14 +709,20 @@ class SessionManager private constructor(
             _state.value = SessionState.Connected(remoteNick = finishedHello.nick)
         }
         if (mode.isStar && transport.localRole == Role.Host) {
-            // 멤버십 양방향 알림(PeerJoined)은 "모두가 모두를 보는" Party 전용.
+            // 멤버십 양방향 알림(PeerJoined)은 "모두가 모두를 보는" mesh(Party·Split) 전용.
             // 교실 모드(Classroom)는 조인자끼리 안 보이므로 호출하지 않는다 — 호스트만 목록을 가진다.
-            if (mode == TransportMode.Party) {
+            if (mode.isMesh) {
                 announcePeerJoined(newlyJoinedEndpoint = endpointId, newlyJoinedHello = finishedHello)
             }
             // 호스트가 이미 Draw 진입한 상태에서 새 조인자 합류 ("방 열기" 케이스) — 그 조인자
             // 만 PartyStart 못 받아 대기 화면 멈춤. unicast 로 즉시 진입시킨다. (스타 공통)
-            if (partyStarted) {
+            val splitStart = lastSplitStart
+            if (splitStart != null) {
+                // 나눠 그리기 (재)합류 — 원래 슬롯 배정을 그대로 복원(같은 peerId면 같은 슬롯).
+                scope.launch {
+                    runCatching { transport.sendTo(endpointId, splitStart) }
+                }
+            } else if (partyStarted) {
                 scope.launch {
                     runCatching { transport.sendTo(endpointId, Frame.PartyStart) }
                 }
@@ -728,7 +768,7 @@ class SessionManager private constructor(
     // - 그 외 → relay (단, 호스트만 가능. 조인자는 무시)
     private fun shouldRelay(targetPeerId: String): Boolean {
         if (targetPeerId.isEmpty() || targetPeerId == peerId) return false
-        return mode == TransportMode.Party && transport.localRole == Role.Host
+        return mode.isMesh && transport.localRole == Role.Host
     }
 
     // 모임 모드 호스트가 target peerId 로 송신할 때 매칭되는 endpointId 찾기.
@@ -761,7 +801,7 @@ class SessionManager private constructor(
     // 호스트가 인바운드 Frame.Event 를 source 제외 다른 조인자에게 재송신. P2P_STAR 토폴로지에서
     // 조인자끼리 직접 안 보이니 이걸로 다대다 동기화.
     private fun relayIfHost(sourceEndpointId: String, frame: Frame) {
-        if (mode != TransportMode.Party) return
+        if (!mode.isMesh) return
         if (transport.localRole != Role.Host) return
         val targets = broadcastRelayTargets(sourceEndpointId)
         if (targets.isEmpty()) return
@@ -774,7 +814,7 @@ class SessionManager private constructor(
 
     // 호스트의 connectedPeers 중 source 제외한 endpoint 목록.
     private fun broadcastRelayTargets(sourceEndpointId: String): List<String> {
-        if (mode != TransportMode.Party || transport.localRole != Role.Host) return emptyList()
+        if (!mode.isMesh || transport.localRole != Role.Host) return emptyList()
         return transport.connectedPeers.value
             .map { it.endpointId }
             .filter { it != sourceEndpointId }
@@ -784,6 +824,8 @@ class SessionManager private constructor(
         handshakes.clear()
         indirectPeers.clear()
         partyStarted = false
+        lastSplitStart = null
+        _splitConfig.value = null
         // 진행 중이던 FILE/메타 매칭 상태를 비운다. 안 비우면 끊겼다 재연결한 뒤 "가져오기"
         // 응답(Snapshot/PhotoMeta + FILE)이 직전 세션의 잔여 pending 과 엉켜 적용이 누락될 수 있다.
         pendingPhotoMeta.clear()
@@ -810,6 +852,7 @@ class SessionManager private constructor(
         @Volatile private var duoInstance: SessionManager? = null
         @Volatile private var partyInstance: SessionManager? = null
         @Volatile private var classroomInstance: SessionManager? = null
+        @Volatile private var splitInstance: SessionManager? = null
 
         fun get(
             context: Context,
@@ -823,6 +866,9 @@ class SessionManager private constructor(
             }
             TransportMode.Classroom -> classroomInstance ?: synchronized(this) {
                 classroomInstance ?: build(context, mode).also { classroomInstance = it }
+            }
+            TransportMode.Split -> splitInstance ?: synchronized(this) {
+                splitInstance ?: build(context, mode).also { splitInstance = it }
             }
         }
 

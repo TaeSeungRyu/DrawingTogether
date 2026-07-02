@@ -48,6 +48,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.rts.rys.ryy.drawingtogether.drawing.model.PeerId
+import com.rts.rys.ryy.drawingtogether.drawing.model.SplitLayout
 import com.rts.rys.ryy.drawingtogether.session.SessionManager
 import com.rts.rys.ryy.drawingtogether.session.SessionState
 import com.rts.rys.ryy.drawingtogether.transport.TransportState
@@ -93,6 +95,13 @@ fun PartyPairingScreen(
     var permissionsGranted by remember { mutableStateOf(NearbyPermissions.allGranted(context)) }
     var permissionDenied by remember { mutableStateOf(false) }
     var role by remember { mutableStateOf(PartyRole.NotPicked) }
+    // 나눠 그리기(Split) 전용 — 호스트가 고른 레이아웃. 참가 인원이 바뀌면 무효화.
+    val isSplit = mode == TransportMode.Split
+    var selectedLayout by remember { mutableStateOf<SplitLayout?>(null) }
+    val participantCount = connectedPeers.size + 1
+    LaunchedEffect(participantCount) {
+        if (selectedLayout?.slotCount != participantCount) selectedLayout = null
+    }
 
     val requestPermissions = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions(),
@@ -191,13 +200,24 @@ fun PartyPairingScreen(
                     connectedCount = connectedPeers.size,
                     maxJoiners = mode.maxJoiners,
                     connectedNicks = connectedPeers.map { it.nick },
-                    canStart = connectedPeers.isNotEmpty(),
+                    // Split 은 레이아웃 선택 필수. 그 외(모임/교실)는 조인자 1명이면 시작 가능.
+                    canStart = connectedPeers.isNotEmpty() &&
+                        (!isSplit || selectedLayout?.slotCount == participantCount),
+                    splitLayouts = if (isSplit) SplitLayout.layoutsFor(participantCount) else emptyList(),
+                    selectedLayout = selectedLayout,
+                    onSelectLayout = { selectedLayout = it },
                     onStartClick = {
-                        // 새 조인자 더 안 받기 + 기존 조인자들에게 PartyStart 신호 → 동기 진입.
-                        // broadcastPartyStart 가 partyStarted 플래그도 박아둠 — 그 후 "방 열기"
-                        // 로 들어오는 새 조인자도 자동으로 PartyStart unicast 받는다.
                         session.transport.stopAdvertising()
-                        session.broadcastPartyStart()
+                        if (isSplit) {
+                            // 슬롯 순서 = [호스트] + 조인자(remotePeers 순). 각 기기는 받은 순서로 슬롯 배정.
+                            val layout = selectedLayout ?: return@HostBody
+                            val ordered = listOf(PeerId(session.peerId)) +
+                                session.remotePeers.value.map { it.peerId }
+                            session.broadcastSplitStart(layout, ordered)
+                        } else {
+                            // 새 조인자 더 안 받기 + 기존 조인자들에게 PartyStart 신호 → 동기 진입.
+                            session.broadcastPartyStart()
+                        }
                         onStart()
                     },
                 )
@@ -373,6 +393,10 @@ private fun ColumnScope.HostBody(
     connectedNicks: List<String>,
     canStart: Boolean,
     onStartClick: () -> Unit,
+    // 나눠 그리기 전용 — 비어있지 않으면 레이아웃 피커를 노출(선택 후에만 시작 가능).
+    splitLayouts: List<SplitLayout> = emptyList(),
+    selectedLayout: SplitLayout? = null,
+    onSelectLayout: (SplitLayout) -> Unit = {},
 ) {
     Text(
         text = "내가 호스트 — 조인자 기다리는 중 ($connectedCount/$maxJoiners)",
@@ -425,6 +449,32 @@ private fun ColumnScope.HostBody(
         }
     }
 
+    // 나눠 그리기 — 현재 인원에 맞는 레이아웃 피커.
+    if (splitLayouts.isNotEmpty()) {
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = "레이아웃 선택 (${connectedCount + 1}명)",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            splitLayouts.forEach { layout ->
+                val chosen = layout == selectedLayout
+                Button(
+                    onClick = { onSelectLayout(layout) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (chosen) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = if (chosen) MaterialTheme.colorScheme.onPrimary
+                        else MaterialTheme.colorScheme.onSecondaryContainer,
+                    ),
+                ) { Text(layout.label) }
+            }
+        }
+    }
+
     Button(
         onClick = onStartClick,
         enabled = canStart,
@@ -433,7 +483,11 @@ private fun ColumnScope.HostBody(
             .height(56.dp),
     ) {
         Text(
-            text = if (canStart) "그리기 시작 (${connectedCount}명)" else "조인자 1명 이상 기다려요",
+            text = when {
+                canStart -> "그리기 시작 (${connectedCount + 1}명)"
+                splitLayouts.isNotEmpty() && connectedCount > 0 -> "레이아웃을 선택하세요"
+                else -> "조인자 1명 이상 기다려요"
+            },
         )
     }
     Spacer(modifier = Modifier.height(12.dp))

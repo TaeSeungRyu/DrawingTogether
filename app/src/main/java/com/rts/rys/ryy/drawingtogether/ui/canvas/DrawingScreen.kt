@@ -8,6 +8,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -29,7 +30,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -60,7 +64,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -82,8 +89,10 @@ import com.rts.rys.ryy.drawingtogether.transport.nearby.TransportMode
 import com.rts.rys.ryy.drawingtogether.ui.DrawMode
 import kotlinx.coroutines.delay
 import com.rts.rys.ryy.drawingtogether.drawing.engine.CanvasState
+import com.rts.rys.ryy.drawingtogether.session.SplitConfig
 import com.rts.rys.ryy.drawingtogether.works.CanvasColorSampler
 import com.rts.rys.ryy.drawingtogether.works.PngComposer
+import com.rts.rys.ryy.drawingtogether.works.SplitComposer
 import com.rts.rys.ryy.drawingtogether.works.TimelapseStore
 import com.rts.rys.ryy.drawingtogether.works.WorkStore
 import kotlinx.coroutines.Dispatchers
@@ -103,6 +112,16 @@ private sealed class SyncStep {
     data class PartyConfirm(
         val target: com.rts.rys.ryy.drawingtogether.session.RemotePeerInfo,
     ) : SyncStep()
+}
+
+// 나눠 그리기 합성 순서 — 슬롯 순서(orderedPeerIds)대로 캔버스를 모은다. 내 peerId 면 내 캔버스,
+// 아니면 그 peer 의 미니 캔버스(peerCanvases, mesh+늦은참여로 최신). 미참여/이탈이면 null(빈 슬롯).
+private fun splitOrderedCanvases(
+    cfg: SplitConfig,
+    myPeerId: String,
+    vm: DrawingViewModel,
+): List<CanvasState?> = cfg.orderedPeerIds.map { pid ->
+    if (pid.value == myPeerId) vm.canvas else vm.peerCanvases[pid]
 }
 
 // 사진 broadcast. FILE 페이로드 + PhotoMeta(BYTES).
@@ -459,6 +478,7 @@ fun DrawingScreen(
     val transportMode = when (mode) {
         DrawMode.Party -> TransportMode.Party
         DrawMode.Classroom -> TransportMode.Classroom
+        DrawMode.Split -> TransportMode.Split
         else -> TransportMode.Duo
     }
     val session = remember(transportMode) { SessionManager.get(context, transportMode) }
@@ -466,6 +486,9 @@ fun DrawingScreen(
     // 연결되면 캔버스 우측 상단에 회색으로 표시할 내 닉네임. 미연결(싱글 등)이면 null.
     val myNick by session.nick.collectAsState()
     val canvasSelfNick = if (sessionState is SessionState.Connected) myNick.ifBlank { null } else null
+    // 나눠 그리기 설정(레이아웃 + 슬롯 순서). draw 화면 전역에서 내 슬롯 비율·합성 저장/미리보기에 사용.
+    val splitConfig by session.splitConfig.collectAsState()
+    var showSplitPreview by remember { mutableStateOf(false) }
 
     // "저장 시 배경 합치기" 토글 변경 — 저장 다이얼로그에서 호출. 공유 캔버스인 함께 모드(Duo)
     // 에서만 동기화. 모임/교실은 각자 독립 캔버스·저장이므로 broadcast 하면 안 됨(남의 설정 덮어씀).
@@ -489,7 +512,7 @@ fun DrawingScreen(
     LaunchedEffect(mode) {
         vm.setRouting(
             when (mode) {
-                DrawMode.Party, DrawMode.Classroom -> CanvasRouting.PerPeer
+                DrawMode.Party, DrawMode.Classroom, DrawMode.Split -> CanvasRouting.PerPeer
                 else -> CanvasRouting.Shared
             }
         )
@@ -498,7 +521,7 @@ fun DrawingScreen(
     // 끊긴 피어의 미니 캔버스 정리 — remotePeers 에 없는 PeerId 의 캔버스 데이터 제거.
     // 모임/교실 공통: 조인자가 방을 나가면 그 사람의 그림(호스트가 보던 라이브 뷰)이 사라져야 하고,
     // 같은 사람이 다시 들어오면 빈 캔버스에서 시작한다(나가기 전 데이터가 남으면 안 됨).
-    if (mode == DrawMode.Party || mode == DrawMode.Classroom) {
+    if (mode == DrawMode.Party || mode == DrawMode.Classroom || mode == DrawMode.Split) {
         LaunchedEffect(session) {
             session.remotePeers.collect { peers ->
                 val active = peers.map { it.peerId }.toSet()
@@ -545,7 +568,7 @@ fun DrawingScreen(
     // 교실과 달리 호스트/조인자 모두, 그리고 모든 peer 를 대상으로 요청한다(mesh = 모두가 모두를 봄).
     // pull 이라 collector 준비 후 요청 → replay=0 SharedFlow 유실 없음. 떠난 peer 는 추적에서 빼
     // 재입장 시 다시 요청(같은 peerId 로 재등장).
-    if (mode == DrawMode.Party) {
+    if (mode == DrawMode.Party || mode == DrawMode.Split) {
         LaunchedEffect(session) {
             val requested = mutableSetOf<PeerId>()
             session.remotePeers.collect { peers ->
@@ -592,12 +615,12 @@ fun DrawingScreen(
 
             val role = session.transport.localRole
             // 스타(모임/교실) 호스트: 마지막 조인자가 나가도 알림 없이 방 유지("방 열기"로 재모집).
-            val isStarHost = (mode == DrawMode.Party || mode == DrawMode.Classroom) &&
+            val isStarHost = (mode == DrawMode.Party || mode == DrawMode.Classroom || mode == DrawMode.Split) &&
                 role == com.rts.rys.ryy.drawingtogether.transport.Role.Host
             if (isStarHost) return@LaunchedEffect
 
-            // 스타(모임/교실) 조인자: 유일한 연결(호스트)이 끊긴 것 = 종료. 재연결 대신 홈 복귀.
-            val isStarJoiner = (mode == DrawMode.Party || mode == DrawMode.Classroom) &&
+            // 스타(모임/교실/나눠그리기) 조인자: 유일한 연결(호스트)이 끊긴 것 = 종료. 재연결 대신 홈 복귀.
+            val isStarJoiner = (mode == DrawMode.Party || mode == DrawMode.Classroom || mode == DrawMode.Split) &&
                 role == com.rts.rys.ryy.drawingtogether.transport.Role.Joiner
             if (isStarJoiner) {
                 Toast.makeText(
@@ -657,7 +680,7 @@ fun DrawingScreen(
             // 모임/교실 모드: sender 가 박힌 배경은 그 발신자의 peerCanvases(라이브뷰)에, sender=null
             // (내 가져오기 응답)은 자기 메인에. 교실에서 sender 라우팅을 안 하면 호스트가 조인자 A에게
             // 보낸 사진을 broadcast 로 받은 조인자 B 의 메인이 덮어써지는 버그가 생긴다.
-            val perPeerMode = mode == DrawMode.Party || mode == DrawMode.Classroom
+            val perPeerMode = mode == DrawMode.Party || mode == DrawMode.Classroom || mode == DrawMode.Split
             val partyTargetCanvas = if (perPeerMode) {
                 change.senderPeerId?.let { id ->
                     vm.peerCanvases.getOrPut(id) {
@@ -681,7 +704,7 @@ fun DrawingScreen(
             }
             // 모임/교실 "가져오기" 응답의 배경 부분 도착. sender=null = 내 가져오기 응답(자기 메인 적용).
             // strokes 까지 도착하면 내 캔버스를 다시 송신해 상대/호스트가 보는 내 뷰를 갱신.
-            if ((mode == DrawMode.Party || mode == DrawMode.Classroom) && change.senderPeerId == null) {
+            if ((mode == DrawMode.Party || mode == DrawMode.Classroom || mode == DrawMode.Split) && change.senderPeerId == null) {
                 syncGotBackground = true
                 if (syncGotStrokes) {
                     syncGotStrokes = false
@@ -709,7 +732,7 @@ fun DrawingScreen(
     // (그 사람의 미니/라이브뷰가 그 비율로 보이도록).
     LaunchedEffect(vm, session) {
         session.incomingCanvasAspect.collect { event ->
-            if (mode == DrawMode.Party || mode == DrawMode.Classroom) {
+            if (mode == DrawMode.Party || mode == DrawMode.Classroom || mode == DrawMode.Split) {
                 val sender = event.senderPeerId
                 if (sender != null) {
                     vm.peerCanvases.getOrPut(sender) {
@@ -725,7 +748,7 @@ fun DrawingScreen(
     // 원격 배경색 변경 — 비율과 동일 라우팅.
     LaunchedEffect(vm, session) {
         session.incomingBackgroundColor.collect { event ->
-            if (mode == DrawMode.Party || mode == DrawMode.Classroom) {
+            if (mode == DrawMode.Party || mode == DrawMode.Classroom || mode == DrawMode.Split) {
                 val sender = event.senderPeerId
                 if (sender != null) {
                     vm.peerCanvases.getOrPut(sender) {
@@ -747,8 +770,8 @@ fun DrawingScreen(
             val requesterEndpoint = session.remotePeers.value
                 .firstOrNull { it.peerId.value == request.requesterPeerId.value && it.endpointId.isNotEmpty() }
                 ?.endpointId
-            if (request.forLiveView && mode == DrawMode.Party) {
-                // 모임 mesh 늦은참여 채움 — 요청자와 직접 연결이 없을 수 있어(조인자↔조인자는 호스트
+            if (request.forLiveView && (mode == DrawMode.Party || mode == DrawMode.Split)) {
+                // 모임/나눠그리기 mesh 늦은참여 채움 — 요청자와 직접 연결이 없을 수 있어(조인자↔조인자는 호스트
                 // relay) broadcast(target="", origin=self)로 응답한다. 호스트 relay 로 요청자에게
                 // 전달되고, 수신 측은 origin 으로 자기 미니뷰(peerCanvases[me])에 채운다.
                 broadcastMyCanvasAsPeer(
@@ -796,8 +819,8 @@ fun DrawingScreen(
     //      sender != null (broadcast) → peerCanvases[sender] 적용 (그 peer 미니뷰 동기화)
     LaunchedEffect(vm, session) {
         session.incomingSnapshot.collect { event ->
-            // Duo/Single: 항상 자기 메인 캔버스에 덮어쓰기.
-            if (mode != DrawMode.Party && mode != DrawMode.Classroom) {
+            // Duo/Single: 항상 자기 메인 캔버스에 덮어쓰기. 모임/교실/나눠그리기는 sender 라우팅.
+            if (mode != DrawMode.Party && mode != DrawMode.Classroom && mode != DrawMode.Split) {
                 vm.applyRemoteSnapshot(event.strokes, event.stickers, event.texts, event.aspect, event.backgroundColor)
                 return@collect
             }
@@ -1051,9 +1074,36 @@ fun DrawingScreen(
             session.transport.localRole == com.rts.rys.ryy.drawingtogether.transport.Role.Host
         val isClassroomHost = mode == DrawMode.Classroom &&
             session.transport.localRole == com.rts.rys.ryy.drawingtogether.transport.Role.Host
+        val isSplitHost = mode == DrawMode.Split &&
+            session.transport.localRole == com.rts.rys.ryy.drawingtogether.transport.Role.Host
+        // 내 슬롯 비율(위에서 collect 한 splitConfig 사용).
+        val mySlotAspect: Float? = splitConfig?.let { c ->
+            val idx = c.orderedPeerIds.indexOfFirst { it.value == session.peerId }
+            if (idx >= 0) c.layout.slotAspect(idx) else null
+        }
 
         val canvasArea: @Composable (Modifier) -> Unit = { m ->
-            if (mode == DrawMode.Party) {
+            if (mode == DrawMode.Split) {
+                // 나눠 그리기 — 내 슬롯만 크게(슬롯 비율 고정). 다른 사람은 미리보기 모달에서 합성으로.
+                Box(modifier = m.background(MaterialTheme.colorScheme.surfaceVariant)) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        MyCanvasContent(
+                            vm = vm,
+                            selfNick = canvasSelfNick,
+                            onRequestText = { nx, ny -> pendingTextPoint = nx to ny },
+                            pendingTextPoint = pendingTextPoint,
+                            aspectOverride = mySlotAspect,
+                        )
+                    }
+                    // 미리보기 — 합성 모달 열기(우하단 오버레이, 닉네임 칩과 겹치지 않게).
+                    FilledTonalButton(
+                        onClick = { showSplitPreview = true },
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(12.dp),
+                    ) { Text("미리보기") }
+                }
+            } else if (mode == DrawMode.Party) {
                 PartyCanvasArea(
                     vm = vm,
                     peers = peers,
@@ -1119,13 +1169,15 @@ fun DrawingScreen(
                 onCycleSmoothing = vm::cycleSmoothing,
                 // 도구바 동기화 버튼 — 함께(Duo)·모임(Party) 전용. 교실(Classroom)은 호스트가
                 // 가져올 필요 없고 조인자는 캔버스 패널의 "가져오기" 버튼을 쓰므로 노출 안 함.
-                onSync = if (sessionState is SessionState.Connected && mode != DrawMode.Classroom) {
+                onSync = if (sessionState is SessionState.Connected &&
+                    mode != DrawMode.Classroom && mode != DrawMode.Split
+                ) {
                     {
                         syncStep = if (mode == DrawMode.Party) SyncStep.PartyPicker
                         else SyncStep.DuoConfirm
                     }
                 } else null,
-                onOpenRoom = if (isPartyHost || isClassroomHost) {
+                onOpenRoom = if (isPartyHost || isClassroomHost || isSplitHost) {
                     {
                         scope.launch {
                             runCatching { session.transport.startAdvertising() }
@@ -1268,7 +1320,7 @@ fun DrawingScreen(
     // PartyPairingScreen 의 동일 흐름을 Draw 단계에서도 노출 — 새 조인자가 자연스럽게 합류.
     val pendingConn by session.transport.pending.collectAsState()
     val p = pendingConn
-    if (p != null && (mode == DrawMode.Party || mode == DrawMode.Classroom)) {
+    if (p != null && (mode == DrawMode.Party || mode == DrawMode.Classroom || mode == DrawMode.Split)) {
         AlertDialog(
             onDismissRequest = {
                 scope.launch { session.transport.rejectPending() }
@@ -1375,11 +1427,27 @@ fun DrawingScreen(
             showSaveDialog = false
             scope.launch {
                 val includeBg = vm.canvas.mergeBackgroundOnSave
-                val mergedBg = vm.canvas.background != null && includeBg
-                val bitmap = PngComposer.compose(
-                    vm.canvas, density, includeBg,
-                    screenCanvasShortDp = vm.screenCanvasShortDp,
-                )
+                val cfg = splitConfig
+                val bitmap: android.graphics.Bitmap
+                val mergedBg: Boolean
+                if (mode == DrawMode.Split && cfg != null) {
+                    // 나눠 그리기 — 참가자 캔버스를 레이아웃대로 합성해 한 장으로 저장(미리보기 = 저장물).
+                    bitmap = withContext(Dispatchers.Default) {
+                        SplitComposer.compose(
+                            layout = cfg.layout,
+                            orderedCanvases = splitOrderedCanvases(cfg, session.peerId, vm),
+                            density = density,
+                            screenCanvasShortDp = vm.screenCanvasShortDp,
+                        )
+                    }
+                    mergedBg = false
+                } else {
+                    mergedBg = vm.canvas.background != null && includeBg
+                    bitmap = PngComposer.compose(
+                        vm.canvas, density, includeBg,
+                        screenCanvasShortDp = vm.screenCanvasShortDp,
+                    )
+                }
                 WorkStore.get(context).save(bitmap, mergedBg, raw)
                 snackbarHostState.showSnackbar(
                     message = SAVED_MESSAGE,
@@ -1430,6 +1498,51 @@ fun DrawingScreen(
             },
         )
     }
+
+    // 나눠 그리기 미리보기 — 참가자 캔버스를 레이아웃대로 합성해 모달로. "미리보기 = 저장물".
+    if (showSplitPreview) {
+        val cfg = splitConfig
+        var preview by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+        LaunchedEffect(showSplitPreview, cfg) {
+            if (cfg != null) {
+                preview = withContext(Dispatchers.Default) {
+                    SplitComposer.compose(
+                        layout = cfg.layout,
+                        orderedCanvases = splitOrderedCanvases(cfg, session.peerId, vm),
+                        density = density,
+                        screenCanvasShortDp = vm.screenCanvasShortDp,
+                    ).asImageBitmap()
+                }
+            }
+        }
+        Dialog(onDismissRequest = { showSplitPreview = false }) {
+            Card(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text("미리보기", style = MaterialTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    val bmp = preview
+                    if (bmp != null) {
+                        Image(
+                            bitmap = bmp,
+                            contentDescription = "합성 미리보기",
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(1f)
+                                .background(Color.White),
+                        )
+                    } else {
+                        CircularProgressIndicator()
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    TextButton(onClick = { showSplitPreview = false }) { Text("닫기") }
+                }
+            }
+        }
+    }
 }
 
 // 자기 캔버스 — 사진 있으면 사진 비율 letterbox, 없으면 fillMaxSize 흰 배경.
@@ -1442,12 +1555,14 @@ private fun MyCanvasContent(
     selfNick: String? = null,
     onRequestText: (Float, Float) -> Unit = { _, _ -> },
     pendingTextPoint: Pair<Float, Float>? = null,
+    // 나눠 그리기 — 내 슬롯 비율로 캔버스를 고정. non-null 이면 사진/캔버스 비율보다 우선.
+    aspectOverride: Float? = null,
 ) {
     val bg = vm.canvas.background
     val density = LocalDensity.current.density
     val context = LocalContext.current
-    // 사진 있으면 사진 비율, 없으면 선택한 캔버스 비율(자유면 화면 채움).
-    val ratio = bg?.aspectRatio ?: vm.canvas.aspect.ratio
+    // 나눠 그리기 슬롯 비율 우선. 아니면 사진 비율, 없으면 선택한 캔버스 비율(자유면 화면 채움).
+    val ratio = aspectOverride ?: bg?.aspectRatio ?: vm.canvas.aspect.ratio
     val sizeModifier = if (ratio != null) {
         Modifier.aspectRatio(ratio)
     } else {

@@ -67,11 +67,22 @@ enum class TransportMode(
         serviceId = "com.rts.rys.ryy.drawingtogether.classroom",
         strategy = Strategy.P2P_STAR,
         maxJoiners = 9,
+    ),
+    // 나눠 그리기 — 모임(Party)과 같은 mesh(P2P_STAR)를 쓰되 별도 serviceId 로 격리(2~4명).
+    Split(
+        serviceId = "com.rts.rys.ryy.drawingtogether.split",
+        strategy = Strategy.P2P_STAR,
+        maxJoiners = 3,
     );
 
     // 호스트–조인자(스타) 모드인지. 호스트 인원 제한·광고 유지·PartyStart 지각입장 등
-    // 스타 공통 메커니즘은 Party/Classroom 둘 다에 적용된다.
+    // 스타 공통 메커니즘은 Party/Classroom/Split 모두에 적용된다.
     val isStar: Boolean get() = strategy == Strategy.P2P_STAR
+
+    // "모두가 모두를 보는" 완전 mesh 인지 — 호스트 relay(Event/스냅샷)·PeerJoined/Left 멤버십·
+    // 조인자↔조인자 동기화가 필요한 모드. Party 와 Split(나눠 그리기)이 해당.
+    // Classroom 은 호스트 중심(조인자끼리 안 보임)이라 제외.
+    val isMesh: Boolean get() = this == Party || this == Split
 }
 
 // Nearby Connections 기반 Transport 구현.

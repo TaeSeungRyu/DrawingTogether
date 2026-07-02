@@ -22,7 +22,7 @@ import com.rts.rys.ryy.drawingtogether.ui.timelapse.TimelapsePlayerScreen
 // - Duo       : 1:1 함께 모드 (공유 캔버스)
 // - Party     : 1:N 모임 모드 (자기 캔버스 + 모두-미니 뷰, mesh)
 // - Classroom : 1:N 교실 모드 (호스트 중심 — 조인자끼리 안 보임). doc/done/classroom-mode.md
-enum class DrawMode { Single, Duo, Party, Classroom }
+enum class DrawMode { Single, Duo, Party, Classroom, Split }
 
 object Routes {
     const val Splash = "splash"
@@ -36,6 +36,7 @@ object Routes {
     const val PairingArg = "autoHost"
     const val PartyPairing = "party-pairing"  // 모임 모드 (1:N) 페어링
     const val ClassroomPairing = "classroom-pairing"  // 교실 모드 (1:N) 페어링
+    const val SplitPairing = "split-pairing"  // 나눠 그리기 (2~4명) 페어링
     const val Preview = "preview"             // path 인자: workId
     const val PreviewArg = "workId"
     const val Timelapses = "timelapses"       // 타임랩스 갤러리
@@ -68,6 +69,7 @@ fun AppNavGraph(modifier: Modifier = Modifier) {
                 onDuoMode = { nav.navigate(pairingRoute(autoHost = false)) },
                 onPartyMode = { nav.navigate(Routes.PartyPairing) },
                 onClassroomMode = { nav.navigate(Routes.ClassroomPairing) },
+                onSplitMode = { nav.navigate(Routes.SplitPairing) },
                 onWorkClick = { workId ->
                     nav.navigate("${Routes.Preview}/$workId")
                 },
@@ -146,6 +148,22 @@ fun AppNavGraph(modifier: Modifier = Modifier) {
                     if (!popped) {
                         nav.navigate(target) {
                             popUpTo(Routes.ClassroomPairing) { inclusive = true }
+                        }
+                    }
+                },
+            )
+        }
+        composable(Routes.SplitPairing) {
+            // 나눠 그리기 — 모임 페어링 화면을 Split 전송 모드로 재사용(호스트는 레이아웃 피커 노출).
+            PartyPairingScreen(
+                mode = TransportMode.Split,
+                onBack = { nav.popBackStack() },
+                onStart = {
+                    val target = drawRoute(DrawMode.Split)
+                    val popped = nav.popBackStack(target, inclusive = false)
+                    if (!popped) {
+                        nav.navigate(target) {
+                            popUpTo(Routes.SplitPairing) { inclusive = true }
                         }
                     }
                 },
