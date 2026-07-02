@@ -110,14 +110,6 @@ object TimelapseVideoExporter {
             setInteger(MediaFormat.KEY_FRAME_RATE, FPS)
             setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, I_FRAME_INTERVAL)
         }
-        val codec = MediaCodec.createEncoderByType(mime)
-        codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-        codec.start()
-        val muxer = MediaMuxer(outFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-        var trackIndex = -1
-        var muxerStarted = false
-        val info = MediaCodec.BufferInfo()
-
         // 콘텐츠 시계(frameStepMs)는 길면 가속, 영상 fps 는 고정 → 너무 긴 녹화도 영상 길이 제한.
         val totalMs = durationMs.coerceAtLeast(1L)
         // 배속 — 프레임당 콘텐츠 진행 시간(=1/FPS) × speed. 클수록 과정이 빨리 지나가 영상이 짧아짐.
@@ -133,31 +125,46 @@ object TimelapseVideoExporter {
         // 구 로그(canvasShortDp=0f)는 기존 "캔버스 폭 400dp 가정"으로 폴백.
         val density = exportStrokeDensity(w, h, canvasShortDp, fallbackDensity = w / 400f)
 
-        fun drain(endOfStream: Boolean) {
-            while (true) {
-                val outIndex = codec.dequeueOutputBuffer(info, 10_000)
-                if (outIndex == MediaCodec.INFO_TRY_AGAIN_LATER) {
-                    if (!endOfStream) break // 더 넣을 때까지 대기
-                } else if (outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
-                    check(!muxerStarted)
-                    trackIndex = muxer.addTrack(codec.outputFormat)
-                    muxer.start()
-                    muxerStarted = true
-                } else if (outIndex >= 0) {
-                    val encoded = codec.getOutputBuffer(outIndex)!!
-                    if (info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0) info.size = 0
-                    if (info.size > 0 && muxerStarted) {
-                        encoded.position(info.offset)
-                        encoded.limit(info.offset + info.size)
-                        muxer.writeSampleData(trackIndex, encoded, info)
-                    }
-                    codec.releaseOutputBuffer(outIndex, false)
-                    if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) break
-                }
-            }
-        }
+        // codec/muxer 생성·configure·start·MediaMuxer 생성이 예외를 던져도 이미 start 된 codec 이
+        // release 없이 버려지지 않도록 전부 try 안에서 만들고 nullable 로 finally 에서 해제(#11).
+        var codec: MediaCodec? = null
+        var muxer: MediaMuxer? = null
+        var muxerStarted = false
 
         try {
+            val c = MediaCodec.createEncoderByType(mime)
+            codec = c
+            c.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+            c.start()
+            val m = MediaMuxer(outFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            muxer = m
+            var trackIndex = -1
+            val info = MediaCodec.BufferInfo()
+
+            fun drain(endOfStream: Boolean) {
+                while (true) {
+                    val outIndex = c.dequeueOutputBuffer(info, 10_000)
+                    if (outIndex == MediaCodec.INFO_TRY_AGAIN_LATER) {
+                        if (!endOfStream) break // 더 넣을 때까지 대기
+                    } else if (outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                        check(!muxerStarted)
+                        trackIndex = m.addTrack(c.outputFormat)
+                        m.start()
+                        muxerStarted = true
+                    } else if (outIndex >= 0) {
+                        val encoded = c.getOutputBuffer(outIndex)!!
+                        if (info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0) info.size = 0
+                        if (info.size > 0 && muxerStarted) {
+                            encoded.position(info.offset)
+                            encoded.limit(info.offset + info.size)
+                            m.writeSampleData(trackIndex, encoded, info)
+                        }
+                        c.releaseOutputBuffer(outIndex, false)
+                        if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) break
+                    }
+                }
+            }
+
             for (f in 0 until frameCount) {
                 // durationMs 로 clamp — 마지막 프레임이 끝(마지막 StrokeEnd)까지 확실히 적용.
                 // tail 구간에선 totalMs 에 머물러 완성 화면을 유지.
@@ -171,12 +178,12 @@ object TimelapseVideoExporter {
 
                 var queued = false
                 while (!queued) {
-                    val inIndex = codec.dequeueInputBuffer(10_000)
+                    val inIndex = c.dequeueInputBuffer(10_000)
                     if (inIndex >= 0) {
-                        val image = codec.getInputImage(inIndex)
+                        val image = c.getInputImage(inIndex)
                         if (image != null) fillImageYuv(image, bitmap, w, h)
                         // getInputBuffer 와 혼용하면 일부 기기서 예외 → 명목 YUV420 크기로 큐잉.
-                        codec.queueInputBuffer(inIndex, 0, w * h * 3 / 2, ptsUs, 0)
+                        c.queueInputBuffer(inIndex, 0, w * h * 3 / 2, ptsUs, 0)
                         queued = true
                     } else {
                         drain(false)
@@ -188,9 +195,9 @@ object TimelapseVideoExporter {
             // EOS
             var sent = false
             while (!sent) {
-                val inIndex = codec.dequeueInputBuffer(10_000)
+                val inIndex = c.dequeueInputBuffer(10_000)
                 if (inIndex >= 0) {
-                    codec.queueInputBuffer(
+                    c.queueInputBuffer(
                         inIndex, 0, 0, frameCount.toLong() * 1_000_000L / FPS,
                         MediaCodec.BUFFER_FLAG_END_OF_STREAM,
                     )
@@ -201,10 +208,11 @@ object TimelapseVideoExporter {
             }
             drain(true)
         } finally {
-            runCatching { codec.stop() }
-            runCatching { codec.release() }
-            runCatching { if (muxerStarted) muxer.stop() }
-            runCatching { muxer.release() }
+            // non-null 인 것만 정리 — 생성 도중 예외로 일부만 만들어졌어도 안전.
+            runCatching { codec?.stop() }
+            runCatching { codec?.release() }
+            runCatching { if (muxerStarted) muxer?.stop() }
+            runCatching { muxer?.release() }
         }
     }
 
