@@ -994,7 +994,8 @@ fun DrawingScreen(
                         content = bgOn,
                     ) { BgColorGlyph(modifier = Modifier.fillMaxSize()) }
                     // 캔버스 비율 — 사진이 없을 때만(사진 있으면 사진 비율이 결정). 선택 시 라벨/강조 표시.
-                    if (vm.canvas.background == null) {
+                    // 나눠 그리기(Split)는 캔버스 모양이 방장이 고른 레이아웃의 슬롯 비율로 고정되므로 숨김.
+                    if (vm.canvas.background == null && mode != DrawMode.Split) {
                         val aspect = vm.canvas.aspect
                         val chosen = aspect != CanvasAspect.Free
                         TopActionButton(

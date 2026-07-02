@@ -42,12 +42,15 @@ object SplitComposer {
         }
         slotRects.forEachIndexed { i, dst ->
             val state = orderedCanvases.getOrNull(i) ?: return@forEachIndexed
-            // 슬롯 캔버스를 자체 해상도로 렌더(사진 배경 포함) 후 슬롯 rect 로 스케일.
+            // 슬롯을 슬롯 rect 치수 그대로(=슬롯 비율) 렌더 → dst 에 1:1 배치라 비균일 스케일 왜곡 없음.
+            // (state.aspect 로 렌더 후 스케일하면 정사각 아닌 슬롯에서 선 두께·스티커가 찌그러짐.)
             val slotBmp = PngComposer.compose(
                 state = state,
                 density = density,
                 includeBackground = true,
                 screenCanvasShortDp = screenCanvasShortDp,
+                forceWidthPx = dst.width(),
+                forceHeightPx = dst.height(),
             )
             canvas.drawBitmap(slotBmp, null, dst, paint)
             slotBmp.recycle()

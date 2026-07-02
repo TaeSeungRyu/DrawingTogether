@@ -26,16 +26,21 @@ object PngComposer {
 
     // screenCanvasShortDp: 화면에 그려진 캔버스의 짧은변(dp). >0 이면 stroke 굵기를 export 해상도 대비
     // 화면과 같은 비율로 산출(#1). 0f(미상)면 device density 로 기존 동작 유지.
+    // forceWidthPx/forceHeightPx: 둘 다 >0 이면 출력 치수를 이 값으로 강제(사진/aspect 무시).
+    // 나눠 그리기 합성에서 각 슬롯을 슬롯 비율 그대로 렌더해 왜곡 없이 배치하려고 사용.
     fun compose(
         state: CanvasState,
         density: Float,
         includeBackground: Boolean = true,
         screenCanvasShortDp: Float = 0f,
+        forceWidthPx: Int = 0,
+        forceHeightPx: Int = 0,
     ): Bitmap {
         val bg = state.background
         // 사진 있으면 사진 치수(비율). 없으면 선택한 캔버스 비율로 치수 산출(자유=정사각).
         // stroke 는 정규화 좌표라 저장 치수의 비율이 화면 캔버스 비율과 같아야 모양이 맞음.
         val (w, h) = when {
+            forceWidthPx > 0 && forceHeightPx > 0 -> forceWidthPx to forceHeightPx
             bg != null -> bg.widthPx to bg.heightPx
             else -> {
                 val r = state.aspect.ratio
