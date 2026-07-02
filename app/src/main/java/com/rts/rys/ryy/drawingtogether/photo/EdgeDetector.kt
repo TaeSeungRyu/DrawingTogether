@@ -19,16 +19,22 @@ object EdgeDetector {
 
     fun detect(source: ImageBitmap): ImageBitmap {
         // 하드웨어 비트맵 등 getPixels 불가 구성을 대비해 소프트 ARGB_8888 로 복사.
+        // copy 로 새로 만든 경우에만 recycle — 원본 src 는 호출자 소유라 절대 recycle 금지(#17).
         val src = source.asAndroidBitmap()
-        val bmp = if (src.config == Bitmap.Config.ARGB_8888) src
-        else src.copy(Bitmap.Config.ARGB_8888, false)
+        val copied = src.config != Bitmap.Config.ARGB_8888
+        val bmp = if (!copied) src else src.copy(Bitmap.Config.ARGB_8888, false)
 
         val w = bmp.width
         val h = bmp.height
-        if (w < 3 || h < 3) return source
+        if (w < 3 || h < 3) {
+            if (copied) bmp.recycle()
+            return source
+        }
 
         val pixels = IntArray(w * h)
         bmp.getPixels(pixels, 0, w, 0, 0, w, h)
+        // 이후 계산은 pixels 배열만 쓴다 — copy 본은 여기서 바로 해제해 순간 네이티브 메모리 압박을 줄인다.
+        if (copied) bmp.recycle()
 
         // 명도(luma) 선계산 — 정수 가중치(0.299/0.587/0.114).
         val gray = IntArray(w * h)
