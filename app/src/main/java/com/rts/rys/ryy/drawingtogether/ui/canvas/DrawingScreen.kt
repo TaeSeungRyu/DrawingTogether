@@ -137,6 +137,7 @@ private suspend fun shareBackgroundToPeer(
                     widthPx = image.widthPx,
                     heightPx = image.heightPx,
                     mime = "image/jpeg",
+                    originPeerId = session.peerId,
                 ),
             )
         }
@@ -211,6 +212,7 @@ private suspend fun broadcastMyCanvasAsPeer(
                 strokesPayloadId = strokesPayloadId,
                 hasPhoto = background != null,
                 targetPeerId = "",
+                originPeerId = session.peerId,
             )
         )
         if (background != null) {
@@ -227,10 +229,11 @@ private suspend fun broadcastMyCanvasAsPeer(
                     heightPx = background.heightPx,
                     mime = "image/jpeg",
                     targetPeerId = "",
+                    originPeerId = session.peerId,
                 )
             )
         } else {
-            session.transport.send(Frame.PhotoRemove(targetPeerId = ""))
+            session.transport.send(Frame.PhotoRemove(targetPeerId = "", originPeerId = session.peerId))
         }
     }
 }
@@ -330,7 +333,7 @@ private suspend fun sendHostCanvasToJoiner(
             val pid = session.transport.sendFileTo(endpointId, uri)
             session.transport.sendTo(
                 endpointId,
-                Frame.Snapshot(pid, hasPhoto = background != null, targetPeerId = ""),
+                Frame.Snapshot(pid, hasPhoto = background != null, targetPeerId = "", originPeerId = session.peerId),
             )
         }
         if (background != null) {
@@ -340,7 +343,7 @@ private suspend fun sendHostCanvasToJoiner(
                 .openAssetFileDescriptor(photoUri, "r")?.use { it.length } ?: 0L
             session.transport.sendTo(
                 endpointId,
-                Frame.PhotoMeta(photoPid, byteSize, background.widthPx, background.heightPx, "image/jpeg", ""),
+                Frame.PhotoMeta(photoPid, byteSize, background.widthPx, background.heightPx, "image/jpeg", "", originPeerId = session.peerId),
             )
         }
     }
@@ -940,7 +943,9 @@ fun DrawingScreen(
                                 // 사진 제거도 상대에게 알림(교실: 호스트→조인자 또는 조인자→호스트).
                                 if (session.state.value is SessionState.Connected) {
                                     scope.launch {
-                                        runCatching { session.transport.send(Frame.PhotoRemove()) }
+                                        runCatching {
+                                            session.transport.send(Frame.PhotoRemove(originPeerId = session.peerId))
+                                        }
                                     }
                                 }
                             },
@@ -1245,7 +1250,7 @@ fun DrawingScreen(
                 // 연결돼 있으면 배경색 변경을 상대에게 전송(비율 동기화와 동일 라우팅).
                 if (session.state.value is SessionState.Connected) {
                     scope.launch {
-                        runCatching { session.transport.send(Frame.BackgroundColorFrame(argb)) }
+                        runCatching { session.transport.send(Frame.BackgroundColorFrame(argb, senderPeerId = session.peerId)) }
                     }
                 }
             },
@@ -1262,7 +1267,7 @@ fun DrawingScreen(
                 // 연결돼 있으면 비율 변경을 상대에게 전송(함께=공유 캔버스, 모임/교실=내 미니뷰 반영).
                 if (session.state.value is SessionState.Connected) {
                     scope.launch {
-                        runCatching { session.transport.send(Frame.CanvasAspectFrame(aspect)) }
+                        runCatching { session.transport.send(Frame.CanvasAspectFrame(aspect, senderPeerId = session.peerId)) }
                     }
                 }
             },

@@ -137,6 +137,50 @@ class FrameCodecTest {
         }
     }
 
+    // #4·#5 — 발신자/원발신자 필드가 코덱 라운드트립에서 보존되는지(호스트 relay 후 라우팅 근거).
+    @Test
+    fun aspectFramePreservesSenderPeerId() {
+        val src = Frame.CanvasAspectFrame(
+            aspect = com.rts.rys.ryy.drawingtogether.drawing.model.CanvasAspect.Portrait9_16,
+            senderPeerId = "peer-a",
+        )
+        val decoded = FrameCodec.decode(FrameCodec.encode(src))
+        assertEquals("peer-a", (decoded as Frame.CanvasAspectFrame).senderPeerId)
+    }
+
+    @Test
+    fun backgroundColorFramePreservesSenderPeerId() {
+        val src = Frame.BackgroundColorFrame(argb = 0xFF112233.toInt(), senderPeerId = "peer-b")
+        val decoded = FrameCodec.decode(FrameCodec.encode(src))
+        assertEquals("peer-b", (decoded as Frame.BackgroundColorFrame).senderPeerId)
+    }
+
+    @Test
+    fun broadcastSnapshotAndPhotoPreserveOriginPeerId() {
+        val snap = Frame.Snapshot(strokesPayloadId = 7L, hasPhoto = true, originPeerId = "peer-a")
+        assertEquals("peer-a", (FrameCodec.decode(FrameCodec.encode(snap)) as Frame.Snapshot).originPeerId)
+
+        val meta = Frame.PhotoMeta(
+            payloadId = 9L, byteSize = 100L, widthPx = 10, heightPx = 20, mime = "image/jpeg",
+            originPeerId = "peer-a",
+        )
+        assertEquals("peer-a", (FrameCodec.decode(FrameCodec.encode(meta)) as Frame.PhotoMeta).originPeerId)
+
+        val rm = Frame.PhotoRemove(originPeerId = "peer-a")
+        assertEquals("peer-a", (FrameCodec.decode(FrameCodec.encode(rm)) as Frame.PhotoRemove).originPeerId)
+    }
+
+    // 구 피어 호환 — 발신자 필드 없이 인코딩된 것은 기본값 "" 로 디코드.
+    @Test
+    fun senderFieldsDefaultToEmptyForOldPeers() {
+        assertEquals("", (FrameCodec.decode(FrameCodec.encode(
+            Frame.CanvasAspectFrame(com.rts.rys.ryy.drawingtogether.drawing.model.CanvasAspect.Free),
+        )) as Frame.CanvasAspectFrame).senderPeerId)
+        assertEquals("", (FrameCodec.decode(FrameCodec.encode(
+            Frame.Snapshot(strokesPayloadId = 1L, hasPhoto = false),
+        )) as Frame.Snapshot).originPeerId)
+    }
+
     @Test
     fun snapshotReqRoundtrip() {
         val src: Frame = Frame.SnapshotReq()

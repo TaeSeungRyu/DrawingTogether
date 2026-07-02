@@ -50,6 +50,9 @@ sealed class Frame {
         val strokesPayloadId: Long,
         val hasPhoto: Boolean,
         val targetPeerId: String = "",
+        // broadcast(targetPeerId="") 시 원발신자 peerId. 호스트 relay 후에도 보존돼 수신 측이
+        // relay 해준 endpoint(호스트)가 아닌 진짜 발신자로 라우팅한다(#5). 비면 endpoint 폴백.
+        val originPeerId: String = "",
     ) : Frame()
 
     // 사진 파일이 곧 도착함을 알리는 메타. payloadId 로 FILE 페이로드와 매칭.
@@ -64,13 +67,19 @@ sealed class Frame {
         val heightPx: Int,
         val mime: String,
         val targetPeerId: String = "",
+        // broadcast 시 원발신자 peerId — relay 후에도 보존해 발신자 라우팅(#5). 비면 endpoint 폴백.
+        val originPeerId: String = "",
     ) : Frame()
 
     // 사진 배경 제거 요청 — 양쪽에 적용.
     // Phase 4-G: Snapshot 응답에서 hasPhoto=false 면 동반 송신. targetPeerId 박힘.
     @Serializable
     @SerialName("photo_remove")
-    data class PhotoRemove(val targetPeerId: String = "") : Frame()
+    data class PhotoRemove(
+        val targetPeerId: String = "",
+        // broadcast 시 원발신자 peerId — relay 후에도 보존해 발신자 라우팅(#5). 비면 endpoint 폴백.
+        val originPeerId: String = "",
+    ) : Frame()
 
     // "저장 시 배경 합치기" 토글 동기화.
     @Serializable
@@ -81,13 +90,22 @@ sealed class Frame {
     // (받는 쪽이 senderPeerId 로 라우팅). 사진 있으면 사진 비율 우선이라 표시엔 영향 없음.
     @Serializable
     @SerialName("canvas_aspect")
-    data class CanvasAspectFrame(val aspect: CanvasAspect) : Frame()
+    data class CanvasAspectFrame(
+        val aspect: CanvasAspect,
+        // 발신자 peerId — 호스트 relay 후에도 보존해 수신 측이 relay endpoint(호스트)가 아닌
+        // 진짜 발신자의 미니뷰에 적용하게 한다(#4). 비면 endpoint 폴백(Duo/구버전 호환).
+        val senderPeerId: String = "",
+    ) : Frame()
 
     // 캔버스 배경색 변경 동기화. 비율(CanvasAspectFrame)과 동일 라우팅 — 함께=공유 캔버스,
     // 모임/교실=발신자 peerCanvases(미니뷰). 사진이 있으면 사진이 위에 깔려 표시엔 영향 없음.
     @Serializable
     @SerialName("bg_color")
-    data class BackgroundColorFrame(val argb: Int) : Frame()
+    data class BackgroundColorFrame(
+        val argb: Int,
+        // 발신자 peerId — relay 후에도 보존해 발신자 미니뷰에 적용(#4). 비면 endpoint 폴백.
+        val senderPeerId: String = "",
+    ) : Frame()
 
     @Serializable
     @SerialName("ping")

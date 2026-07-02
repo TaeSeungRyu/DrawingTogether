@@ -420,6 +420,12 @@ class SessionManager private constructor(
         _remotePeers.value = direct + indirect
     }
 
+    // broadcast/relay 프레임의 발신자 계산 — 프레임에 박힌 원발신자 peerId 우선(호스트 relay 후에도
+    // 보존됨), 비어있으면(구 피어/Duo) 프레임을 물어다 준 endpoint 의 handshake peerId 로 폴백(#4·#5).
+    private fun resolveSender(framePeerId: String, endpointId: String): PeerId? =
+        framePeerId.takeIf { it.isNotEmpty() }?.let(::PeerId)
+            ?: handshakes[endpointId]?.remoteHello?.peerId?.let(::PeerId)
+
     private fun handleIncoming(endpointId: String, frame: Frame) {
         // 어떤 프레임이든 도착 = 그 endpoint 는 살아있음(하트비트 생존 신호).
         liveness.onSeen(endpointId, SystemClock.elapsedRealtime())
@@ -476,7 +482,7 @@ class SessionManager private constructor(
                 val senderPeerId = if (isSnapshotResponse) {
                     null
                 } else {
-                    handshakes[endpointId]?.remoteHello?.peerId?.let(::PeerId)
+                    resolveSender(frame.originPeerId, endpointId)
                 }
                 val fileUri = pendingFiles.remove(frame.payloadId)
                 if (fileUri != null) {
@@ -507,7 +513,7 @@ class SessionManager private constructor(
                 val senderPeerId = if (isSnapshotResponse) {
                     null
                 } else {
-                    handshakes[endpointId]?.remoteHello?.peerId?.let(::PeerId)
+                    resolveSender(frame.originPeerId, endpointId)
                 }
                 _incomingBackground.tryEmit(BackgroundChange.Remove(senderPeerId = senderPeerId))
             }
@@ -515,13 +521,13 @@ class SessionManager private constructor(
                 _incomingMergeToggle.tryEmit(frame.enabled)
             }
             is Frame.CanvasAspectFrame -> {
-                val sender = handshakes[endpointId]?.remoteHello?.peerId?.let(::PeerId)
+                val sender = resolveSender(frame.senderPeerId, endpointId)
                 _incomingCanvasAspect.tryEmit(IncomingCanvasAspect(sender, frame.aspect))
                 // 모임(Party) 호스트는 다른 조인자에게 relay(mesh). 교실/함께는 relay 안 함(relayIfHost 내부 게이트).
                 relayIfHost(endpointId, frame)
             }
             is Frame.BackgroundColorFrame -> {
-                val sender = handshakes[endpointId]?.remoteHello?.peerId?.let(::PeerId)
+                val sender = resolveSender(frame.senderPeerId, endpointId)
                 _incomingBackgroundColor.tryEmit(IncomingBackgroundColor(sender, frame.argb))
                 relayIfHost(endpointId, frame)
             }
@@ -570,7 +576,7 @@ class SessionManager private constructor(
                 val senderPeerId = if (isSnapshotResponse) {
                     null
                 } else {
-                    handshakes[endpointId]?.remoteHello?.peerId?.let(::PeerId)
+                    resolveSender(frame.originPeerId, endpointId)
                 }
                 val fileUri = pendingFiles.remove(frame.strokesPayloadId)
                 if (fileUri != null) {
