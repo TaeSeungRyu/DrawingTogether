@@ -1524,6 +1524,12 @@ fun DrawingScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text("미리보기", style = MaterialTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "완성본은 정사각형(1:1)으로 합쳐져 저장돼요.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                     Spacer(modifier = Modifier.height(12.dp))
                     val bmp = preview
                     if (bmp != null) {

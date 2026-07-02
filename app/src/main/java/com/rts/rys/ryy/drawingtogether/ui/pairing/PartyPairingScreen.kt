@@ -457,6 +457,12 @@ private fun ColumnScope.HostBody(
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold,
         )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = "각자 자기 칸만 그리고, 완성본은 정사각형(1:1)으로 합쳐져 저장돼요.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Spacer(modifier = Modifier.height(8.dp))
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             splitLayouts.forEach { layout ->
