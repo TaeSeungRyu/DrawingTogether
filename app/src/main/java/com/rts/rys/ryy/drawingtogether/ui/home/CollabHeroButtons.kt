@@ -38,7 +38,7 @@ fun CollabHeroGradient(onClick: () -> Unit, modifier: Modifier = Modifier) {
         contentAlignment = Alignment.Center,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("👥", style = MaterialTheme.typography.headlineSmall)
+            Text("🎨", style = MaterialTheme.typography.headlineSmall)
             Spacer(modifier = Modifier.width(10.dp))
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
