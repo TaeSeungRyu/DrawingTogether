@@ -525,6 +525,36 @@ fun DrawingScreen(
             }
         }
     }
+
+    // 모임(mesh) 모드: 새 peer 가 remotePeers 에 등장하면 그 peer 에게 "라이브뷰용 스냅샷"을
+    // 요청(pull)해 합류/재합류 전에 그려진 그림까지 미니뷰(peerCanvases[peer])를 채운다.
+    // 응답은 broadcast(origin=발신자) 로 오고 호스트 relay 로 조인자↔조인자도 전달됨(위 응답자 분기).
+    // 교실과 달리 호스트/조인자 모두, 그리고 모든 peer 를 대상으로 요청한다(mesh = 모두가 모두를 봄).
+    // pull 이라 collector 준비 후 요청 → replay=0 SharedFlow 유실 없음. 떠난 peer 는 추적에서 빼
+    // 재입장 시 다시 요청(같은 peerId 로 재등장).
+    if (mode == DrawMode.Party) {
+        LaunchedEffect(session) {
+            val requested = mutableSetOf<PeerId>()
+            session.remotePeers.collect { peers ->
+                val active = peers.map { it.peerId }.toSet()
+                requested.retainAll(active)
+                peers.forEach { peer ->
+                    if (peer.peerId !in requested) {
+                        requested.add(peer.peerId)
+                        runCatching {
+                            session.transport.send(
+                                Frame.SnapshotReq(
+                                    targetPeerId = peer.peerId.value,
+                                    requesterPeerId = session.peerId,
+                                    forLiveView = true,
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
     DisposableEffect(Unit) {
         onDispose {
             if (session.state.value is SessionState.Connected ||
@@ -704,7 +734,22 @@ fun DrawingScreen(
             val requesterEndpoint = session.remotePeers.value
                 .firstOrNull { it.peerId.value == request.requesterPeerId.value && it.endpointId.isNotEmpty() }
                 ?.endpointId
-            if (request.forLiveView && requesterEndpoint != null) {
+            if (request.forLiveView && mode == DrawMode.Party) {
+                // 모임 mesh 늦은참여 채움 — 요청자와 직접 연결이 없을 수 있어(조인자↔조인자는 호스트
+                // relay) broadcast(target="", origin=self)로 응답한다. 호스트 relay 로 요청자에게
+                // 전달되고, 수신 측은 origin 으로 자기 미니뷰(peerCanvases[me])에 채운다.
+                broadcastMyCanvasAsPeer(
+                    context = context,
+                    session = session,
+                    strokes = vm.canvas.strokes.toList(),
+                    stickers = vm.canvas.stickers.toList(),
+                    texts = vm.canvas.texts.toList(),
+                    background = vm.canvas.background,
+                    aspect = vm.canvas.aspect,
+                    backgroundColor = vm.canvas.backgroundColor,
+                )
+            } else if (request.forLiveView && requesterEndpoint != null) {
+                // 교실 모드 — 호스트가 요청 조인자에게 직접 push(호스트↔조인자 직접 연결).
                 sendHostCanvasToJoiner(
                     context = context,
                     session = session,
