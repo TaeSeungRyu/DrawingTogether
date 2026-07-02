@@ -206,34 +206,47 @@ private suspend fun broadcastMyCanvasAsPeer(
     if (session.state.value !is SessionState.Connected) return
     runCatching {
         val strokesUri = canvasToCacheUri(context, strokes, stickers, texts, aspect, backgroundColor)
-        val strokesPayloadId = session.transport.sendFile(strokesUri)
-        session.transport.send(
-            Frame.Snapshot(
-                strokesPayloadId = strokesPayloadId,
-                hasPhoto = background != null,
-                targetPeerId = "",
-                originPeerId = session.peerId,
-            )
-        )
-        if (background != null) {
-            val uri = bitmapToCacheUri(context, background.bitmap)
-            val payloadId = session.transport.sendFile(uri)
-            session.transport.send(
-                Frame.PhotoMeta(
-                    payloadId = payloadId,
-                    byteSize = context.contentResolver
-                        .openAssetFileDescriptor(uri, "r")
-                        ?.use { it.length }
-                        ?: 0L,
-                    widthPx = background.widthPx,
-                    heightPx = background.heightPx,
-                    mime = "image/jpeg",
+        val photoUri = if (background != null) bitmapToCacheUri(context, background.bitmap) else null
+        val photoByteSize = photoUri?.let {
+            context.contentResolver.openAssetFileDescriptor(it, "r")?.use { fd -> fd.length } ?: 0L
+        } ?: 0L
+        // 연결된 각 피어에게 개별 전송. broadcast 용 sendFile 은 하나의 Payload(pfd)를 여러 endpoint 에
+        // 재사용하는데 Nearby 파일 payload 는 1회 소비라 첫 endpoint 만 파일을 받는다(호스트가 여러
+        // 조인자에게 broadcast 하면 한 명만 받던 문제). endpoint 마다 sendFileTo 로 새 pfd 를 열고
+        // 그 payloadId 를 박은 메타를 unicast → 모든 수신자가 각자 정상 수신.
+        // target="" + origin=self 라 각 수신자는 자기 미니뷰(peerCanvases[origin])에 채우고,
+        // 직접 연결 안 된 조인자(모임 조인자↔조인자)는 호스트 relay 가 target="" broadcast 를 전달.
+        session.transport.connectedPeers.value.forEach { peer ->
+            val strokesPid = session.transport.sendFileTo(peer.endpointId, strokesUri)
+            session.transport.sendTo(
+                peer.endpointId,
+                Frame.Snapshot(
+                    strokesPayloadId = strokesPid,
+                    hasPhoto = background != null,
                     targetPeerId = "",
                     originPeerId = session.peerId,
-                )
+                ),
             )
-        } else {
-            session.transport.send(Frame.PhotoRemove(targetPeerId = "", originPeerId = session.peerId))
+            if (background != null && photoUri != null) {
+                val photoPid = session.transport.sendFileTo(peer.endpointId, photoUri)
+                session.transport.sendTo(
+                    peer.endpointId,
+                    Frame.PhotoMeta(
+                        payloadId = photoPid,
+                        byteSize = photoByteSize,
+                        widthPx = background.widthPx,
+                        heightPx = background.heightPx,
+                        mime = "image/jpeg",
+                        targetPeerId = "",
+                        originPeerId = session.peerId,
+                    ),
+                )
+            } else {
+                session.transport.sendTo(
+                    peer.endpointId,
+                    Frame.PhotoRemove(targetPeerId = "", originPeerId = session.peerId),
+                )
+            }
         }
     }
 }
