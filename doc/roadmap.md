@@ -276,7 +276,11 @@
 - [x] **#4·#5 mesh relay 발신자 오인식** — CanvasAspect/BackgroundColor에 `senderPeerId`, broadcast Snapshot/PhotoMeta/PhotoRemove에 `originPeerId`(기본 ""=구피어 폴백). 송신 시 `session.peerId` 스탬프, 수신 `resolveSender`(프레임 우선·endpoint 폴백), relay가 원발신자 보존. 코덱 라운드트립 유닛 ✓.
 - [x] **#13 조인자 재검색** — 조인자가 연결됐다 호스트 이탈로 끊긴 뒤(sessionState=Failed) "다시 검색" 버튼 노출(enterPairing+startDiscovery). 뒤로가기 외 회복 경로.
 
-**남은 QA (코드 완료, 검증만)**: #2·#3·#4·#5·#12·#13은 3대+ mesh/레이스, #10·#11·#17은 코드리뷰/스트레스.
+**후속(3대 QA 중 발견·수정)**
+- [x] **모임 mesh 늦은참여 자동채움** (`2f9c787`) — 재참여 시 미니뷰가 라이브 이벤트로만 채워지던 문제. 교실 forLiveView pull 을 Party 로 확장(모든 peer 대상), 응답은 broadcast+origin 라우팅(#4·#5 재사용). roadmap Phase 3 "늦참가 SNAPSHOT_REQ→SNAPSHOT" 미구현분을 모임에 채움.
+- [x] **모임 broadcast endpoint별 전송** (`57942da`) — `broadcastMyCanvasAsPeer` 가 broadcast용 `sendFile`(단일 pfd 재사용)을 써 호스트가 여러 조인자에 보낼 때 첫 명만 FILE 수신하던 버그. `connectedPeers` 각각 `sendFileTo`+`sendTo` 로 개별 전송(shareBackgroundToPeer 패턴).
+
+**검증 완료**: 확정 17건 + 신규 3건 전부 코드 완료 및 QA 통과(유닛/기기 1~3대/코드리뷰). 상세 표는 `doc/qa-checklist.md`. 이 버그 수정 이니셔티브 종료.
 
 ## Phase 6 — 나중에 검토만
 지금 결정하지 않을 것들:
