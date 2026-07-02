@@ -38,6 +38,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import java.util.concurrent.ConcurrentHashMap
 
 // Phase 4-A: 각 모드를 SERVICE_ID + Strategy 로 격리. 같은 모드끼리만 발견된다.
 // Duo       = 1:1 함께 모드 (P2P_POINT_TO_POINT)
@@ -114,7 +115,9 @@ class NearbyTransport(
     override val fileTransfers: SharedFlow<FileTransferEvent> = _fileTransfers.asSharedFlow()
 
     // 우리가 보낸 / 받은 FILE payload id 추적 — 진행률 업데이트 방향 분류용.
-    private val outgoingFilePayloads = mutableSetOf<Long>()
+    // outgoing 은 Main 코루틴(sendFile add)과 GMS 콜백 스레드(onPayloadTransferUpdate read/remove)가
+    // 함께 접근하므로 동시성 안전 컬렉션(#10). incoming 계열은 단일 PayloadCallback executor 만 접근.
+    private val outgoingFilePayloads: MutableSet<Long> = ConcurrentHashMap.newKeySet()
     private val incomingFilePayloads = mutableSetOf<Long>()
     // 인바운드 FILE 의 (endpointId, uri) 보관. onPayloadReceived 시점에 등록하고
     // onPayloadTransferUpdate SUCCESS 시점에 emit — 그 시점에야 파일이 완전 채워진다.
@@ -122,7 +125,9 @@ class NearbyTransport(
     private val pendingIncomingFiles = mutableMapOf<Long, Pair<String, Uri>>()
 
     private var localNick: String = "User"
-    private val nickByEndpoint = mutableMapOf<String, String>()
+    // GMS 콜백 스레드(onConnectionInitiated write / onConnectionResult read)와 Main(stop clear)이
+    // 함께 접근 → 동시성 안전 맵(#10).
+    private val nickByEndpoint = ConcurrentHashMap<String, String>()
     // Phase 4-D: 호스트/조인자 구분. Party 호스트는 첫 연결 후에도 광고 유지 (최대 3명 더 수용).
     // Transport 인터페이스로 노출 — UI 에서 호스트 전용 분기(예: "방 열기" 버튼) 에 사용.
     override var localRole: Role? = null
