@@ -44,6 +44,7 @@ class TimelapseStore private constructor(private val rootDir: File) {
         durationMs: Long,
         backgrounds: List<ImageBitmap>,
         thumbnail: Bitmap,
+        canvasShortDp: Float = 0f,
     ): TimelapseMeta = withContext(Dispatchers.IO) {
         val id = UUID.randomUUID().toString()
         val createdAt = System.currentTimeMillis()
@@ -54,6 +55,7 @@ class TimelapseStore private constructor(private val rootDir: File) {
             createdAtEpochMs = createdAt,
             durationMs = durationMs,
             entries = entries,
+            canvasShortDp = canvasShortDp,
         )
         File(dir, LOG).writeBytes(cbor.encodeToByteArray(log))
         File(dir, META).writeText("$id|$createdAt|$durationMs")

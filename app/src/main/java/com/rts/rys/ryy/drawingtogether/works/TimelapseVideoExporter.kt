@@ -65,7 +65,7 @@ object TimelapseVideoExporter {
         val tmp = File(context.cacheDir, "timelapse_$id.mp4")
         if (tmp.exists()) tmp.delete()
 
-        encode(log.entries, log.durationMs, bgMap, w, h, speed, tmp, onProgress)
+        encode(log.entries, log.durationMs, log.canvasShortDp, bgMap, w, h, speed, tmp, onProgress)
         val uri = copyToGallery(context, tmp, id)
         tmp.delete()
         uri
@@ -88,6 +88,7 @@ object TimelapseVideoExporter {
     private fun encode(
         entries: List<com.rts.rys.ryy.drawingtogether.drawing.model.TimelapseEntry>,
         durationMs: Long,
+        canvasShortDp: Float,
         bgMap: Map<String, BackgroundImage>,
         w: Int,
         h: Int,
@@ -128,7 +129,9 @@ object TimelapseVideoExporter {
 
         val canvas = CanvasState()
         var entryIndex = 0
-        val density = w / 400f
+        // stroke 굵기 density — 기록 시점 화면 캔버스 짧은변(dp) 대비 영상 해상도 비율(#16).
+        // 구 로그(canvasShortDp=0f)는 기존 "캔버스 폭 400dp 가정"으로 폴백.
+        val density = exportStrokeDensity(w, h, canvasShortDp, fallbackDensity = w / 400f)
 
         fun drain(endOfStream: Boolean) {
             while (true) {

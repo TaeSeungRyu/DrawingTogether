@@ -87,4 +87,21 @@ class TimelapseSerializationTest {
         val back = cbor.decodeFromByteArray<Timelapse>(cbor.encodeToByteArray(src))
         assertEquals(src, back)
     }
+
+    // canvasShortDp(#16) 라운드트립 + 구 로그(필드 없음) 호환 — default 0f 로 디코드되어야.
+    @Test
+    fun canvasShortDpRoundtripAndDefault() {
+        val src = Timelapse(
+            id = "tl-2",
+            createdAtEpochMs = 1_700_000_000_000L,
+            durationMs = 10L,
+            entries = listOf(TimelapseEntry(0L, TimelapseOp.BackgroundColor(0xFFFFFFFF.toInt()))),
+            canvasShortDp = 393.5f,
+        )
+        val back = cbor.decodeFromByteArray<Timelapse>(cbor.encodeToByteArray(src))
+        assertEquals(393.5f, back.canvasShortDp, 0.001f)
+
+        // 구 로그(canvasShortDp 미기록)는 기본값 0f.
+        assertEquals(0f, Timelapse(id = "tl-3", createdAtEpochMs = 0L, durationMs = 0L, entries = emptyList()).canvasShortDp, 0f)
+    }
 }

@@ -46,4 +46,7 @@ data class Timelapse(
     val createdAtEpochMs: Long,
     val durationMs: Long,
     val entries: List<TimelapseEntry>,
+    // 기록 시점 화면 캔버스의 짧은변(dp). 영상 export 시 stroke 굵기를 화면과 같은 비율로 재현(#1·#16).
+    // 0f = 미기록(구 로그) → exporter 가 기존 400dp 가정으로 폴백.
+    val canvasShortDp: Float = 0f,
 )

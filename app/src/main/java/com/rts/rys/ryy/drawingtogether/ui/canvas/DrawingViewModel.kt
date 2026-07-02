@@ -105,6 +105,7 @@ class DrawingViewModel : ViewModel() {
         initialTexts = canvas.texts.toList(),
         initialBgColor = canvas.backgroundColor,
         initialBgPhoto = canvas.background?.bitmap,
+        canvasShortDp = screenCanvasShortDp,
     )
     fun discardRecording() = recorder.discard()
     fun finishRecording(): RecordedTimelapse? = recorder.stop()

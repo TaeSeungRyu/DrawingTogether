@@ -17,6 +17,7 @@ class RecordedTimelapse(
     val entries: List<TimelapseEntry>,
     val durationMs: Long,
     val backgrounds: List<ImageBitmap>,   // index = "bg-<index>" ref
+    val canvasShortDp: Float,             // 기록 시점 화면 캔버스 짧은변(dp) — 영상 굵기 정규화용(#16)
 )
 
 // 그리는 과정을 메모리에만 임시 기록. 디스크 쓰기는 stop() 으로 묶음을 받아 TimelapseStore 가 한다.
@@ -29,6 +30,7 @@ class TimelapseRecorder {
     private val entries = mutableListOf<TimelapseEntry>()
     private val backgrounds = mutableListOf<ImageBitmap>()
     private var startMs = 0L
+    private var canvasShortDp = 0f
 
     // 기록 시작. 시작 시점의 캔버스(기록 버튼 전 작업)를 atMs=0 초기 상태로 심어 재생이 빈
     // 캔버스가 아니라 "이미 그려진 것"부터 시작하게 한다.
@@ -38,10 +40,12 @@ class TimelapseRecorder {
         initialTexts: List<TextElement> = emptyList(),
         initialBgColor: Int = 0xFFFFFFFF.toInt(),
         initialBgPhoto: ImageBitmap? = null,
+        canvasShortDp: Float = 0f,
     ) {
         entries.clear()
         backgrounds.clear()
         startMs = SystemClock.elapsedRealtime()
+        this.canvasShortDp = canvasShortDp
         isRecording = true
         // 초기 상태 시딩(atMs=0). 배경색 → 배경사진 → 스냅샷 순.
         entries.add(TimelapseEntry(0L, TimelapseOp.BackgroundColor(initialBgColor)))
@@ -97,6 +101,7 @@ class TimelapseRecorder {
             entries = entries.toList(),
             durationMs = duration,
             backgrounds = backgrounds.toList(),
+            canvasShortDp = canvasShortDp,
         )
     }
 }

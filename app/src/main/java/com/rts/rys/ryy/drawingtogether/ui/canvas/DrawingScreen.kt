@@ -391,7 +391,10 @@ fun DrawingScreen(
                     PngComposer.compose(snap, density, screenCanvasShortDp = vm.screenCanvasShortDp)
                 }
                 TimelapseStore.get(context)
-                    .save(recorded.entries, recorded.durationMs, recorded.backgrounds, thumb)
+                    .save(
+                        recorded.entries, recorded.durationMs, recorded.backgrounds, thumb,
+                        canvasShortDp = recorded.canvasShortDp,
+                    )
             }.isSuccess
             Toast.makeText(
                 context,
