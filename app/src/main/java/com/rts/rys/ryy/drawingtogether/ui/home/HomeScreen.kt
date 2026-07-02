@@ -68,6 +68,8 @@ fun HomeScreen(
     val store = remember { WorkStore.get(context) }
     val works by store.works.collectAsState()
     var modalOpen by rememberSaveable { mutableStateOf(false) }
+    // "같이 그리기" 바텀시트 — 협업 모드 선택. 모드 선택 시 닫히므로 saveable 불필요.
+    var collabSheetOpen by remember { mutableStateOf(false) }
     // modal 의 LazyGrid 스크롤 위치 — HomeScreen 에서 hoist. modal close → preview → 뒤로가기로
     // modal 재오픈해도 그대로. rememberLazyGridState 가 내부적으로 rememberSaveable 사용해
     // HomeScreen 의 NavBackStackEntry 에 보존.
@@ -109,9 +111,10 @@ fun HomeScreen(
                 Text("혼자 그리기", style = MaterialTheme.typography.bodySmall)
             }
         }
-        // 함께 모드 — 민트(secondary). 1:1 공유 캔버스.
+        // 같이 그리기 — 협업 모드 4종(함께/모임/교실/나눠 그리기)을 하나로 묶은 통합 버튼.
+        // 탭하면 바텀시트로 방식을 고른다. 민트(secondary)로 협업의 대표 CTA.
         Button(
-            onClick = onDuoMode,
+            onClick = { collabSheetOpen = true },
             modifier = Modifier.fillMaxWidth().height(72.dp),
             shape = MaterialTheme.shapes.extraLarge,
             colors = ButtonDefaults.buttonColors(
@@ -120,57 +123,9 @@ fun HomeScreen(
             ),
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("함께 모드", style = MaterialTheme.typography.titleLarge)
+                Text("같이 그리기", style = MaterialTheme.typography.titleLarge)
                 Spacer(modifier = Modifier.height(2.dp))
-                Text("둘이서 한 캔버스에 같이 그리기", style = MaterialTheme.typography.bodySmall)
-            }
-        }
-        // 모임 모드 — secondaryContainer. mesh(모두가 모두를 봄).
-        Button(
-            onClick = onPartyMode,
-            modifier = Modifier.fillMaxWidth().height(72.dp),
-            shape = MaterialTheme.shapes.extraLarge,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-            ),
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("모임 모드", style = MaterialTheme.typography.titleLarge)
-                Spacer(modifier = Modifier.height(2.dp))
-                Text("최대 4명, 각자 캔버스 + 미니 뷰", style = MaterialTheme.typography.bodySmall)
-            }
-        }
-        // 교실 모드 — 호스트 중심(교사–학생).
-        Button(
-            onClick = onClassroomMode,
-            modifier = Modifier.fillMaxWidth().height(72.dp),
-            shape = MaterialTheme.shapes.extraLarge,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-            ),
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("교실 모드", style = MaterialTheme.typography.titleLarge)
-                Spacer(modifier = Modifier.height(2.dp))
-                Text("최대 10명, 방장 중심 (교사–학생)", style = MaterialTheme.typography.bodySmall)
-            }
-        }
-        // 나눠 그리기 — mesh(모임 재사용), 레이아웃으로 나눠 각자 구역만 그림.
-        Button(
-            onClick = onSplitMode,
-            modifier = Modifier.fillMaxWidth().height(72.dp),
-            shape = MaterialTheme.shapes.extraLarge,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-            ),
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("나눠 그리기", style = MaterialTheme.typography.titleLarge)
-                Spacer(modifier = Modifier.height(2.dp))
-                Text("2~4명, 레이아웃 나눠 각자 구역 그리기", style = MaterialTheme.typography.bodySmall)
+                Text("함께 · 모임 · 교실 · 나눠 그리기", style = MaterialTheme.typography.bodySmall)
             }
         }
         // 최근 작업 — 라벤더(tertiary).
@@ -269,6 +224,16 @@ fun HomeScreen(
                 content = modeButtons,
             )
         }
+        }
+
+        if (collabSheetOpen) {
+            CollabModeSheet(
+                onDuoMode = onDuoMode,
+                onPartyMode = onPartyMode,
+                onClassroomMode = onClassroomMode,
+                onSplitMode = onSplitMode,
+                onDismiss = { collabSheetOpen = false },
+            )
         }
 
         if (modalOpen) {
