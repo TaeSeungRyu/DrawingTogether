@@ -15,4 +15,6 @@ data class TextElement(
     val cy: Float,
     val sizeFrac: Float,
     val colorArgb: Int,
+    // 배치 시점의 단조 증가 순번 — 스냅샷 복원 시 통합 undo 순서 재구성용(#8). 0L = 미부여(구 데이터).
+    val seq: Long = 0L,
 )

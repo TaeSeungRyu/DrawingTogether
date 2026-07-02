@@ -272,6 +272,51 @@ class CanvasStateTest {
     }
 
     @Test
+    fun `applySnapshot restores undo order chronologically, not by type`() {
+        // 실제 추가 순서: stroke(s1) → sticker(sk2) → stroke(s3) → text(t4)
+        val src = CanvasState()
+        src.apply(DrawingEvent.StrokeStart(next(), local, StrokeId("s1"), pen, Point(0f, 0f)))
+        src.apply(DrawingEvent.StrokeEnd(next(), local, StrokeId("s1")))
+        src.apply(place(StickerId("sk2")))
+        src.apply(DrawingEvent.StrokeStart(next(), local, StrokeId("s3"), pen, Point(0.1f, 0.1f)))
+        src.apply(DrawingEvent.StrokeEnd(next(), local, StrokeId("s3")))
+        src.apply(placeText(TextId("t4")))
+
+        // 스냅샷(타입별 리스트) → 새 상태로 복원.
+        val fresh = CanvasState()
+        fresh.applySnapshot(
+            strokes = src.strokes.toList(),
+            stickers = src.stickers.toList(),
+            texts = src.texts.toList(),
+        )
+
+        // 되돌리기는 실제 시간역순으로: t4 → s3 → sk2 → s1 (타입순 t4→s1 이 아니라).
+        assertEquals(UndoItem.TextRef(TextId("t4")), fresh.lastUndoable())
+        fresh.apply(DrawingEvent.RemoveText(next(), local, TextId("t4")))
+        assertEquals(UndoItem.StrokeRef(StrokeId("s3")), fresh.lastUndoable())
+        fresh.apply(DrawingEvent.Undo(next(), local, StrokeId("s3")))
+        assertEquals(UndoItem.StickerRef(StickerId("sk2")), fresh.lastUndoable())
+        fresh.apply(DrawingEvent.RemoveSticker(next(), local, StickerId("sk2")))
+        assertEquals(UndoItem.StrokeRef(StrokeId("s1")), fresh.lastUndoable())
+    }
+
+    @Test
+    fun `local adds after applySnapshot undo before imported elements`() {
+        val src = CanvasState()
+        src.apply(place(StickerId("sk1")))
+
+        val fresh = CanvasState()
+        fresh.applySnapshot(strokes = emptyList(), stickers = src.stickers.toList(), texts = emptyList())
+        // 복원 후 로컬로 새 stroke 추가 → 가져온 스티커보다 최신이라 먼저 되돌려져야.
+        fresh.apply(DrawingEvent.StrokeStart(next(), local, StrokeId("new"), pen, Point(0f, 0f)))
+        fresh.apply(DrawingEvent.StrokeEnd(next(), local, StrokeId("new")))
+
+        assertEquals(UndoItem.StrokeRef(StrokeId("new")), fresh.lastUndoable())
+        fresh.apply(DrawingEvent.Undo(next(), local, StrokeId("new")))
+        assertEquals(UndoItem.StickerRef(StickerId("sk1")), fresh.lastUndoable())
+    }
+
+    @Test
     fun `canvas aspect defaults to Free and setter updates it`() {
         val state = CanvasState()
         assertEquals(CanvasAspect.Free, state.aspect)

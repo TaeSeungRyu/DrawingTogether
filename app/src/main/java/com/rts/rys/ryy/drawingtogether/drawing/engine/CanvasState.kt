@@ -48,6 +48,11 @@ class CanvasState {
 
     fun lastUndoable(): UndoItem? = _undoStack.lastOrNull()
 
+    // 요소(stroke/스티커/텍스트) 생성 순번 발급기. 세 종류가 하나의 카운터를 공유해 서로 섞인
+    // 시간순을 갖는다 → 스냅샷 복원 시 seq 로 병합정렬하면 통합 undo 순서를 복원할 수 있다(#8).
+    private var _elementSeq: Long = 0L
+    private fun nextSeq(): Long = ++_elementSeq
+
     // 캐시 무효화용 리비전 — "완료된 stroke 비트맵 캐시"(DrawingCanvas)가 이 값이 바뀔 때만
     // 캐시를 다시 렌더한다. 완료 stroke 집합/배경/배경색이 바뀔 때만 증가(진행 중 stroke·스티커는
     // 라이브로 위에 그리므로 무관). Compose 가 추적하도록 mutableStateOf.
@@ -113,11 +118,21 @@ class CanvasState {
         _texts.addAll(texts)
         _aspect = aspect
         _backgroundColor = backgroundColor
-        // collaborative undo — 받은 stroke 들 시간순으로 undoStack 에 push.
-        // 스티커·텍스트는 추가 순서를 알 수 없으니 stroke 뒤에 이어 push (대략적 시간순).
-        strokes.forEach { _undoStack.add(UndoItem.StrokeRef(it.id)) }
-        stickers.forEach { _undoStack.add(UndoItem.StickerRef(it.id)) }
-        texts.forEach { _undoStack.add(UndoItem.TextRef(it.id)) }
+        // collaborative undo — 세 종류를 생성 순번(seq)으로 병합정렬해 실제 시간순으로 push(#8).
+        // sortedBy 는 안정 정렬이라, seq 가 모두 0(구 데이터·미부여)이면 기존 동작(stroke→스티커→텍스트)으로 폴백.
+        val ordered = buildList {
+            strokes.forEach { add(it.seq to UndoItem.StrokeRef(it.id)) }
+            stickers.forEach { add(it.seq to UndoItem.StickerRef(it.id)) }
+            texts.forEach { add(it.seq to UndoItem.TextRef(it.id)) }
+        }.sortedBy { it.first }
+        ordered.forEach { _undoStack.add(it.second) }
+        // 이후 로컬 추가가 가져온 요소들보다 뒤 순번을 갖도록 카운터를 최대값 이상으로.
+        _elementSeq = maxOf(
+            _elementSeq,
+            strokes.maxOfOrNull { it.seq } ?: 0L,
+            stickers.maxOfOrNull { it.seq } ?: 0L,
+            texts.maxOfOrNull { it.seq } ?: 0L,
+        )
         bumpRevision()
     }
 
@@ -129,6 +144,7 @@ class CanvasState {
         _stickers.clear()
         _texts.clear()
         _undoStack.clear()
+        _elementSeq = 0L
         _background = null
         _backgroundColor = 0xFFFFFFFF.toInt()
         _aspect = CanvasAspect.Free
@@ -151,7 +167,7 @@ class CanvasState {
             }
             is DrawingEvent.StrokeEnd -> {
                 val finished = _openStrokes.remove(event.strokeId) ?: return
-                _strokes.add(finished)
+                _strokes.add(finished.copy(seq = nextSeq()))
                 _undoStack.add(UndoItem.StrokeRef(finished.id))
                 bumpRevision()
             }
@@ -185,6 +201,7 @@ class CanvasState {
                         cy = event.cy,
                         scale = event.scale,
                         rotationDeg = event.rotationDeg,
+                        seq = nextSeq(),
                     )
                 )
                 _undoStack.add(UndoItem.StickerRef(event.stickerId))
@@ -218,6 +235,7 @@ class CanvasState {
                         cy = event.cy,
                         sizeFrac = event.sizeFrac,
                         colorArgb = event.colorArgb,
+                        seq = nextSeq(),
                     )
                 )
                 _undoStack.add(UndoItem.TextRef(event.textId))
