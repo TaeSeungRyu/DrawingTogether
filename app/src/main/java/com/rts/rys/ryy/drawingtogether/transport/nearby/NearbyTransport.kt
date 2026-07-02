@@ -93,6 +93,14 @@ class NearbyTransport(
     private val _pending = MutableStateFlow<PendingConnection?>(null)
     override val pending: StateFlow<PendingConnection?> = _pending.asStateFlow()
 
+    // 동시 연결 요청 레이스 방지:
+    // - #3: pending 을 큐로 관리 — 거의 동시에 붙은 조인자들이 서로 덮어써 유실되지 않게. _pending 은 head 를 노출.
+    // - #2: "수락했지만 STATUS_OK 아직" 인 endpoint 를 예약 집합에 담아 정원(연결됨+예약) 초과를 차단.
+    // 콜백(GMS 스레드) 과 accept/reject(Main) 이 함께 접근하므로 pendingLock 으로 보호.
+    private val pendingLock = Any()
+    private val pendingQueue = ArrayDeque<PendingConnection>()
+    private val acceptedEndpoints = mutableSetOf<String>()
+
     private val _connectedPeers = MutableStateFlow<List<ConnectedPeer>>(emptyList())
     override val connectedPeers: StateFlow<List<ConnectedPeer>> = _connectedPeers.asStateFlow()
 
@@ -169,15 +177,38 @@ class NearbyTransport(
     }
 
     override suspend fun acceptPending() {
-        val p = _pending.value ?: return
-        _pending.value = null
+        val p = synchronized(pendingLock) { pendingQueue.firstOrNull() } ?: return
+        // 수락 직전 재검사(#2) — 큐에 있는 동안 다른 조인자가 먼저 채워 정원이 찼으면 accept 대신 reject.
+        if (isStarHostFull()) {
+            synchronized(pendingLock) { pendingQueue.removeFirstOrNull() }
+            client.rejectConnection(p.endpointId)
+            publishHead()
+            return
+        }
+        synchronized(pendingLock) {
+            pendingQueue.removeFirstOrNull()
+            acceptedEndpoints.add(p.endpointId)
+        }
         client.acceptConnection(p.endpointId, payloadCallback)
+        publishHead()
     }
 
     override suspend fun rejectPending() {
-        val p = _pending.value ?: return
-        _pending.value = null
+        val p = synchronized(pendingLock) { pendingQueue.removeFirstOrNull() } ?: return
         client.rejectConnection(p.endpointId)
+        publishHead()
+    }
+
+    // 스타 호스트 정원(연결됨 + 수락대기 예약) 이 찼는지. Duo/조인자는 항상 false.
+    private fun isStarHostFull(): Boolean {
+        if (!(mode.isStar && localRole == Role.Host)) return false
+        val reserved = synchronized(pendingLock) { acceptedEndpoints.size }
+        return _connectedPeers.value.size + reserved >= mode.maxJoiners
+    }
+
+    // 큐 head 를 _pending 으로 노출 — UI 는 한 번에 한 다이얼로그만 보고 순차 처리.
+    private fun publishHead() {
+        _pending.value = synchronized(pendingLock) { pendingQueue.firstOrNull() }
     }
 
     override suspend fun send(frame: Frame) {
@@ -233,6 +264,7 @@ class NearbyTransport(
         localRole = null
         _connectedPeers.value = emptyList()
         nickByEndpoint.clear()
+        synchronized(pendingLock) { acceptedEndpoints.clear() }
         _state.value = TransportState.Idle
     }
 
@@ -243,31 +275,44 @@ class NearbyTransport(
         client.stopAdvertising()
         client.stopDiscovery()
         _discovered.value = emptyList()
+        synchronized(pendingLock) { pendingQueue.clear() }
         _pending.value = null
     }
 
     private val lifecycleCallback = object : ConnectionLifecycleCallback() {
         override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {
-            // 스타(Party/Classroom) 호스트가 모드별 최대 조인자 수를 채웠으면 자동 reject — 다이얼로그도 안 띄움.
+            // 스타(Party/Classroom) 호스트가 정원(연결됨 + 수락대기 예약)을 채웠으면 자동 reject —
+            // 다이얼로그도 안 띄움. 예약까지 세므로 동시 초기화 레이스에서도 초과되지 않음(#2).
             // Duo / 조인자는 영향 없음.
-            val partyHostFull = mode.isStar &&
-                localRole == Role.Host &&
-                _connectedPeers.value.size >= mode.maxJoiners
-            if (partyHostFull) {
+            if (isStarHostFull()) {
                 client.rejectConnection(endpointId)
                 return
             }
             nickByEndpoint[endpointId] = info.endpointName
-            _pending.value = PendingConnection(
+            val pc = PendingConnection(
                 endpointId = endpointId,
                 remoteNick = info.endpointName,
                 token = info.authenticationDigits,
             )
+            // 큐로 관리(#3) — 거의 동시에 붙은 두 번째 조인자가 첫 번째를 덮어써 유실되지 않게.
+            synchronized(pendingLock) {
+                if (pendingQueue.none { it.endpointId == endpointId }) pendingQueue.addLast(pc)
+            }
+            publishHead()
         }
 
         override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {
+            // 예약 해제 — 수락 후 결과 도착(성공/거부/실패 모두).
+            synchronized(pendingLock) { acceptedEndpoints.remove(endpointId) }
             when (result.status.statusCode) {
                 ConnectionsStatusCodes.STATUS_OK -> {
+                    // 최종 방어(#2) — 예약을 넘어선 잔여 레이스로 정원을 넘겼으면 이 연결을 끊는다(스타 호스트).
+                    if (mode.isStar && localRole == Role.Host &&
+                        _connectedPeers.value.size >= mode.maxJoiners
+                    ) {
+                        disconnectFromEndpoint(endpointId)
+                        return
+                    }
                     val nick = nickByEndpoint[endpointId] ?: "peer"
                     _connectedPeers.value = _connectedPeers.value
                         .filter { it.endpointId != endpointId } +
@@ -280,11 +325,18 @@ class NearbyTransport(
                     _discovered.value = emptyList()
                     _state.value = TransportState.Connected
                 }
-                ConnectionsStatusCodes.STATUS_CONNECTION_REJECTED -> {
-                    _state.value = TransportState.Failed("rejected")
-                }
                 else -> {
-                    _state.value = TransportState.Failed("conn: ${result.status.statusCode}")
+                    // 스타 호스트는 특정 조인자의 거부/실패(정원 초과 reject 포함)로 세션 전체를 실패시키지
+                    // 않는다 — 방을 유지하고 다른 조인자를 계속 받는다. Duo/조인자만 Failed 로 표면화.
+                    val reason =
+                        if (result.status.statusCode == ConnectionsStatusCodes.STATUS_CONNECTION_REJECTED) {
+                            "rejected"
+                        } else {
+                            "conn: ${result.status.statusCode}"
+                        }
+                    if (!(mode.isStar && localRole == Role.Host)) {
+                        _state.value = TransportState.Failed(reason)
+                    }
                 }
             }
         }
@@ -298,6 +350,8 @@ class NearbyTransport(
     // connectedPeers 에서 제거, 마지막 하나였고 연결 상태였으면 Idle 로. localRole 은 건드리지 않음.
     private fun handleEndpointGone(endpointId: String) {
         _connectedPeers.value = _connectedPeers.value.filter { it.endpointId != endpointId }
+        // 수락 대기 중이던 endpoint 가 STATUS_OK 전에 끊기면 예약도 해제(정원 카운트 누수 방지).
+        synchronized(pendingLock) { acceptedEndpoints.remove(endpointId) }
         if (_connectedPeers.value.isEmpty() && _state.value is TransportState.Connected) {
             _state.value = TransportState.Idle
         }
