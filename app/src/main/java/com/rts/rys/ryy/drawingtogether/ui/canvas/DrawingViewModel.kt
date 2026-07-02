@@ -322,15 +322,21 @@ class DrawingViewModel : ViewModel() {
         }
     }
 
-    // 진행 중 stroke 취소 — 줌 제스처(두 번째 손가락 감지)로 그리기를 중단할 때.
+    // 진행 중 stroke 취소 — 줌 제스처(두 번째 손가락)나 툴 변경/컴포저블 이탈로 그리기를 중단할 때.
     // StrokeStart/Append 가 이미 피어에 실시간 전송됐으므로, 끝낸 뒤 곧바로 Undo 로 제거해
     // 로컬·피어·타임랩스 기록 모두 정리한다(미러 stroke 포함).
+    // 판정 기준은 현재 tool 이 아니라 "열린 stroke 존재 여부" — 그리는 도중 지우개로 바꿔도
+    // (StrokeStart 는 이전 tool 로 이미 열림) 확실히 정리되게 한다(#6). 열린 게 없으면(지우개라
+    // 애초에 시작 안 함 등) no-op. strokeEnd 는 tool 가드가 있어 우회하고 이벤트를 직접 발행.
     fun strokeCancel(strokeId: StrokeId) {
-        if (tool.kind == ToolKind.Eraser) return
-        val mirrors = mirrorStrokes[strokeId]?.map { it.first } ?: emptyList()
-        strokeEnd(strokeId)
+        if (strokeId !in canvas.openStrokes) return
+        val mirrors = mirrorStrokes.remove(strokeId)?.map { it.first } ?: emptyList()
+        emit(DrawingEvent.StrokeEnd(nextSeq(), author, strokeId))
         emit(DrawingEvent.Undo(nextSeq(), author, strokeId))
-        mirrors.forEach { emit(DrawingEvent.Undo(nextSeq(), author, it)) }
+        mirrors.forEach { mid ->
+            emit(DrawingEvent.StrokeEnd(nextSeq(), author, mid))
+            emit(DrawingEvent.Undo(nextSeq(), author, mid))
+        }
     }
 
     // 지우개 한 점이 stroke 과 충돌하면 그 stroke 에 대해 Undo 이벤트 발행.

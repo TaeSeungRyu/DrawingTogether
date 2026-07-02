@@ -192,61 +192,70 @@ fun DrawingCanvas(
                             first.position.screenToContent(scaleState.value, offsetState.value).toNormalized(size),
                         )
                         cursor = first.position
+                        try {
+                            // 지수이동평균(EMA) 상태 — 첫 점에서 시작(화면좌표). alpha=1f 면 원본 그대로.
+                            val alpha = smoothingAlpha.coerceIn(0.05f, 1f)
+                            var smoothed = first.position
 
-                        // 지수이동평균(EMA) 상태 — 첫 점에서 시작(화면좌표). alpha=1f 면 원본 그대로.
-                        val alpha = smoothingAlpha.coerceIn(0.05f, 1f)
-                        var smoothed = first.position
+                            val pending = mutableListOf<DrawPoint>()
+                            while (true) {
+                                val event = awaitPointerEvent()
 
-                        val pending = mutableListOf<DrawPoint>()
-                        while (true) {
-                            val event = awaitPointerEvent()
+                                // 두 번째 손가락 감지 → 진행 stroke 취소하고 줌/이동(pan/zoom)으로 전환.
+                                if (drawing && event.changes.count { it.pressed } >= 2) {
+                                    onStrokeCancel(strokeId)
+                                    cursor = null
+                                    pending.clear()
+                                    drawing = false
+                                }
 
-                            // 두 번째 손가락 감지 → 진행 stroke 취소하고 줌/이동(pan/zoom)으로 전환.
-                            if (drawing && event.changes.count { it.pressed } >= 2) {
-                                onStrokeCancel(strokeId)
-                                cursor = null
-                                pending.clear()
-                                drawing = false
+                                if (drawing) {
+                                    var anyPressed = false
+                                    event.changes.forEach { change: PointerInputChange ->
+                                        if (change.pressed) anyPressed = true
+                                        if (change.positionChanged()) {
+                                            smoothed += (change.position - smoothed) * alpha
+                                            pending.add(
+                                                smoothed.screenToContent(scaleState.value, offsetState.value)
+                                                    .toNormalized(size),
+                                            )
+                                            cursor = smoothed
+                                            change.consume()
+                                        }
+                                    }
+                                    if (pending.isNotEmpty()) {
+                                        onStrokeAppend(strokeId, pending.toList())
+                                        pending.clear()
+                                    }
+                                    if (!anyPressed) break
+                                } else {
+                                    // 줌/이동 모드 — 두 손가락 핀치=확대(centroid 고정), 드래그=이동.
+                                    val zoom = event.calculateZoom()
+                                    val panChange = event.calculatePan()
+                                    val centroid = event.calculateCentroid(useCurrent = true)
+                                    if (centroid != Offset.Unspecified && (zoom != 1f || panChange != Offset.Zero)) {
+                                        val (ns, no) = zoomAround(
+                                            scaleState.value, offsetState.value, centroid, zoom, panChange, size,
+                                        )
+                                        onViewportChange(ns, no)
+                                    }
+                                    event.changes.forEach { if (it.positionChanged()) it.consume() }
+                                    if (event.changes.none { it.pressed }) break
+                                }
                             }
 
                             if (drawing) {
-                                var anyPressed = false
-                                event.changes.forEach { change: PointerInputChange ->
-                                    if (change.pressed) anyPressed = true
-                                    if (change.positionChanged()) {
-                                        smoothed += (change.position - smoothed) * alpha
-                                        pending.add(
-                                            smoothed.screenToContent(scaleState.value, offsetState.value)
-                                                .toNormalized(size),
-                                        )
-                                        cursor = smoothed
-                                        change.consume()
-                                    }
-                                }
-                                if (pending.isNotEmpty()) {
-                                    onStrokeAppend(strokeId, pending.toList())
-                                    pending.clear()
-                                }
-                                if (!anyPressed) break
-                            } else {
-                                // 줌/이동 모드 — 두 손가락 핀치=확대(centroid 고정), 드래그=이동.
-                                val zoom = event.calculateZoom()
-                                val panChange = event.calculatePan()
-                                val centroid = event.calculateCentroid(useCurrent = true)
-                                if (centroid != Offset.Unspecified && (zoom != 1f || panChange != Offset.Zero)) {
-                                    val (ns, no) = zoomAround(
-                                        scaleState.value, offsetState.value, centroid, zoom, panChange, size,
-                                    )
-                                    onViewportChange(ns, no)
-                                }
-                                event.changes.forEach { if (it.positionChanged()) it.consume() }
-                                if (event.changes.none { it.pressed }) break
+                                onStrokeEnd(strokeId)
+                                cursor = null
+                                drawing = false
                             }
-                        }
-
-                        if (drawing) {
-                            onStrokeEnd(strokeId)
-                            cursor = null
+                        } finally {
+                            // 툴 변경(pointerInput 재시작)·컴포저블 이탈로 제스처가 취소되면 정상 종료 코드가
+                            // 실행되지 않아 openStroke 이 영구 잔존한다(#6). 취소 시에도 여기서 정리.
+                            if (drawing) {
+                                onStrokeCancel(strokeId)
+                                cursor = null
+                            }
                         }
                     }
                 }
