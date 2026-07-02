@@ -153,7 +153,7 @@ class CanvasState {
 - **텍스트**: `PlaceText` → 추가 + undoStack push, `RemoveText` → 제거 + undo 항목 제거. 변형 없음(불변·삭제전용).
 - 사진·배경색·비율은 `apply` 밖의 별도 setter — 이벤트가 아니라 캔버스 속성이기 때문. `Clear`/`applySnapshot` 도 배경색·비율은 건드리지 않음(`reset` 만 초기화).
 - `mutableStateListOf` + `mutableStateMapOf`로 Compose가 변경된 부분만 다시 그리도록.
-- **타임랩스**: 모든 변경이 이 이벤트 스트림을 지나므로(`DrawingViewModel.emit`/`applyRemoteEvent` + 배경 setter), 기록기가 `(atMs, op)` 로그만 모았다가 빈 `CanvasState` 에 다시 재생/렌더한다. 상세: [timelapse-plan.md](timelapse-plan.md).
+- **타임랩스**: 모든 변경이 이 이벤트 스트림을 지나므로(`DrawingViewModel.emit`/`applyRemoteEvent` + 배경 setter), 기록기가 `(atMs, op)` 로그만 모았다가 빈 `CanvasState` 에 다시 재생/렌더한다. 상세: [timelapse-plan.md](done-timelapse-plan.md).
 
 ## 3. 입력 처리
 

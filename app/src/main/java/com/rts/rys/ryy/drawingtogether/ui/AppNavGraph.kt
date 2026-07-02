@@ -21,7 +21,7 @@ import com.rts.rys.ryy.drawingtogether.ui.timelapse.TimelapsePlayerScreen
 // - Single    : 네트워크 없음, 혼자 그리기
 // - Duo       : 1:1 함께 모드 (공유 캔버스)
 // - Party     : 1:N 모임 모드 (자기 캔버스 + 모두-미니 뷰, mesh)
-// - Classroom : 1:N 교실 모드 (호스트 중심 — 조인자끼리 안 보임). doc/classroom-mode.md
+// - Classroom : 1:N 교실 모드 (호스트 중심 — 조인자끼리 안 보임). doc/done-classroom-mode.md
 enum class DrawMode { Single, Duo, Party, Classroom }
 
 object Routes {

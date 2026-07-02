@@ -24,7 +24,7 @@
    `drawIntoCanvas { nativeCanvas.drawPath }`. PNG 합성에서도 동작. `StrokeRenderer.drawBlurred`.
 4. **스티커** — 자체 벡터 12종(하트/별/스마일/꽃/구름/해/달/무지개/물방울/번개/보석/반짝이)
    배치·이동·크기·회전·삭제 + stroke/스티커 통합 undo(`UndoItem`). 메타(`key`+변환)만 보관·전송,
-   렌더 시 벡터로 치환. 변형은 commit-on-end. 상세: [sticker-plan.md](sticker-plan.md).
+   렌더 시 벡터로 치환. 변형은 commit-on-end. 상세: [sticker-plan.md](done-sticker-plan.md).
 5. **브러시 변형 4종(네온/점선/무지개/붓펜)** — `BrushType` 4개 + `StrokeRenderer` 분기.
    네온=발광 후광+밝은 코어, 점선=`dashPathEffect`, 무지개=누적 길이→hue 회전(결정론 phase),
    붓펜=점 간 거리(속도)→굵기 변조. 점 좌표에서 유도 → 와이어 변경 없음, 화면·PNG·멀티 자동 공유.
@@ -96,7 +96,7 @@
 
 ## P3 — 큰/조건부 (구조 변경·성능) — 전부 완료
 
-> **타임랩스 재생·내보내기 = 완료** — 기록→재생·갤러리→MP4 내보내기 + 다듬기까지. 상세: [timelapse-plan.md](timelapse-plan.md).
+> **타임랩스 재생·내보내기 = 완료** — 기록→재생·갤러리→MP4 내보내기 + 다듬기까지. 상세: [timelapse-plan.md](done-timelapse-plan.md).
 > **비트맵 캐시 = 완료**(아래). **트레이싱 엣지 검출 = 완료**(아래).
 
 ### 트레이싱 보조 — 엣지 검출 ✅ 완료
