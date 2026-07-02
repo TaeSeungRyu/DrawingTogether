@@ -5,9 +5,14 @@
 
 ---
 
-## 1. 나눠 그리기 (Split Drawing) — 신규 모드
+## 1. 나눠 그리기 (Split Drawing) — 신규 모드  ✅ 구현됨(2026-07, 커밋 `4444c79`) — 기기 2~4대 QA 남음
 
 홈 화면 신규 모드. 2~4명이 **하나의 합성 캔버스를 레이아웃으로 나눠** 각자 자기 구역을 그린다.
+
+> 구현 요약: `SplitLayout`(모델), `TransportMode.Split`+`isMesh`, `Frame.SplitStart`,
+> `SessionManager.splitConfig/broadcastSplitStart`, `PartyPairingScreen` 레이아웃 피커,
+> `DrawingScreen` Split 분기(슬롯 비율 고정 + 미리보기 모달), `SplitComposer`(합성 저장/미리보기).
+> 모임 mesh 인프라 재사용(P2P_STAR·PerPeer·relay·늦은참여 채움).
 
 ### 요구사항 (사용자 스펙)
 - **대상**: 2~4명.
