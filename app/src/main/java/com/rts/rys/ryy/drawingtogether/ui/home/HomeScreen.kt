@@ -102,7 +102,7 @@ fun HomeScreen(
         // 싱글모드 — 코랄(primary). 가장 강한 CTA.
         Button(
             onClick = onSingleMode,
-            modifier = Modifier.fillMaxWidth().height(72.dp),
+            modifier = Modifier.fillMaxWidth().height(88.dp),
             shape = MaterialTheme.shapes.extraLarge,
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -112,15 +112,15 @@ fun HomeScreen(
             }
         }
         // 함께 그리기 — 협업 모드 4종(함께/모임/교실/나눠 그리기)을 하나로 묶은 통합 버튼.
-        // 탭하면 바텀시트로 방식을 고른다. 민트(secondary) 컨테이너 + 깊은 코랄(onPrimaryContainer)
-        // 글씨로 보색 대비 pop — 협업의 대표 CTA 를 눈에 띄게.
+        // 탭하면 바텀시트로 방식을 고른다. 민트(secondary) 컨테이너 + 은은한 청록(onSecondaryContainer)
+        // 글씨로 동계 톤 조화 — 협업의 대표 CTA.
         Button(
             onClick = { collabSheetOpen = true },
-            modifier = Modifier.fillMaxWidth().height(72.dp),
+            modifier = Modifier.fillMaxWidth().height(88.dp),
             shape = MaterialTheme.shapes.extraLarge,
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.secondary,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
             ),
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -132,7 +132,7 @@ fun HomeScreen(
         // 최근 작업 — 라벤더(tertiary).
         Button(
             onClick = { modalOpen = true },
-            modifier = Modifier.fillMaxWidth().height(72.dp),
+            modifier = Modifier.fillMaxWidth().height(88.dp),
             shape = MaterialTheme.shapes.extraLarge,
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.tertiary,
@@ -152,7 +152,7 @@ fun HomeScreen(
         // 타임랩스 — 라벤더 컨테이너 톤.
         Button(
             onClick = onTimelapses,
-            modifier = Modifier.fillMaxWidth().height(72.dp),
+            modifier = Modifier.fillMaxWidth().height(88.dp),
             shape = MaterialTheme.shapes.extraLarge,
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.tertiaryContainer,
@@ -202,8 +202,8 @@ fun HomeScreen(
 
         // 버튼 영역 — 제목 아래 남은 공간을 차지. 폭은 MAX_CONTENT_WIDTH 로 제한해 넓은 화면
         // (태블릿/가로)에서 버튼이 끝까지 늘어나지 않고 가운데 모이게 한다(폰 세로에선 제한 미발동).
-        // 버튼이 4개로 줄어 SpaceEvenly 면 세로 화면에서 간격이 과하게 벌어진다 →
-        //  - 세로: 고정 간격(16dp) 으로 묶어 세로 가운데 정렬(허전함 방지).
+        //  - 세로: 큰 버튼(88dp)을 SpaceEvenly 로 영역 전체에 분산 → 하단 여백 최소, 버튼이 커서
+        //    간격도 과하지 않음.
         //  - 가로: 높이가 부족할 수 있으니 스크롤 + 고정 간격(12dp), 넘치면 스크롤.
         if (isLandscape) {
             Column(
@@ -222,8 +222,8 @@ fun HomeScreen(
                     .weight(1f)
                     .fillMaxWidth()
                     .widthIn(max = MAX_CONTENT_WIDTH)
-                    .padding(vertical = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+                    .padding(vertical = 8.dp),
+                verticalArrangement = Arrangement.SpaceEvenly,
                 content = modeButtons,
             )
         }

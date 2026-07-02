@@ -1,6 +1,11 @@
 package com.rts.rys.ryy.drawingtogether.ui.home
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
@@ -33,6 +38,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -64,23 +70,33 @@ fun CollabModeSheet(
     val maxCardsHeight = (cfg.screenHeightDp * 0.7f).roundToInt().dp
     val dismissThresholdPx = with(density) { 120.dp.toPx() }
     var dragOffsetY by remember { mutableStateOf(0f) }
+    // 진입 시 아래→위 슬라이드 + 백드롭 페이드. (mount 직후 shown=true 로 전환해 애니메이션 트리거.)
+    var shown by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { shown = true }
 
     BackHandler { onDismiss() }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.4f))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                ) { onDismiss() },
-        )
+        AnimatedVisibility(visible = shown, enter = fadeIn(), exit = fadeOut()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.4f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) { onDismiss() },
+            )
+        }
 
+        AnimatedVisibility(
+            visible = shown,
+            modifier = Modifier.align(Alignment.BottomCenter),
+            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+        ) {
         Surface(
             modifier = Modifier
-                .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .offset { IntOffset(0, dragOffsetY.roundToInt()) },
             color = MaterialTheme.colorScheme.surface,
@@ -164,6 +180,7 @@ fun CollabModeSheet(
 
                 Spacer(modifier = Modifier.height(16.dp))
             }
+        }
         }
     }
 }
